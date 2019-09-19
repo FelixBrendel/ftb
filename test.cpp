@@ -1,8 +1,8 @@
 #define _CRT_SECURE_NO_WARNINGS
+#include <stdio.h>
 
 #include "profiler.hpp"
-#include "macros.h"
-
+#include "macros.hpp"
 
 int var = 100;
 
@@ -14,13 +14,13 @@ void test() {
         printf("var is %d\n", var);
     }
 
-    printf("var is %d\n", var);
 }
 
 int main(int argc, char* argv[]) {
     profile_this;
 
     test();
+    printf("var is %d\n", var);
 
     return 0;
 }

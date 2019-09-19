@@ -1,5 +1,5 @@
 #pragma once
-#include <functional>
+// #include <functional>
 
 #define proc auto
 
@@ -55,23 +55,63 @@ struct {
 #define defer auto TOKENPASTE2(__deferred_lambda_call, __COUNTER__) = deferrer << [&]
 
 
-/**
+/*
+   defer {
+       call();
+    };
+
+expands to:
+
+    auto __deferred_lambda_call0 = deferrer << [&] {
+       call();
+    };
+*/
+
+/*****************
  *   fluid-let   *
- */
+ *****************/
 
 #define fluid_let(var, val)                                             \
     if (0)                                                              \
         TOKENPASTE2(finished,__LINE__): ;                               \
     else                                                                \
         for (auto TOKENPASTE2(fluid_let_, __LINE__) = var;;)            \
-            for(var = val;;)                                            \
-                if (1) {                                                \
-                    goto TOKENPASTE2(body,__LINE__);                    \
-                }                                                       \
-                else                                                    \
-                    while (1)                                           \
-                        if (1) {                                        \
-                            var = TOKENPASTE2(fluid_let_, __LINE__);    \
-                            goto TOKENPASTE2(finished, __LINE__);       \
-                        }                                               \
-                        else TOKENPASTE2(body,__LINE__):
+            for (defer{var = TOKENPASTE2(fluid_let_, __LINE__);};;)     \
+                for(var = val;;)                                        \
+                    if (1) {                                            \
+                        goto TOKENPASTE2(body,__LINE__);                \
+                    }                                                   \
+                    else                                                \
+                        while (1)                                       \
+                            if (1) {                                    \
+                                goto TOKENPASTE2(finished, __LINE__);   \
+                            }                                           \
+                            else TOKENPASTE2(body,__LINE__):
+
+
+/**
+fluid_let(var, val) {
+    call1(var);
+    call2(var);
+}
+
+expands to
+
+if (0)
+    finished98:;
+else
+    for (auto fluid_let_98 = var;;)
+        for (auto __deferred_lambda_call0 = deferrer << [&] { var = fluid_let_98; };;)
+            for (var = val;;)
+                if (1) {
+                    goto body98;
+                } else
+                    while (1)
+                        if (1) {
+                            goto finished98;
+                        } else
+                          body98 : {
+                              call1(var);
+                              call2(var);
+                          }
+*/
