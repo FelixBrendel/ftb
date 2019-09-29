@@ -1,8 +1,17 @@
 #pragma once
 #include <string.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "types.hpp"
+
+#define for_str_hash_map(hm)                                    \
+    if (char* key   = nullptr); else                            \
+    if (void* value = nullptr); else                            \
+        for(int i = 0; i < hm->current_capacity; ++i)           \
+            if (!((key   = hm->data[i].original_string) &&      \
+                  (value = hm->data[i].object))); else
+
+
 
 struct StringHashMapCell {
     char* original_string;
@@ -16,6 +25,12 @@ struct StringHashMap {
     int cell_count;
     StringHashMapCell* data;
 };
+
+inline void print_hm(StringHashMap* hm) {
+    for_str_hash_map(hm) {
+        printf("index: %d key: %s value: %llu\n", i, key, (unsigned long long)value);
+    }
+}
 
 inline bool strings_match(char* a, char* b) {
     return strcmp(a, b) == 0;
@@ -61,15 +76,20 @@ u32 hash(char* str) {
 }
 
 StringHashMap* create_hashmap(int initial_capacity = 8) {
+    printf("1aeaeae\n");
     StringHashMap* hm = new StringHashMap;
     hm->current_capacity = initial_capacity;
     hm->cell_count = 0;
     // set all data to nullptr
     hm->data = (StringHashMapCell *)calloc(initial_capacity, sizeof(StringHashMapCell*));
+    // printf("check: %s\n", hm->data[6].original_string);
+    printf("after creating...\n");
+    print_hm(hm);
     return hm;
 }
 
 int hm_get_index_of_living_cell_if_it_exists(StringHashMap* hm, char* key, u64 hash_val) {
+    printf("2aeaeae\n");
     int index = hash_val % hm->current_capacity;
     StringHashMapCell cell = hm->data[index];
     // test if cell exists at that index
@@ -130,13 +150,20 @@ inline void hm_delete_object(StringHashMap* hm, char* key) {
 }
 
 void hm_set(StringHashMap* hm, char* key, void* obj) {
+    printf(" -------------\n");
+    printf("before...\n");
+    print_hm(hm);
+
     u64 hash_val = hash(key);
     int index = index = hash_val % hm->current_capacity;
 
     // if we the desired cell is just empty, write to it and done :)
-    printf("index: %d\n");
+    printf("  setting:  %s\n", key);
+    printf("  capacity: %d\n", hm->current_capacity);
+    printf("  index: %d\n", index);
     if (!hm->data[index].original_string) {
         // insert new cell into desired slot
+        printf("alles paletti\n");
         ++hm->cell_count;
     } else {
         if (strings_match(key, hm->data[index].original_string)) {
@@ -146,7 +173,7 @@ void hm_set(StringHashMap* hm, char* key, void* obj) {
             // collision, check resize
             ++hm->cell_count;
             if ((hm->cell_count*1.0f / hm->current_capacity) > 0.666f) {
-                printf("raellocation\n");
+                printf("!!!reallocation\n");
                 StringHashMapCell* old_data = hm->data;
                 hm->data = (StringHashMapCell*)calloc(hm->current_capacity*4, sizeof(StringHashMapCell*));
                 hm->cell_count = 0;
@@ -165,23 +192,36 @@ void hm_set(StringHashMap* hm, char* key, void* obj) {
             // preventing gotos using lambdas!
             [&](){
                 for (int i = index; i < hm->current_capacity; ++i) {
-                    if (!hm->data[i].original_string) {
+                    printf("  checking free index: %d\n", i);
+                    if (!hm->data[i].original_string ||
+                        strings_match(hm->data[i].original_string, key))
+                    {
                         index = i;
                         return;
+                    } else {
+                        printf("-> not free, found %s\n", hm->data[i].original_string);
                     }
                 }
                 for (int i = 0; i < index; ++i) {
-                    if (!hm->data[i].original_string) {
+                    printf("  checking free index: %d\n", i);
+                    if (!hm->data[i].original_string ||
+                        strings_match(hm->data[i].original_string, key))
+                    {
                         index = i;
                         return;
+                    } else {
+                        printf("-> not free, found %s", hm->data[i].original_string);
                     }
                 }
             }();
         }
     }
 
+    printf ("  writing at index: %d\n", index);
     hm->data[index].deleted = false;
     hm->data[index].original_string = key;
     hm->data[index].hash = hash_val;
     hm->data[index].object = obj;
+    printf("after...\n");
+    print_hm(hm);
 }

@@ -3,24 +3,14 @@
 
 #include "profiler.hpp"
 #include "macros.hpp"
-
-int var = 100;
-
-void test() {
-    profile_this;
-    printf("var is %d\n", var);
-
-    fluid_let (var, 200) {
-        printf("var is %d\n", var);
-    }
-
-}
+#include "hashmap.hpp"
 
 int main(int argc, char* argv[]) {
-    profile_this;
 
-    test();
-    printf("var is %d\n", var);
+    StringHashMap* hm = create_hashmap();
+    hm_set(hm, (char*)"=", (void*)1);
+    hm_set(hm, (char*)"<", (void*)2);
+    hm_set(hm, (char*)"<=", (void*)2);
 
     return 0;
 }
