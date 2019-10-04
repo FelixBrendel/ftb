@@ -45,7 +45,7 @@ struct Profiler {
 
             char file_name[100];
             sprintf(file_name, file_template, thread_id);
-            printf("Hello I am %zd\n", thread_id);
+            // printf("Hello I am %zd\n", thread_id);
             out_file = fopen(file_name, "w");
             if (!out_file) {
                 printf("could not open %s\n", file_name);

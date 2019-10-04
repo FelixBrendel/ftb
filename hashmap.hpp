@@ -20,6 +20,8 @@
 
 
 #define define_hash_map(type, name)                                     \
+    bool hm_objects_match(type,type);                                   \
+    u32 hm_hash(type);                                                  \
                                                                         \
     struct name##_Hash_Map_Cell {                                       \
         type original;                                                  \
@@ -98,7 +100,7 @@
         return nullptr;                                                 \
     }                                                                   \
                                                                         \
-    inline void hm_delete_object(name##_Hash_Map* hm, char* key) {      \
+    inline void hm_delete_object(name##_Hash_Map* hm, type key) {                    \
         int index = hm_get_index_of_living_cell_if_it_exists(hm, key, hm_hash(key)); \
         if (index != -1) {                                              \
             hm->data[index].deleted = true;                             \
