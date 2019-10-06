@@ -15,8 +15,9 @@
     if (key_type key   = nullptr); else                            \
     if (void*    value = nullptr); else                            \
     for(int      index = 0; index < hm->current_capacity; ++index) \
-    if (!((key   = hm->data[index].original) &&                    \
-          (value = hm->data[index].object))); else
+        if (!((!hm->data[index].deleted) &&                        \
+              (key   = hm->data[index].original) &&                \
+              (value = hm->data[index].object))); else
 
 
 #define define_hash_map(type, name)                                     \
