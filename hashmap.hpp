@@ -89,7 +89,6 @@ struct Hash_Map {
         if (index != -1) {
             return data[index].object;
         }
-        int a = *((int*)(nullptr));
         return 0;
     }
 
