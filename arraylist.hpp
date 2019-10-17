@@ -35,7 +35,7 @@ struct Array_List {
         return data[index];
     }
 
-    proc _merge(int start, int mid, int end) -> void {
+    void _merge(int start, int mid, int end) {
         int start2 = mid + 1;
 
         /* If the direct merge is already sorted */
@@ -67,7 +67,7 @@ struct Array_List {
         }
     }
 
-    proc sort(int left=-1, int right=-1) -> void {
+    void sort(int left=-1, int right=-1) {
         if (left == -1) {
             sort(0, next_index - 1);
             return;
@@ -83,7 +83,7 @@ struct Array_List {
         _merge(left, middle, right);
     }
 
-    proc sorted_find(type elem, int left=-1, int right=-1) -> int {
+    int sorted_find(type elem, int left=-1, int right=-1) {
         if (left == -1) {
             return sorted_find(elem, 0, next_index - 1);
         } else if (left == right) {
