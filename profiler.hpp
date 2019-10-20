@@ -66,5 +66,5 @@ struct Profiler {
 
 # define profile_this Profiler profiler(__FILE__, __FUNCTION__, __LINE__)
 #else
-# define profile_this enum {}
+# define profile_this do {} while(0)
 #endif
