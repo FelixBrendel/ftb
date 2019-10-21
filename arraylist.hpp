@@ -1,3 +1,6 @@
+#pragma once
+#include <stdlib.h>
+
 template <typename type>
 struct Array_List {
     type* data;

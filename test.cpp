@@ -1,30 +1,36 @@
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 
-#include "profiler.hpp"
-#include "macros.hpp"
-#include "hashmap.hpp"
-#include "arraylist.hpp"
+#include "bucket_allocator.hpp"
 
 int main(int argc, char* argv[]) {
-    Array_List<int> al;
-    al.append(10);
-    al.append(3);
-    al.append(1);
+    Bucket_Allocator<int, 3> ba;
 
-    printf("numbers: %d %d %d %d\n", al[0], al[1], al[2], al[3]);
-    al[2] = 1099;
+    int* a = ba.allocate();
+    *a = 1;
+    printf("%d\n", *a);
 
-    printf("numbers: %d %d %d %d\n", al[0], al[1], al[2], al[3]);
+    ba.free(a);
 
-    al.sort();
+    int* b = ba.allocate();
+    *b = 2;
+    printf("%d\n", *b);
 
-    printf("numbers: %d %d %d %d\n", al[0], al[1], al[2], al[3]);
+    int* c = ba.allocate();
+    *c = 3;
+    printf("%d\n", *c);
 
-    printf("sortedfind (10): %d\n", al.sorted_find(10));
+    int* d = ba.allocate();
+    *d = 4;
+    printf("%d\n", *d);
 
-    for (auto num : al) {
-        printf("- %d\n", num);
-    }
+    int* e = ba.allocate();
+    *e = 5;
+    printf("%d\n", *e);
+
+    int* f = ba.allocate();
+    *f = 6;
+    printf("%d\n", *f);
+
     return 0;
 }
