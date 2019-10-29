@@ -48,10 +48,18 @@ public:
     }
 
     ~Bucket_Allocator() {
-        for (int i = 0; i < bucket_count; ++i) {
-            free(buckets[i]);
+        for (int i = 0; i < latest_bucket-1; ++i) {
+            for (int j = 0; j < bucket_size; ++j) {
+                ::delete (buckets[i]+j);
+            }
         }
-        ::free(buckets);
+
+        for (int i = 0; i < next_index_in_latest_bucket; ++i) {
+            ::delete (buckets[latest_bucket]+i);
+        }
+
+        ::delete[] buckets;
+        free_list.~Array_List();
     }
 
     type* allocate(unsigned int amount = 1) {
@@ -84,13 +92,9 @@ public:
         }
     }
 
-    void free(type* obj) {
+    void free_object(type* obj) {
+        delete obj;
         free_list.append(obj);
     }
 
-    void reset() {
-        latest_bucket = 0;
-        next_index_in_latest_bucket = 0;
-        next_bucket_index = 0;
-    }
 };

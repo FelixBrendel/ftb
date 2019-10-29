@@ -10,7 +10,7 @@ int main(int argc, char* argv[]) {
     *a = 1;
     printf("%d\n", *a);
 
-    ba.free(a);
+    ba.free_object(a);
 
     int* b = ba.allocate();
     *b = 2;

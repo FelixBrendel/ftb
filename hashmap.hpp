@@ -30,6 +30,13 @@ struct Hash_Map {
         data = (HM_Cell*)calloc(initial_capacity, sizeof(HM_Cell));
     }
 
+    ~Hash_Map() {
+        if (data) {
+            free(data);
+            data = nullptr;
+        }
+    }
+
     int get_index_of_living_cell_if_it_exists(key_type key, u64 hash_val) {
         // int index = hash_val & (current_capacity - 1);
         int index = hash_val % current_capacity;

@@ -11,7 +11,7 @@ cl^
    ../test.cpp^
    /Fe%exeName% /MP /openmp /W3 /std:c++latest^
    /nologo /EHsc /Z7^
-   /link /incremental /debug:fastlink
+   /link /incremental
 
 if %errorlevel% == 0 (
    echo.

@@ -13,6 +13,13 @@ struct Array_List {
         length = initial_capacity;
     }
 
+    ~Array_List() {
+        if (data) {
+            free(data);
+            data = nullptr;
+        }
+    }
+
     type* begin() {
         return data;
     }
