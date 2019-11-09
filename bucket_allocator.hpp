@@ -1,21 +1,19 @@
 #include "arraylist.hpp"
 
-template <typename type, unsigned int bucket_size>
+template <typename type>
 class Bucket_Allocator {
-    int latest_bucket;
     int next_index_in_latest_bucket;
-    int bucket_count;
     int next_bucket_index;
+    int bucket_count;
+    unsigned int bucket_size;
 
     Array_List<type*> free_list;
     type** buckets;
 
     void expand() {
+        // printf("realloc time\n");
         // realloc time
         buckets = (type**)realloc(buckets, bucket_count * 2 * sizeof(type*));
-        for (int i = bucket_count; i < bucket_count * 2; ++i) {
-            buckets[i] = (type*)malloc(bucket_size * sizeof(type));
-        }
         bucket_count *= 2;
     }
 
@@ -25,6 +23,7 @@ class Bucket_Allocator {
         if (next_bucket_index >= bucket_count) {
             expand();
         }
+        buckets[next_bucket_index] = (type*)malloc(bucket_size * sizeof(type));
     }
 
     void increment_pointers(int amount = 1) {
@@ -35,31 +34,40 @@ class Bucket_Allocator {
     }
 
 public:
-    Bucket_Allocator(unsigned int initial_bucket_count = 1) {
-        latest_bucket = 0;
+    Bucket_Allocator(unsigned int bucket_size, unsigned int initial_bucket_count) {
+        this->bucket_size = bucket_size;
         next_index_in_latest_bucket = 0;
         next_bucket_index = 0;
         bucket_count = initial_bucket_count;
 
         buckets = (type**)malloc(bucket_count * sizeof(type*));
-        for (int i = 0; i < bucket_count; ++i) {
-            buckets[i] = (type*)malloc(bucket_size * sizeof(type));
-        }
+        buckets[0] = (type*)malloc(bucket_size * sizeof(type));
     }
 
     ~Bucket_Allocator() {
-        for (int i = 0; i < latest_bucket-1; ++i) {
+        for (int i = 0; i <= next_bucket_index; ++i) {
+            free(buckets[i]);
+        }
+
+        free(buckets);
+    }
+
+    template <typename proc>
+    void for_each(proc p) {
+        free_list.sort();
+        type* val;
+        for (int i = 0; i < next_bucket_index; ++i) {
             for (int j = 0; j < bucket_size; ++j) {
-                ::delete (buckets[i]+j);
+                val = buckets[i]+j;
+                if (free_list.sorted_find(val) == -1)
+                    p(val);
             }
         }
-
-        for (int i = 0; i < next_index_in_latest_bucket; ++i) {
-            ::delete (buckets[latest_bucket]+i);
+        for (int j = 0; j < next_index_in_latest_bucket; ++j) {
+            val = buckets[next_bucket_index]+j;
+            if (free_list.sorted_find(val) == -1)
+                p(val);
         }
-
-        ::delete[] buckets;
-        free_list.~Array_List();
     }
 
     type* allocate(unsigned int amount = 1) {
@@ -93,7 +101,6 @@ public:
     }
 
     void free_object(type* obj) {
-        delete obj;
         free_list.append(obj);
     }
 

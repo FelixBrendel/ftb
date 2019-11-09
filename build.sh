@@ -7,7 +7,7 @@ pushd $SCRIPTPATH > /dev/null
 time clang++ -D_DEBUG -D_PROFILING -fpermissive test.cpp -g -o ./ftb --std=c++17 || exit 1
 
 echo ""
-time ./ftb
+time valgrind --leak-check=full ./ftb
 
 popd > /dev/null
 unset TIMEFORMAT

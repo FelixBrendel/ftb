@@ -4,33 +4,30 @@
 #include "bucket_allocator.hpp"
 
 int main(int argc, char* argv[]) {
-    Bucket_Allocator<int, 3> ba;
+    Bucket_Allocator<int> ba(2, 1);
 
     int* a = ba.allocate();
     *a = 1;
-    printf("%d\n", *a);
-
     ba.free_object(a);
 
     int* b = ba.allocate();
     *b = 2;
-    printf("%d\n", *b);
 
     int* c = ba.allocate();
     *c = 3;
-    printf("%d\n", *c);
 
     int* d = ba.allocate();
     *d = 4;
-    printf("%d\n", *d);
 
     int* e = ba.allocate();
     *e = 5;
-    printf("%d\n", *e);
 
     int* f = ba.allocate();
     *f = 6;
-    printf("%d\n", *f);
+
+    ba.for_each([](int* i){
+        printf("%d\n", *i);
+    });
 
     return 0;
 }

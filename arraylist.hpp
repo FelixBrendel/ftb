@@ -14,10 +14,20 @@ struct Array_List {
     }
 
     ~Array_List() {
-        if (data) {
-            free(data);
-            data = nullptr;
+        free(data);
+        data = 0;
+    }
+
+    Array_List<type> clone() {
+        Array_List<type> ret;
+        ret.length = length;
+        ret.next_index = next_index;
+
+        ret.data = (type*)malloc(length * sizeof(type));
+        for (int i = 0; i < next_index; ++i) {
+            ret.data[i] = data[i];
         }
+        return ret;
     }
 
     type* begin() {
@@ -79,6 +89,8 @@ struct Array_List {
 
     void sort(int left=-1, int right=-1) {
         if (left == -1) {
+            if (next_index == 0)
+                return;
             sort(0, next_index - 1);
             return;
         } else if (left == right) {
