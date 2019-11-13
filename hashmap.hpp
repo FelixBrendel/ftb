@@ -6,12 +6,12 @@
 #include "types.hpp"
 
 #define for_hash_map(hm)                                           \
-    if (decltype(hm.data[0].original) key   = 0); else             \
-    if (decltype(hm.data[0].object)   value = 0); else             \
-    for(int index = 0; index < hm.current_capacity; ++index)       \
-        if (!((!hm.data[index].deleted) &&                         \
-              (key   = hm.data[index].original) &&                 \
-              (value = hm.data[index].object))); else
+    if (decltype((hm).data[0].original) key   = 0); else           \
+    if (decltype((hm).data[0].object)   value = 0); else           \
+    for(int index = 0; index < (hm).current_capacity; ++index)     \
+        if (!((!(hm).data[index].deleted) &&                       \
+              (key   = (hm).data[index].original) &&               \
+              (value = (hm).data[index].object))); else
 
 template <typename key_type, typename value_type>
 struct Hash_Map {
@@ -100,8 +100,7 @@ struct Hash_Map {
         }
     }
 
-    void set_object(key_type key, value_type obj) {
-        u64 hash_val = hm_hash((key_type)key);
+    void set_object(key_type key, value_type obj, u64 hash_val) {
         int index = hash_val % current_capacity;
 
         /* if we the desired cell is just empty, write to it and done :) */
@@ -125,7 +124,7 @@ struct Hash_Map {
                     for (int i = 0; i < current_capacity/4; ++i) {
                         auto cell = old_data[i];
                         if (cell.original) {
-                            set_object(cell.original, cell.object);
+                            set_object(cell.original, cell.object, cell.hash);
                         }
                     }
                     free(old_data);
@@ -158,6 +157,10 @@ struct Hash_Map {
         data[index].original = key;
         data[index].hash = hash_val;
         data[index].object = obj;
+    }
+    void set_object(key_type key, value_type obj) {
+        u64 hash_val = hm_hash((key_type)key);
+        set_object(key, obj, hash_val);
     }
 
 };
