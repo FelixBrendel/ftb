@@ -2,9 +2,9 @@
 
 template <typename type>
 class Bucket_Allocator {
-    int next_index_in_latest_bucket;
-    int next_bucket_index;
-    int bucket_count;
+    unsigned int next_index_in_latest_bucket;
+    unsigned int next_bucket_index;
+    unsigned int bucket_count;
     unsigned int bucket_size;
 
     Array_List<type*> free_list;
@@ -45,7 +45,7 @@ public:
     }
 
     ~Bucket_Allocator() {
-        for (int i = 0; i <= next_bucket_index; ++i) {
+        for (unsigned int i = 0; i <= next_bucket_index; ++i) {
             free(buckets[i]);
         }
 
@@ -56,14 +56,14 @@ public:
     void for_each(proc p) {
         free_list.sort();
         type* val;
-        for (int i = 0; i < next_bucket_index; ++i) {
-            for (int j = 0; j < bucket_size; ++j) {
+        for (unsigned int i = 0; i < next_bucket_index; ++i) {
+            for (unsigned int j = 0; j < bucket_size; ++j) {
                 val = buckets[i]+j;
                 if (free_list.sorted_find(val) == -1)
                     p(val);
             }
         }
-        for (int j = 0; j < next_index_in_latest_bucket; ++j) {
+        for (unsigned int j = 0; j < next_index_in_latest_bucket; ++j) {
             val = buckets[next_bucket_index]+j;
             if (free_list.sorted_find(val) == -1)
                 p(val);
