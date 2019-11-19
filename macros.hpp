@@ -45,7 +45,7 @@ public:
     }
 };
 
-struct {
+static struct {
     template<typename F>
     defer_finalizer<F> operator<<(F && f) {
         return defer_finalizer<F>(std::forward<F>(f));
