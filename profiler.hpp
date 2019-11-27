@@ -4,13 +4,21 @@
 # include <stdio.h>
 # include <string.h>
 # include <time.h>
+// # include <bits/stdc++.h>
+// # include <iostream>
+// # include <sys/stat.h>
+// # include <sys/types.h>
+#ifdef _MSC_VER
+// if windows
+# include <Windows.h>
+#else
+# include <sys/time.h>
+#endif
 
-//# include <bits/stdc++.h>
-# include <iostream>
-# include <sys/stat.h>
-# include <sys/types.h>
 
 struct Profiler {
+    LARGE_INTEGER tmp_time;
+
     // same for all threads
     inline static char file_template[40] = "\0";
 
@@ -19,7 +27,9 @@ struct Profiler {
     inline thread_local static size_t thread_id = -1;
     inline thread_local static int    call_depth = 0;
     inline thread_local static FILE*  out_file = nullptr;
-    Profiler(const char* file, const char* func, const int line) {
+
+
+    Profiler(const char* file, const char* func, const int line, char* custom_name) {
         call_depth += 1;
 
         // if we never used this thread before
@@ -53,18 +63,25 @@ struct Profiler {
 
             is_initialized = true;
         }
-
-        fprintf(out_file, "-> %s %s %d\n", func, file, line);
+        QueryPerformanceCounter(&tmp_time);
+        fprintf(out_file, "->,%lld,%s,%s,%d\n",
+                tmp_time.QuadPart,
+                (custom_name ?
+                 custom_name :
+                 func), file, line);
     };
     ~Profiler() {
         call_depth -= 1;
-        fprintf(out_file, "<-\n");
+        QueryPerformanceCounter(&tmp_time);
+        fprintf(out_file, "<-,%lld,,,\n", tmp_time.QuadPart);
         if (call_depth == 0)
             fflush(out_file);
     };
 };
 
-# define profile_this Profiler profiler(__FILE__, __FUNCTION__, __LINE__)
+# define profile_this()          Profiler profiler(__FILE__, __FUNCTION__, __LINE__,    0)
+# define profile_with_name(name) Profiler profiler(__FILE__, __FUNCTION__, __LINE__, name)
 #else
-# define profile_this do {} while(0)
+# define profile_this()      do {} while(0)
+# define profile_with_name() do {} while(0)
 #endif
