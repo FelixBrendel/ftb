@@ -29,7 +29,7 @@ struct Profiler {
     inline thread_local static FILE*  out_file = nullptr;
 
 
-    Profiler(const char* file, const char* func, const int line, char* custom_name) {
+    Profiler(const char* file, const char* name, const int line, const char* comment1, const char* comment2) {
         call_depth += 1;
 
         // if we never used this thread before
@@ -61,27 +61,39 @@ struct Profiler {
                 printf("could not open %s\n", file_name);
             }
 
+            // initially write the performance frequency
+            LARGE_INTEGER pf;
+            QueryPerformanceFrequency(&pf);
+            fprintf(out_file, "%lld,,,,\n", pf.QuadPart);
+
             is_initialized = true;
         }
         QueryPerformanceCounter(&tmp_time);
-        fprintf(out_file, "->,%lld,%s,%s,%d\n",
-                tmp_time.QuadPart,
-                (custom_name ?
-                 custom_name :
-                 func), file, line);
+        fprintf(out_file, "->,%lld,%s,%s,%d,%s,%s\n",
+                tmp_time.QuadPart, name, file,
+                line, comment1, comment2);
     };
+
     ~Profiler() {
         call_depth -= 1;
         QueryPerformanceCounter(&tmp_time);
-        fprintf(out_file, "<-,%lld,,,\n", tmp_time.QuadPart);
+        fprintf(out_file, "<-,%lld,,,,,\n", tmp_time.QuadPart);
         if (call_depth == 0)
             fflush(out_file);
     };
 };
 
-# define profile_this()          Profiler profiler(__FILE__, __FUNCTION__, __LINE__,    0)
-# define profile_with_name(name) Profiler profiler(__FILE__, __FUNCTION__, __LINE__, name)
+# define profile_this()                             Profiler profiler(__FILE__, __FUNCTION__, __LINE__, "", "")
+# define profile_with_name(name)                    Profiler profiler(__FILE__,         name, __LINE__, "", "")
+# define profile_with_comment(c1)                   Profiler profiler(__FILE__, __FUNCTION__, __LINE__, c1, "")
+# define profile_with_comments(c1,c2)               Profiler profiler(__FILE__, __FUNCTION__, __LINE__, c1, c2)
+# define profile_with_name_and_comment(name,c1)     Profiler profiler(__FILE__,         name, __LINE__, c1, "")
+# define profile_with_name_and_comments(name,c1,c2) Profiler profiler(__FILE__,         name, __LINE__, c1, c2)
 #else
-# define profile_this()      do {} while(0)
-# define profile_with_name() do {} while(0)
+# define profile_this()                             do {} while(0)
+# define profile_with_name(name)                    do {} while(0)
+# define profile_with_comment(c1)                   do {} while(0)
+# define profile_with_comments(c1,c2)               do {} while(0)
+# define profile_with_name_and_comment(name,c1)     do {} while(0)
+# define profile_with_name_and_comments(name,c1,c2) do {} while(0)
 #endif
