@@ -51,6 +51,13 @@ struct Array_List {
         next_index++;
     }
 
+    void reserve(unsigned int count) {
+        if (next_index+count <= length) {
+            length *= 2;
+            data = (type*)realloc(data, length * sizeof(type));
+        }
+    }
+
     type& operator[](int index) {
         return data[index];
     }
