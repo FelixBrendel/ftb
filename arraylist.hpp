@@ -7,13 +7,13 @@ struct Array_List {
     int length;
     int next_index;
 
-    Array_List(int initial_capacity = 16) {
+    void alloc(int initial_capacity = 16) {
         data = (type*)malloc(initial_capacity * sizeof(type));
         next_index = 0;
         length = initial_capacity;
     }
 
-    ~Array_List() {
+    void dealloc() {
         free(data);
         data = 0;
     }
@@ -52,7 +52,7 @@ struct Array_List {
     }
 
     void reserve(unsigned int count) {
-        if (next_index+count <= length) {
+        if (next_index+count <= (unsigned int)length) {
             length *= 2;
             data = (type*)realloc(data, length * sizeof(type));
         }
