@@ -52,7 +52,7 @@ struct Array_List {
     }
 
     void reserve(unsigned int count) {
-        if (next_index+count <= (unsigned int)length) {
+        if (next_index+count >= (unsigned int)length) {
             length *= 2;
             data = (type*)realloc(data, length * sizeof(type));
         }
