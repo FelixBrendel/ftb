@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "types.hpp"
+#include "arraylist.hpp"
 
 #define for_hash_map(hm)                                           \
     if (decltype((hm).data[0].original) key   = 0); else           \
@@ -24,18 +25,16 @@ struct Hash_Map {
         value_type object;
     }* data;
 
-    Hash_Map(int initial_capacity = 8) {
+    void alloc(int initial_capacity = 8) {
         current_capacity = initial_capacity;
         cell_count = 0;
         data = (HM_Cell*)calloc(initial_capacity, sizeof(HM_Cell));
     }
 
-    ~Hash_Map() {
-        if (data) {
+    void dealloc() {
             free(data);
             data = nullptr;
         }
-    }
 
     int get_index_of_living_cell_if_it_exists(key_type key, u64 hash_val) {
         // int index = hash_val & (current_capacity - 1);
@@ -82,6 +81,24 @@ struct Hash_Map {
 
     bool key_exists(key_type key) {
         return get_index_of_living_cell_if_it_exists(key, hm_hash((key_type)key)) != -1;
+    }
+
+    key_type search_key_to_object(value_type v) {
+        for (int i = 0; i < current_capacity; ++i) {
+            if (data[i].object == v && !data[i].deleted)
+                return data[i].original;
+        }
+        return nullptr;
+    }
+
+    Array_List<key_type> get_all_keys() {
+        Array_List<key_type> ret;
+        ret.alloc();
+        for (int i = 0; i < current_capacity; ++i) {
+            if (data[i].original && !data[i].deleted)
+                ret.append(data[i].original);
+        }
+        return ret;
     }
 
     value_type get_object(key_type key) {
@@ -158,9 +175,9 @@ struct Hash_Map {
         data[index].hash = hash_val;
         data[index].object = obj;
     }
+
     void set_object(key_type key, value_type obj) {
         u64 hash_val = hm_hash((key_type)key);
         set_object(key, obj, hash_val);
     }
-
 };
