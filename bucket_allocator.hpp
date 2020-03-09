@@ -34,7 +34,7 @@ class Bucket_Allocator {
     }
 
 public:
-    Bucket_Allocator(unsigned int bucket_size, unsigned int initial_bucket_count) {
+    void alloc(unsigned int bucket_size, unsigned int initial_bucket_count) {
         this->free_list.alloc();
         this->bucket_size = bucket_size;
         next_index_in_latest_bucket = 0;
@@ -45,7 +45,7 @@ public:
         buckets[0] = (type*)malloc(bucket_size * sizeof(type));
     }
 
-    ~Bucket_Allocator() {
+    void dealloc() {
         for (unsigned int i = 0; i <= next_bucket_index; ++i) {
             free(buckets[i]);
         }

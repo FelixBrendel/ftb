@@ -5,10 +5,10 @@
 #include <type_traits>
 
 template<typename>
-struct TransientFunction; // intentionally not defined
+struct Lambda; // intentionally not defined
 
 template<typename R, typename ...Args>
-struct TransientFunction<R(Args...)>
+struct Lambda<R(Args...)>
 {
     using Dispatcher = R(*)(void*, Args...);
 
@@ -16,7 +16,7 @@ struct TransientFunction<R(Args...)>
     // wrapped invokable object
     void* m_Target;          // A pointer to the invokable object
 
-    // Dispatch() is instantiated by the TransientFunction constructor,
+    // Dispatch() is instantiated by the Lambda constructor,
     // which will store a pointer to the function in m_Dispatcher.
     template<typename S>
     static R Dispatch(void* target, Args... args)
@@ -25,7 +25,7 @@ struct TransientFunction<R(Args...)>
         }
 
     template<typename T>
-    TransientFunction(T&& target)
+    Lambda(T&& target)
         : m_Dispatcher(&Dispatch<typename std::decay<T>::type>)
         , m_Target(&target)
         {
@@ -34,7 +34,7 @@ struct TransientFunction<R(Args...)>
     // Specialize for reference-to-function, to ensure that a valid pointer is
     // stored.
     using TargetFunctionRef = R(Args...);
-    TransientFunction(TargetFunctionRef target)
+    Lambda(TargetFunctionRef target)
         : m_Dispatcher(Dispatch<TargetFunctionRef>)
         {
             static_assert(sizeof(void*) == sizeof target,
@@ -50,18 +50,18 @@ struct TransientFunction<R(Args...)>
 };
 
 
-struct Hook : Array_List<TransientFunction<void()>> {
+struct Hook : Array_List<Lambda<void()>> {
     Hook() {
         alloc();
     }
     ~Hook () {
         dealloc();
     }
-    void operator<<(TransientFunction<void()> f) {
+    void operator<<(Lambda<void()> f) {
         // FIXME(Felix): Why can I not call Array_List::append here??? Hallo?
         if (next_index == length) {
             length *= 2;
-            data = (TransientFunction<void()>*)realloc(data, length * sizeof(TransientFunction<void()>));
+            data = (Lambda<void()>*)realloc(data, length * sizeof(Lambda<void()>));
         }
         data[next_index] = f;
         next_index++;

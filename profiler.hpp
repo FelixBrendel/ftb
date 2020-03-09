@@ -1,23 +1,57 @@
 #pragma once
 #ifdef _PROFILING
+
 # include <stdlib.h>
 # include <stdio.h>
 # include <string.h>
 # include <time.h>
-// # include <bits/stdc++.h>
-// # include <iostream>
-// # include <sys/stat.h>
-// # include <sys/types.h>
+
 #ifdef _MSC_VER
-// if windows
-# include <Windows.h>
+#  include <Windows.h>
 #else
-# include <sys/time.h>
+#  include <fcntl.h>
+#  include <sys/stat.h>
+#  include <sys/time.h>
+#  include <sys/time.h>
+#  include <stdint.h>
+#  include <stdbool.h>
+#  include <stddef.h>
+
+/* Helpful conversion constants. */
+static const unsigned usec_per_sec = 1000000;
+static const unsigned usec_per_msec = 1000;
+
+/* These functions are written to match the win32
+   signatures and behavior as closely as possible.
+*/
+bool QueryPerformanceFrequency(int64_t *frequency)
+{
+    /* gettimeofday reports to microsecond accuracy. */
+    *frequency = usec_per_sec;
+
+    return true;
+}
+
+bool QueryPerformanceCounter(int64_t *performance_count)
+{
+    struct timeval time;
+
+    /* Grab the current time. */
+    gettimeofday(&time, NULL);
+    *performance_count = time.tv_usec + /* Microseconds. */
+        time.tv_sec * usec_per_sec; /* Seconds. */
+
+    return true;
+}
 #endif
 
 
 struct Profiler {
+#ifdef _MSC_VER
     LARGE_INTEGER tmp_time;
+#else
+    int64_t tmp_time;
+#endif
 
     // same for all threads
     inline static char file_template[40] = "\0";
@@ -62,22 +96,35 @@ struct Profiler {
             }
 
             // initially write the performance frequency
-            LARGE_INTEGER pf;
-            QueryPerformanceFrequency(&pf);
-            fprintf(out_file, "%lld,,,,\n", pf.QuadPart);
-
+            QueryPerformanceFrequency(&tmp_time);
+#ifdef _MSC_VER
+            fprintf(out_file, "%lld,,,,\n", tmp_time.QuadPart);
+#else
+            fprintf(out_file, "%ld,,,,\n", tmp_time);
+#endif
             is_initialized = true;
         }
+
         QueryPerformanceCounter(&tmp_time);
+#ifdef _MSC_VER
         fprintf(out_file, "->,%lld,%s,%s,%d,%s,%s\n",
                 tmp_time.QuadPart, name, file,
                 line, comment1, comment2);
+#else
+        fprintf(out_file, "->,%ld,%s,%s,%d,%s,%s\n",
+                tmp_time, name, file,
+                line, comment1, comment2);
+#endif
     };
 
     ~Profiler() {
         call_depth -= 1;
         QueryPerformanceCounter(&tmp_time);
+#ifdef _MSC_VER
         fprintf(out_file, "<-,%lld,,,,,\n", tmp_time.QuadPart);
+#else
+        fprintf(out_file, "<-,%ld,,,,,\n", tmp_time);
+#endif
         if (call_depth == 0)
             fflush(out_file);
     };
