@@ -102,7 +102,6 @@ struct Hash_Map {
     }
 
     value_type get_object(key_type key) {
-
         int index = get_index_of_living_cell_if_it_exists(key, hm_hash((key_type)key));
         if (index != -1) {
             return data[index].object;
