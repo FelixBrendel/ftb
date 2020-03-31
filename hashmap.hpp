@@ -9,15 +9,15 @@
 #define for_hash_map(hm)                                           \
     if (decltype((hm).data[0].original) key   = 0); else           \
     if (decltype((hm).data[0].object)   value = 0); else           \
-    for(int index = 0; index < (hm).current_capacity; ++index)     \
+    for(u32 index = 0; index < (hm).current_capacity; ++index)     \
         if (!((!(hm).data[index].deleted) &&                       \
               (key   = (hm).data[index].original) &&               \
               (value = (hm).data[index].object))); else
 
 template <typename key_type, typename value_type>
 struct Hash_Map {
-    int current_capacity;
-    int cell_count;
+    u32 current_capacity;
+    u32 cell_count;
     struct HM_Cell {
         key_type original;
         u64  hash;
@@ -25,7 +25,7 @@ struct Hash_Map {
         value_type object;
     }* data;
 
-    void alloc(int initial_capacity = 8) {
+    void alloc(u32 initial_capacity = 8) {
         current_capacity = initial_capacity;
         cell_count = 0;
         data = (HM_Cell*)calloc(initial_capacity, sizeof(HM_Cell));
@@ -36,9 +36,9 @@ struct Hash_Map {
             data = nullptr;
         }
 
-    int get_index_of_living_cell_if_it_exists(key_type key, u64 hash_val) {
-        // int index = hash_val & (current_capacity - 1);
-        int index = hash_val % current_capacity;
+    s32 get_index_of_living_cell_if_it_exists(key_type key, u64 hash_val) {
+        // s32 index = hash_val & (current_capacity - 1);
+        s32 index = hash_val % current_capacity;
         HM_Cell cell = data[index];
         /* test if cell exists at that index */
         if (cell.original) {
@@ -56,8 +56,8 @@ struct Hash_Map {
             } else {
                 /* strings dont match, this means we have */
                 /* a collision. We just search forward */
-                for (int i = 0; i < current_capacity; ++i) {
-                    int new_idx = (i + index) % current_capacity;
+                for (u32 i = 0; i < current_capacity; ++i) {
+                    u32 new_idx = (i + index) % current_capacity;
                     cell = data[new_idx];
                     if (!cell.original)
                         return -1;
@@ -84,7 +84,7 @@ struct Hash_Map {
     }
 
     key_type search_key_to_object(value_type v) {
-        for (int i = 0; i < current_capacity; ++i) {
+        for (u32 i = 0; i < current_capacity; ++i) {
             if (data[i].object == v && !data[i].deleted)
                 return data[i].original;
         }
@@ -94,7 +94,9 @@ struct Hash_Map {
     Array_List<key_type> get_all_keys() {
         Array_List<key_type> ret;
         ret.alloc();
-        for (int i = 0; i < current_capacity; ++i) {
+        // QUESTION(Felix): Does it make sense to
+        // ret.reserve(this->cell_count)?
+        for (u32 i = 0; i < current_capacity; ++i) {
             if (data[i].original && !data[i].deleted)
                 ret.append(data[i].original);
         }
@@ -102,7 +104,7 @@ struct Hash_Map {
     }
 
     value_type get_object(key_type key) {
-        int index = get_index_of_living_cell_if_it_exists(key, hm_hash((key_type)key));
+        s32 index = get_index_of_living_cell_if_it_exists(key, hm_hash((key_type)key));
         if (index != -1) {
             return data[index].object;
         }
@@ -110,14 +112,14 @@ struct Hash_Map {
     }
 
     void delete_object(key_type key) {
-        int index = get_index_of_living_cell_if_it_exists(key, hm_hash((key_type)key));
+        s32 index = get_index_of_living_cell_if_it_exists(key, hm_hash((key_type)key));
         if (index != -1) {
             data[index].deleted = true;
         }
     }
 
     void set_object(key_type key, value_type obj, u64 hash_val) {
-        int index = hash_val % current_capacity;
+        u32 index = hash_val % current_capacity;
 
         /* if we the desired cell is just empty, write to it and done :) */
         if (!data[index].original) {
@@ -137,7 +139,7 @@ struct Hash_Map {
                     current_capacity *= 4;
 
                     /* insert all old items again */
-                    for (int i = 0; i < current_capacity/4; ++i) {
+                    for (u32 i = 0; i < current_capacity/4; ++i) {
                         auto cell = old_data[i];
                         if (cell.original) {
                             set_object(cell.original, cell.object, cell.hash);
@@ -149,7 +151,7 @@ struct Hash_Map {
                 /* search for empty slot for new cell starting at desired index; */
                 /* preventing gotos using lambdas!                               */
                 [&]{
-                    for (int i = index; i < current_capacity; ++i) {
+                    for (u32 i = index; i < current_capacity; ++i) {
                         if (!data[i].original ||
                             hm_objects_match(data[i].original, key))
                         {
@@ -157,7 +159,7 @@ struct Hash_Map {
                             return;
                         }
                     }
-                    for (int i = 0; i < index; ++i) {
+                    for (u32 i = 0; i < index; ++i) {
                         if (!data[i].original ||
                             hm_objects_match(data[i].original, key))
                         {

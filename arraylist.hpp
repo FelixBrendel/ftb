@@ -1,13 +1,14 @@
 #pragma once
 #include <stdlib.h>
+#include "types.hpp"
 
 template <typename type>
 struct Array_List {
     type* data;
-    int length;
-    int next_index;
+    u32 length;
+    u32 next_index;
 
-    void alloc(int initial_capacity = 16) {
+    void alloc(u32 initial_capacity = 16) {
         data = (type*)malloc(initial_capacity * sizeof(type));
         next_index = 0;
         length = initial_capacity;
@@ -24,7 +25,7 @@ struct Array_List {
         ret.next_index = next_index;
 
         ret.data = (type*)malloc(length * sizeof(type));
-        for (int i = 0; i < next_index; ++i) {
+        for (u32 i = 0; i < next_index; ++i) {
             ret.data[i] = data[i];
         }
         return ret;
@@ -38,7 +39,7 @@ struct Array_List {
         return data+(next_index);
     }
 
-    void remove_index(int index) {
+    void remove_index(u32 index) {
         data[index] = data[--next_index];
     }
 
@@ -51,19 +52,19 @@ struct Array_List {
         next_index++;
     }
 
-    void reserve(unsigned int count) {
-        if (next_index+count >= (unsigned int)length) {
+    void reserve(u32 count) {
+        if (next_index+count >= (u32)length) {
             length *= 2;
             data = (type*)realloc(data, length * sizeof(type));
         }
     }
 
-    type& operator[](int index) {
+    type& operator[](u32 index) {
         return data[index];
     }
 
-    void _merge(int start, int mid, int end) {
-        int start2 = mid + 1;
+    void _merge(u32 start, u32 mid, u32 end) {
+        u32 start2 = mid + 1;
 
         /* If the direct merge is already sorted */
         if ((size_t)data[mid] <= (size_t)data[start2]) {
@@ -77,7 +78,7 @@ struct Array_List {
             }
             else {
                 type value = data[start2];
-                int index = start2;
+                u32 index = start2;
 
                 /* Shift all the elements between element 1; element 2, right by 1. */
                 while (index != start) {
@@ -94,7 +95,7 @@ struct Array_List {
         }
     }
 
-    void sort(int left=-1, int right=-1) {
+    void sort(s32 left=-1, s32 right=-1) {
         if (left == -1) {
             if (next_index == 0)
                 return;
@@ -104,7 +105,7 @@ struct Array_List {
             return;
         }
 
-        int middle = left + (right-left) / 2;
+        u32 middle = left + (right-left) / 2;
 
         sort(left, middle);
         sort(middle+1, right);
@@ -112,7 +113,7 @@ struct Array_List {
         _merge(left, middle, right);
     }
 
-    int sorted_find(type elem, int left=-1, int right=-1) {
+    u32 sorted_find(type elem, s32 left=-1, s32 right=-1) {
         if (left == -1) {
             return sorted_find(elem, 0, next_index - 1);
         } else if (left == right) {
@@ -122,7 +123,7 @@ struct Array_List {
         } else if (right < left)
             return -1;
 
-        int middle = left + (right-left) / 2;
+        u32 middle = left + (right-left) / 2;
 
         if ((size_t)data[middle] < (size_t)elem)
             return sorted_find(elem, middle+1, right);

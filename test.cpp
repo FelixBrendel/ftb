@@ -1,10 +1,11 @@
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 
+#include "./types.hpp"
 #include "./hooks.hpp"
 
 Hook h;
-int main(int argc, char* argv[]) {
+s32 main(s32 argc, char* argv[]) {
     printf("Hello world");
     system_shutdown_hook << [] {
         printf("Goodbye world\n");
