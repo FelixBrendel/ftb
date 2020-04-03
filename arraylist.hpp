@@ -19,6 +19,11 @@ struct Array_List {
         data = 0;
     }
 
+
+    void clear() {
+        next_index = 0;
+    }
+
     Array_List<type> clone() {
         Array_List<type> ret;
         ret.length = length;
