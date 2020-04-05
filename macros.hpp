@@ -1,24 +1,6 @@
 #pragma once
-// #include <functional>
 
 #define proc auto
-
-#ifdef _DEBUG
-# define if_debug if constexpr (true)
-#else
-# define if_debug if constexpr (false)
-#endif
-
-#ifdef _MSC_VER
-# define debug_break() if_debug __debugbreak()
-# define if_windows if constexpr (true)
-# define if_linux   if constexpr (false)
-#else
-# define debug_break() if_debug raise(SIGTRAP)
-# define if_windows if constexpr (false)
-# define if_linux   if constexpr (true)
-#endif
-
 #define TOKENPASTE(x, y) x ## y
 #define TOKENPASTE2(x, y) TOKENPASTE(x, y)
 
