@@ -7,9 +7,9 @@
 Hook h;
 s32 main(s32 argc, char* argv[]) {
     printf("Hello world");
-    system_shutdown_hook << [] {
-        printf("Goodbye world\n");
-    };
+    // system_shutdown_hook << [] {
+    //     printf("Goodbye world\n");
+    // };
 
     h << []{
         printf("Hallo1");

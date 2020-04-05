@@ -131,7 +131,6 @@ struct Hash_Map {
                 /* count                                               */
             } else {
                 /* collision, check resize */
-                ++cell_count;
                 if ((cell_count*1.0f / current_capacity) > 0.666f) {
                     auto old_data = data;
                     data = (HM_Cell*)calloc(current_capacity*4, sizeof(HM_Cell));
@@ -148,6 +147,7 @@ struct Hash_Map {
                     free(old_data);
                     index = hash_val % current_capacity;
                 }
+                ++cell_count;
                 /* search for empty slot for new cell starting at desired index; */
                 /* preventing gotos using lambdas!                               */
                 [&]{
