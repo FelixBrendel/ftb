@@ -1,29 +1,33 @@
 @echo off
-pushd %~dp0
 
-set exeName=main.exe
-set binDir=bin
+set EXE_RAW=test
+set BINDIR_RAW=bin
+set SRC=test.cpp
 
-mkdir %bindir%
-pushd %bindir%
+set EXE_WIN=%EXE_RAW%.exe
+set EXE_LINUX=%EXE_RAW%
+set BINDIR_WIN=.\%BINDIR_RAW%
+set BINDIR_LINUX=./%BINDIR_RAW%
 
-cl^
-   ../test.cpp^
-   /Fe%exeName% /MP /openmp /W3 /std:c++latest^
-   /nologo /EHsc /Z7^
-   /link /incremental
+echo.
+echo clang:
+clang %SRC% -o %BINDIR_WIN%\clang_%EXE_WIN%
+%BINDIR_WIN%\clang_%EXE_WIN%
 
-if %errorlevel% == 0 (
-   echo.
-   if not exist ..\%binDir% mkdir ..\%binDir%
-   move %exeName% ..\%binDir%\ > NUL
-  echo ---------- Output start ----------
-   %exeName%
-   echo ---------- Output   end ----------
-   popd
-) else (
-  echo.
-  echo Fucki'n 'ell
-)
+echo.
+echo g++:
+g++ %SRC% -o %BINDIR_WIN%\g++_%EXE_WIN%
+%BINDIR_WIN%\g++_%EXE_WIN%
 
-popd
+echo.
+echo cl:
+cl %SRC% /nologo /Zi /Fd: %BINDIR_WIN%\cl_%EXE_WIN%.pdb /Fo: %BINDIR_WIN%\ /Fe: %BINDIR_WIN%\cl_%EXE_WIN% /wd4090
+%BINDIR_WIN%\cl_%EXE_WIN%
+
+echo.
+echo bash_clang:
+bash -c "clang -std=c++11 %SRC% -o %BINDIR_LINUX%/bash_clang_%EXE_LINUX% && %BINDIR_LINUX%/bash_clang_%EXE_LINUX%"
+
+echo.
+echo bash_g++:
+bash -c "g++ -std=c++11 %SRC% -o %BINDIR_LINUX%/bash_g++_%EXE_LINUX% && %BINDIR_LINUX%/bash_g++_%EXE_LINUX%"

@@ -6,6 +6,29 @@
 #include "types.hpp"
 #include "arraylist.hpp"
 
+
+u32 hm_hash(char* str) {
+    u32 value = str[0] << 7;
+    s32 i = 0;
+    while (str[i]) {
+        value = (10000003 * value) ^ str[i++];
+    }
+    return value ^ i;
+}
+
+u32 hm_hash(void* ptr) {
+    return ((u64)ptr * 2654435761) % 4294967296;
+}
+
+inline bool hm_objects_match(char* a, char* b) {
+    return strcmp(a, b) == 0;
+}
+
+inline bool hm_objects_match(void* a, void* b) {
+    return a == b;
+}
+
+
 #define for_hash_map(hm)                                           \
     if (decltype((hm).data[0].original) key   = 0); else           \
     if (decltype((hm).data[0].object)   value = 0); else           \
@@ -103,13 +126,18 @@ struct Hash_Map {
         return ret;
     }
 
-    value_type get_object(key_type key) {
-        s32 index = get_index_of_living_cell_if_it_exists(key, hm_hash((key_type)key));
+    value_type get_object(key_type key, u64 hash_val) {
+        s32 index = get_index_of_living_cell_if_it_exists(key, hash_val);
         if (index != -1) {
             return data[index].object;
         }
         return 0;
     }
+
+    value_type get_object(key_type key) {
+        return get_object(key, hm_hash((key_type)key));
+    }
+
 
     void delete_object(key_type key) {
         s32 index = get_index_of_living_cell_if_it_exists(key, hm_hash((key_type)key));
