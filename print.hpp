@@ -275,7 +275,7 @@ int maybe_fprintf(FILE* file, static_string format, int* pos, va_list* arg_list)
 }
 
 
-int vafprint(FILE* file, static_string format, va_list* arg_list) {
+int print_va_args_to_file(FILE* file, static_string format, va_list* arg_list) {
     int printed_chars = 0;
 
     char c;
@@ -302,6 +302,29 @@ int vafprint(FILE* file, static_string format, va_list* arg_list) {
     return printed_chars;
 }
 
+int print_va_args_to_string(char** out, static_string format, va_list* arg_list) {
+    FILE* t_file = tmpfile();
+    if (!t_file) {
+        return 0;
+    }
+
+    int num_printed_chars = print_va_args_to_file(t_file, format, arg_list);
+
+    *out = (char*)malloc(sizeof(char) * (num_printed_chars+1));
+
+    rewind(t_file);
+    fread(*out, sizeof(char), num_printed_chars, t_file);
+    (*out)[num_printed_chars] = '\0';
+
+    fclose(t_file);
+
+    return num_printed_chars;
+}
+
+int print_va_args(static_string format, va_list* arg_list) {
+    return print_va_args_to_file(stdout, format, arg_list);
+}
+
 int print_to_string(char** out, static_string format, ...) {
     va_list arg_list;
     va_start(arg_list, format);
@@ -311,14 +334,14 @@ int print_to_string(char** out, static_string format, ...) {
         return 0;
     }
 
-    int num_printed_chars = vafprint(t_file, format, &arg_list);
+    int num_printed_chars = print_va_args_to_file(t_file, format, &arg_list);
     va_end(arg_list);
 
 
     *out = (char*)malloc(sizeof(char) * (num_printed_chars+1));
 
     rewind(t_file);
-    size_t newLen = fread(*out, sizeof(char), num_printed_chars, t_file);
+    fread(*out, sizeof(char), num_printed_chars, t_file);
     (*out)[num_printed_chars] = '\0';
 
     fclose(t_file);
@@ -330,7 +353,7 @@ int print_to_file(FILE* file, static_string format, ...) {
     va_list arg_list;
     va_start(arg_list, format);
 
-    int num_printed_chars = vafprint(file, format, &arg_list);
+    int num_printed_chars = print_va_args_to_file(file, format, &arg_list);
 
     va_end(arg_list);
 
@@ -341,7 +364,7 @@ int print(static_string format, ...) {
     va_list arg_list;
     va_start(arg_list, format);
 
-    int num_printed_chars = vafprint(stdout, format, &arg_list);
+    int num_printed_chars = print_va_args_to_file(stdout, format, &arg_list);
 
     va_end(arg_list);
 
