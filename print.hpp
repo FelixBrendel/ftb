@@ -405,6 +405,11 @@ int print_ptr(FILE* f, void* ptr) {
     return print_to_file(f, "nullptr");
 }
 
+void deinit_printer() {
+    printer_map.dealloc();
+    type_map.dealloc();
+}
+
 void init_printer() {
     printer_map.alloc();
     type_map.alloc();
