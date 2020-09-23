@@ -11,6 +11,11 @@
 
 #define str_eq(s1, s2) (strcmp(s1, s2) == 0)
 
+#define console_normal "\x1B[0m"
+#define console_red    "\x1B[31m"
+#define console_green  "\x1B[32m"
+#define console_cyan   "\x1B[36m"
+
 typedef const char* static_string;
 typedef int (*printer_function_32b)(FILE*, u32);
 typedef int (*printer_function_64b)(FILE*, u64);
@@ -27,13 +32,14 @@ enum struct Printer_Function_Type {
     _void
 };
 
-Hash_Map<char*, printer_function_32b> printer_map  = {0};
+Array_List<char*>                     color_stack  = {0};
+Hash_Map<char*, printer_function_ptr> printer_map  = {0};
 Hash_Map<char*, int>                  type_map     = {0};
 
-#define register_printer(spec, fun, type)       \
-    register_printer_32(spec, (printer_function_32b)fun, type)
+#define register_printer(spec, fun, type)                       \
+    register_printer_ptr(spec, (printer_function_ptr)fun, type)
 
-void register_printer_32(const char* spec, printer_function_32b fun, Printer_Function_Type type) {
+void register_printer_ptr(const char* spec, printer_function_ptr fun, Printer_Function_Type type) {
     printer_map.set_object((char*)spec, fun);
     type_map.set_object((char*)spec, (int)type);
 }
@@ -69,14 +75,15 @@ int maybe_special_print(FILE* file, static_string format, int* pos, va_list* arg
     } printer;
 
     // just grab it, it will have the correct type
-    printer.printer_32b = printer_map.get_object(spec, spec_hash);
-
-    free(spec);
+    printer.printer_ptr = printer_map.get_object(spec, spec_hash);
 
     if (type == Printer_Function_Type::unknown) {
+        printf("ERROR: %s printer not found\n", spec);
+        free(spec);
         return 0;
     }
-
+    free(spec);
+    
     if (format[end_pos] == ',') {
         int element_count;
 
@@ -399,10 +406,40 @@ int print_str(FILE* f, char* str) {
     return print_to_file(f, "%s", str);
 }
 
+
+int print_color_start(FILE* f, char* str) {
+    color_stack.append(str);
+    return print_to_file(f, "%s", str);
+}
+
+int print_color_end(FILE* f) {
+    --color_stack.next_index;
+    if (color_stack.next_index == 0) {
+        return print_to_file(f, "%s", console_normal);
+    } else {
+        return print_to_file(f, "%s", color_stack[color_stack.next_index-1]);
+    }
+}
+
 int print_ptr(FILE* f, void* ptr) {
     if (ptr)
         return print_to_file(f, "%#0*X", sizeof(void*)*2+2, ptr);
     return print_to_file(f, "nullptr");
+}
+
+auto print_Str(FILE* f, String* str) -> s32 {
+    return print_to_file(f, "%.*s", str->length, str->data);
+}
+
+auto print_str_line(FILE* f, char* str) -> s32 {
+    u32 length = 0;
+    char* str_cpy = str;
+    while (str[length] != '\0') {
+        if (str[length] == '\n')
+            break;
+        length++;
+    }
+    return print_to_file(f, "%.*s", length, str);
 }
 
 void deinit_printer() {
@@ -411,16 +448,21 @@ void deinit_printer() {
 }
 
 void init_printer() {
+    color_stack.alloc();
     printer_map.alloc();
     type_map.alloc();
 
-    register_printer("u32",  print_u32,  Printer_Function_Type::_32b);
-    register_printer("u64",  print_u64,  Printer_Function_Type::_64b);
-    register_printer("bool", print_bool, Printer_Function_Type::_32b);
-    register_printer("s64",  print_s64,  Printer_Function_Type::_64b);
-    register_printer("s32",  print_s32,  Printer_Function_Type::_32b);
-    register_printer("f32",  print_flt,  Printer_Function_Type::_flt);
-    register_printer("f64",  print_flt,  Printer_Function_Type::_flt);
-    register_printer("str",  print_str,  Printer_Function_Type::_ptr);
-    register_printer("ptr",  print_ptr,  Printer_Function_Type::_ptr);
+    register_printer("u32",    print_u32,  Printer_Function_Type::_32b);
+    register_printer("u64",    print_u64,  Printer_Function_Type::_64b);
+    register_printer("bool",   print_bool, Printer_Function_Type::_32b);
+    register_printer("s64",    print_s64,  Printer_Function_Type::_64b);
+    register_printer("s32",    print_s32,  Printer_Function_Type::_32b);
+    register_printer("f32",    print_flt,  Printer_Function_Type::_flt);
+    register_printer("f64",    print_flt,  Printer_Function_Type::_flt);
+    register_printer("->char", print_str,  Printer_Function_Type::_ptr);
+    register_printer("->",     print_ptr,  Printer_Function_Type::_ptr);
+    register_printer("color<", print_color_start, Printer_Function_Type::_ptr);
+    register_printer(">color", print_color_end,   Printer_Function_Type::_void);
+    register_printer("->Str",       print_Str, Printer_Function_Type::_ptr);
+    register_printer("->char_line", print_str_line, Printer_Function_Type::_ptr);
 }

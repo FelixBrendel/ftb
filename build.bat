@@ -1,5 +1,7 @@
 @echo off
 
+mkdir bin
+
 set EXE_RAW=test
 set BINDIR_RAW=bin
 set SRC=test.cpp
@@ -11,12 +13,12 @@ set BINDIR_LINUX=./%BINDIR_RAW%
 
 echo.
 echo clang:
-clang %SRC% -o %BINDIR_WIN%\clang_%EXE_WIN%
+clang -std=c++17 %SRC% -o %BINDIR_WIN%\clang_%EXE_WIN%
 %BINDIR_WIN%\clang_%EXE_WIN%
 
 echo.
 echo g++:
-g++ %SRC% -o %BINDIR_WIN%\g++_%EXE_WIN%
+g++ -std=c++17 %SRC% -o %BINDIR_WIN%\g++_%EXE_WIN%
 %BINDIR_WIN%\g++_%EXE_WIN%
 
 echo.
@@ -26,8 +28,8 @@ cl %SRC% /nologo /Zi /Fd: %BINDIR_WIN%\cl_%EXE_WIN%.pdb /Fo: %BINDIR_WIN%\ /Fe: 
 
 echo.
 echo bash_clang:
-bash -c "clang -std=c++11 %SRC% -o %BINDIR_LINUX%/bash_clang_%EXE_LINUX% && %BINDIR_LINUX%/bash_clang_%EXE_LINUX%"
+bash -c "clang -std=c++17 %SRC% -o %BINDIR_LINUX%/bash_clang_%EXE_LINUX% && %BINDIR_LINUX%/bash_clang_%EXE_LINUX%"
 
 echo.
 echo bash_g++:
-bash -c "g++ -std=c++11 %SRC% -o %BINDIR_LINUX%/bash_g++_%EXE_LINUX% && %BINDIR_LINUX%/bash_g++_%EXE_LINUX%"
+bash -c "g++ -std=c++17 %SRC% -o %BINDIR_LINUX%/bash_g++_%EXE_LINUX% && %BINDIR_LINUX%/bash_g++_%EXE_LINUX%"

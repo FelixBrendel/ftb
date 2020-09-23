@@ -1,8 +1,8 @@
 #pragma once
 
 #define proc auto
-#define TOKENPASTE(x, y) x ## y
-#define TOKENPASTE2(x, y) TOKENPASTE(x, y)
+#define concat(x, y) x ## y
+#define label(x, y) concat(x, y)
 
 
 /**
@@ -34,7 +34,7 @@ static struct {
     }
 } deferrer;
 
-#define defer auto TOKENPASTE2(__deferred_lambda_call, __COUNTER__) = deferrer << [&]
+#define defer auto label(__deferred_lambda_call, __COUNTER__) = deferrer << [&]
 
 #define defer_free(var) defer { free(var); }
 
@@ -57,13 +57,13 @@ expands to:
 
 #define fluid_let(var, val)                                             \
     if (0)                                                              \
-        TOKENPASTE2(finished,__LINE__): ;                               \
+        label(finished,__LINE__): ;                               \
     else                                                                \
-        for (auto TOKENPASTE2(fluid_let_, __LINE__) = var;;)            \
-            for (defer{var = TOKENPASTE2(fluid_let_, __LINE__);};;)     \
+        for (auto label(fluid_let_, __LINE__) = var;;)            \
+            for (defer{var = label(fluid_let_, __LINE__);};;)     \
                 for(var = val;;)                                        \
                     if (1) {                                            \
-                        goto TOKENPASTE2(body,__LINE__);                \
+                        goto label(body,__LINE__);                \
                     }                                                   \
                     else                                                \
                         while (1)                                       \

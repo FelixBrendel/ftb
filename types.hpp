@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <string.h>
 
 typedef int8_t   s8;
 typedef int16_t s16;
@@ -20,3 +21,15 @@ typedef wchar_t path_char;
 #else
 typedef char    path_char;
 #endif
+
+struct String {
+    u32 length;
+    char* data;
+};
+
+inline String make_heap_string(const char* str) {
+    String ret;
+    ret.length = strlen(str);
+    ret.data = _strdup(str);
+    return ret;
+}
