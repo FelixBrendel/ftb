@@ -32,13 +32,13 @@ auto create_error(const char* c_func_name, const char* c_file_name,
     print("\n%{color<}%{->Str} error:%{>color} %{->Str}\n",
           console_red, &(error->type), &(error->message));
 
-    printf("in");
+    print("in");
     s32 spacing = 30-((s32)strlen(c_file_name) + (s32)log10(c_file_line));
     if (spacing < 1) spacing = 1;
     for (s32 i = 0; i < spacing; ++i)
-        printf(" ");
-    printf("%s (%u) ", c_file_name, c_file_line);
-    printf("-> %s\n", c_func_name);
+        print(" ");
+    print("%s (%u) ", c_file_name, c_file_line);
+    print("-> %s\n", c_func_name);
 }
 
 #define __create_error(keyword, ...)            \

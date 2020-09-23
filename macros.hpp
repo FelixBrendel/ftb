@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 
 #define proc auto
 #define concat(x, y) x ## y
@@ -50,6 +51,25 @@ expands to:
        call();
     };
 */
+
+#define ignore_stdout                                                   \
+    if (0)                                                              \
+        label(finished,__LINE__): ;                                     \
+    else                                                                \
+        for (FILE* tmp = ftb_stdout;;)                                  \
+            for (defer{ fclose(ftb_stdout); ftb_stdout= tmp; } ;;)      \
+                if (1) {                                                \
+                    ftb_stdout = fopen("nul", "w");                     \
+                    goto label(body,__LINE__);                          \
+                }                                                       \
+                else                                                    \
+                    while (1)                                           \
+                        if (1) {                                        \
+                            goto label(finished, __LINE__);             \
+                        }                                               \
+                        else label(body,__LINE__):
+                            
+
 
 /*****************
  *   fluid-let   *

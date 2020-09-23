@@ -9,6 +9,8 @@
 
 #include "hashmap.hpp"
 
+FILE* ftb_stdout = stdout;
+
 #define str_eq(s1, s2) (strcmp(s1, s2) == 0)
 
 #define console_normal "\x1B[0m"
@@ -371,7 +373,7 @@ int print(static_string format, ...) {
     va_list arg_list;
     va_start(arg_list, format);
 
-    int num_printed_chars = print_va_args_to_file(stdout, format, &arg_list);
+    int num_printed_chars = print_va_args_to_file(ftb_stdout, format, &arg_list);
 
     va_end(arg_list);
 
@@ -405,7 +407,6 @@ int print_flt(FILE* f, double arg) {
 int print_str(FILE* f, char* str) {
     return print_to_file(f, "%s", str);
 }
-
 
 int print_color_start(FILE* f, char* str) {
     color_stack.append(str);

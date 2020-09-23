@@ -23,13 +23,20 @@ typedef char    path_char;
 #endif
 
 struct String {
-    u32 length;
+    u64 length;
     char* data;
 };
 
-inline String make_heap_string(const char* str) {
+inline auto make_heap_string(const char* str) -> String {
     String ret;
     ret.length = strlen(str);
     ret.data = _strdup(str);
+    return ret;
+}
+
+inline const String make_static_string(char* str) {
+    String ret;
+    ret.length = strlen(str);
+    ret.data = str;
     return ret;
 }
