@@ -16,11 +16,15 @@ typedef s32 testresult;
           "\n\tgot anyways:  " format "\n",                             \
           __FILE__, __LINE__, (type)(value), (type)(variable))
 
-#define assert_equal_string(variable, value)                            \
-    if (!string_equal(variable, value)) {                               \
-        print_assert_equal_fail(&(variable), &(value), String*, "%{->Str}"); \
-        return fail;                                                    \
-    }
+#define assert_equal_string(variable, value)                              \
+    do {                                                                  \
+        auto v1{variable};                                                \
+        auto v2{value};                                                   \
+        if (!string_equal(v1, v2)) {                                      \
+            print_assert_equal_fail(&(v1), &(v2), String*, "%{->Str}");   \
+            return fail;                                                  \
+        }                                                                 \
+    } while (0)
 
 #define assert_equal_int(variable, value)                               \
     if (variable != value) {                                            \
