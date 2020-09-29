@@ -1,5 +1,6 @@
 #pragma once
 
+#include "platform.hpp"
 #include <stdint.h>
 #include <string.h>
 
@@ -27,10 +28,18 @@ struct String {
     char* data;
 };
 
+inline auto heap_copy_c_string(const char* str) -> char* {
+#ifdef FTB_WINDOWS
+    return _strdup(str);
+#else
+    return strdup(str);
+#endif
+}
+
 inline auto make_heap_string(const char* str) -> String {
     String ret;
     ret.length = strlen(str);
-    ret.data = _strdup(str);
+    ret.data = heap_copy_c_string(str);
     return ret;
 }
 

@@ -1,3 +1,5 @@
+#include "./types.hpp"
+
 typedef s32 testresult;
 
 #define epsilon 2.2204460492503131E-16
