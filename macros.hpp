@@ -52,14 +52,19 @@ expands to:
     };
 */
 
+#if defined(unix) || defined(__unix__) || defined(__unix)
+#define NULL_HANDLE "/dev/null"
+#else
+#define NULL_HANDLE "nul"
+#endif
 #define ignore_stdout                                                   \
     if (0)                                                              \
         label(finished,__LINE__): ;                                     \
     else                                                                \
-        for (FILE* tmp = ftb_stdout;;)                                  \
-            for (defer{ fclose(ftb_stdout); ftb_stdout= tmp; } ;;)      \
+        for (FILE* label(fluid_let_, __LINE__) = ftb_stdout;;)                             \
+            for (defer{ fclose(ftb_stdout); ftb_stdout=label(fluid_let_, __LINE__) ; } ;;) \
                 if (1) {                                                \
-                    ftb_stdout = fopen("nul", "w");                     \
+                    ftb_stdout = fopen(NULL_HANDLE, "w");               \
                     goto label(body,__LINE__);                          \
                 }                                                       \
                 else                                                    \
@@ -68,7 +73,6 @@ expands to:
                             goto label(finished, __LINE__);             \
                         }                                               \
                         else label(body,__LINE__):
-                            
 
 
 /*****************
@@ -91,6 +95,7 @@ expands to:
                                 goto TOKENPASTE2(finished, __LINE__);   \
                             }                                           \
                             else TOKENPASTE2(body,__LINE__):
+                                     ;
 
 
 /**

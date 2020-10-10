@@ -16,7 +16,7 @@ struct Array_List {
 
     void dealloc() {
         free(data);
-        data = 0;
+        data = nullptr;
     }
 
 

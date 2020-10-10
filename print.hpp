@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "hashmap.hpp"
+#include "hooks.hpp"
 
 FILE* ftb_stdout = stdout;
 
@@ -443,27 +444,28 @@ auto print_str_line(FILE* f, char* str) -> s32 {
     return print_to_file(f, "%.*s", length, str);
 }
 
-void deinit_printer() {
-    printer_map.dealloc();
-    type_map.dealloc();
-}
-
 void init_printer() {
     color_stack.alloc();
     printer_map.alloc();
     type_map.alloc();
 
-    register_printer("u32",    print_u32,  Printer_Function_Type::_32b);
-    register_printer("u64",    print_u64,  Printer_Function_Type::_64b);
-    register_printer("bool",   print_bool, Printer_Function_Type::_32b);
-    register_printer("s64",    print_s64,  Printer_Function_Type::_64b);
-    register_printer("s32",    print_s32,  Printer_Function_Type::_32b);
-    register_printer("f32",    print_flt,  Printer_Function_Type::_flt);
-    register_printer("f64",    print_flt,  Printer_Function_Type::_flt);
-    register_printer("->char", print_str,  Printer_Function_Type::_ptr);
-    register_printer("->",     print_ptr,  Printer_Function_Type::_ptr);
-    register_printer("color<", print_color_start, Printer_Function_Type::_ptr);
-    register_printer(">color", print_color_end,   Printer_Function_Type::_void);
-    register_printer("->Str",       print_Str, Printer_Function_Type::_ptr);
-    register_printer("->char_line", print_str_line, Printer_Function_Type::_ptr);
+    system_shutdown_hook << [](){
+        color_stack.dealloc();
+        printer_map.dealloc();
+        type_map.dealloc();
+    };
+
+    register_printer("u32",         print_u32,         Printer_Function_Type::_32b);
+    register_printer("u64",         print_u64,         Printer_Function_Type::_64b);
+    register_printer("bool",        print_bool,        Printer_Function_Type::_32b);
+    register_printer("s64",         print_s64,         Printer_Function_Type::_64b);
+    register_printer("s32",         print_s32,         Printer_Function_Type::_32b);
+    register_printer("f32",         print_flt,         Printer_Function_Type::_flt);
+    register_printer("f64",         print_flt,         Printer_Function_Type::_flt);
+    register_printer("->char",      print_str,         Printer_Function_Type::_ptr);
+    register_printer("->",          print_ptr,         Printer_Function_Type::_ptr);
+    register_printer("color<",      print_color_start, Printer_Function_Type::_ptr);
+    register_printer(">color",      print_color_end,   Printer_Function_Type::_void);
+    register_printer("->Str",       print_Str,         Printer_Function_Type::_ptr);
+    register_printer("->char_line", print_str_line,    Printer_Function_Type::_ptr);
 }
