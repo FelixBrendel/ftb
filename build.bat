@@ -13,12 +13,12 @@ set BINDIR_LINUX=./%BINDIR_RAW%
 
 echo.
 echo clang:
-clang -std=c++17 %SRC% -o %BINDIR_WIN%\clang_%EXE_WIN%
+clang++ -std=c++17 %SRC% -o %BINDIR_WIN%\clang_%EXE_WIN%
 %BINDIR_WIN%\clang_%EXE_WIN%
 
 echo.
 echo g++:
-g++ -std=c++17 %SRC% -o %BINDIR_WIN%\g++_%EXE_WIN%
+g++ -O3 -std=c++17 %SRC% -o %BINDIR_WIN%\g++_%EXE_WIN%
 %BINDIR_WIN%\g++_%EXE_WIN%
 
 echo.
@@ -28,8 +28,10 @@ cl %SRC% /nologo /Zi /Fd: %BINDIR_WIN%\cl_%EXE_WIN%.pdb /Fo: %BINDIR_WIN%\ /Fe: 
 
 echo.
 echo bash_clang:
-bash -c "clang -std=c++17 %SRC% -o %BINDIR_LINUX%/bash_clang_%EXE_LINUX% && %BINDIR_LINUX%/bash_clang_%EXE_LINUX%"
+wsl bash -c "clang++ -g  -std=c++17 %SRC% -o %BINDIR_LINUX%/bash_clang_%EXE_LINUX%"
+:: wsl bash -c "valgrind --leak-check=full --show-leak-kinds=all %BINDIR_LINUX%/bash_clang_%EXE_LINUX%"
+wsl bash -c "%BINDIR_LINUX%/bash_clang_%EXE_LINUX%"
 
-echo.
+:: echo.
 echo bash_g++:
 bash -c "g++ -std=c++17 %SRC% -o %BINDIR_LINUX%/bash_g++_%EXE_LINUX% && %BINDIR_LINUX%/bash_g++_%EXE_LINUX%"

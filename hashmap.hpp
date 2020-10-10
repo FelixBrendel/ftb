@@ -48,16 +48,27 @@ struct Hash_Map {
         value_type object;
     }* data;
 
-    void alloc(u32 initial_capacity = 8) {
+    Hash_Map(u32 initial_capacity = 8) {
         current_capacity = initial_capacity;
         cell_count = 0;
         data = (HM_Cell*)calloc(initial_capacity, sizeof(HM_Cell));
     }
 
-    void dealloc() {
-            free(data);
-            data = nullptr;
-        }
+    ~Hash_Map() {
+        free(data);
+        data = nullptr;
+    }
+
+    Hash_Map(Hash_Map<key_type, value_type>& other) = delete;
+    Hash_Map(const Hash_Map<key_type, value_type>& other) = delete;
+
+    Hash_Map(Hash_Map<key_type, value_type>&& other) {
+        data             = other.data;
+        cell_count       = other.cell_count;
+        current_capacity = other.current_capacity;
+        
+        other.data = nullptr;
+    }
 
     s32 get_index_of_living_cell_if_it_exists(key_type key, u64 hash_val) {
         // s32 index = hash_val & (current_capacity - 1);

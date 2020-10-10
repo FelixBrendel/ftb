@@ -1,6 +1,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "./types.hpp"
 #include "./hooks.hpp"
@@ -48,7 +49,7 @@ s32 main(s32 argc, char* argv[]) {
 
     // test_printer();
 
-    init_printer();
+    // init_printer();
     // create_generic_error("nothing to lex was found:\n"
     //                      "  in %{color<}%{->char}%{>color}\n"
     //                      "  at %{color<}%{->char}%{>color}\n"
@@ -59,7 +60,7 @@ s32 main(s32 argc, char* argv[]) {
     //                      "yesssssss");
 
     create_error(__FUNCTION__, __FILE__, __LINE__,
-                 make_heap_string("generic"),
+                 String("generic"),
                  "nothing to lex was found:\n"
                  "  in %{color<}%{->char}%{>color}\n"
                  "  at %{color<}%{->char}%{>color}\n"

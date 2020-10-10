@@ -51,12 +51,6 @@ struct Lambda<R(Args...)>
 
 
 struct Hook : Array_List<Lambda<void()>> {
-    Hook() {
-        alloc();
-    }
-    ~Hook () {
-        dealloc();
-    }
     void operator<<(Lambda<void()> f) {
         // FIXME(Felix): Why can I not call Array_List::append here??? Hallo?
         if (next_index == length) {
@@ -79,6 +73,5 @@ struct __System_Shutdown_Hook : Hook {
     void operator()() = delete;
     ~__System_Shutdown_Hook() {
         Hook::operator()();
-        dealloc();
     }
 } system_shutdown_hook;

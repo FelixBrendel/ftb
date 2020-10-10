@@ -2,7 +2,7 @@
 
 typedef s32 testresult;
 
-#define epsilon 2.2204460492503131E-16
+static const double epsilon =  2.2204460492503131E-16;
 #define pass 1
 #define fail 0
 

@@ -2,6 +2,7 @@
 
 #include "platform.hpp"
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef int8_t   s8;
@@ -23,17 +24,6 @@ typedef wchar_t path_char;
 typedef char    path_char;
 #endif
 
-struct StringSlice {
-    const char* data;
-    u64 length;
-};
-
-struct String {
-    char* data;
-    u64 length;
-};
-
-
 inline auto heap_copy_c_string(const char* str) -> char* {
 #ifdef FTB_WINDOWS
     return _strdup(str);
@@ -42,17 +32,55 @@ inline auto heap_copy_c_string(const char* str) -> char* {
 #endif
 }
 
-inline auto make_heap_string(const char* str) -> String {
-    String ret;
-    ret.length = strlen(str);
-    ret.data = heap_copy_c_string(str);
-    return ret;
-}
+struct String_Slice {
+    String_Slice() = default;
+    String_Slice (const char* str)
+        : length(strlen(str)),
+          data(str)
+    {}
 
-inline auto make_static_string(const char* str) -> const StringSlice {
-    StringSlice ret;
-    ret.length = strlen(str);
-    ret.data = str;
+    const char* data;
+    u64 length;
+};
+
+struct String {
+    String () = default;
+
+    String (const char* str) {
+        length = strlen(str);
+        data = heap_copy_c_string(str);
+    }
+
+    ~String () {
+        free(data);
+        data = nullptr;
+    }
+
+    String (const String&) = delete;
+    
+    String (String&& other) {
+        length = other.length;
+        data = other.data;
+
+        other.data = nullptr;
+    }
+
+    String& operator= (String&& other) {
+        length = other.length;
+        data = other.data;
+
+        other.data = nullptr;
+
+        return *this;
+    }
+
+
+    char* data;
+    u64 length;
+};
+
+inline auto make_static_string(const char* str) -> const String_Slice {
+    String_Slice ret(str);
     return ret;
 }
 
@@ -60,19 +88,19 @@ auto inline string_equal(const char* input, const char* check) -> bool {
     return strcmp(input, check) == 0;
 }
 
-auto inline string_equal(StringSlice str, const char* check) -> bool {
+auto inline string_equal(String_Slice str, const char* check) -> bool {
     if (str.length != strlen(check))
         return false;
     return strncmp(str.data, check, str.length) == 0;
 }
 
-auto inline string_equal(const char* check, StringSlice str) -> bool {
+auto inline string_equal(const char* check, String_Slice str) -> bool {
     if (str.length != strlen(check))
         return false;
     return strncmp(str.data, check, str.length) == 0;
 }
 
-auto inline string_equal(StringSlice str1, StringSlice str2) -> bool {
+auto inline string_equal(String_Slice str1, String_Slice str2) -> bool {
     if (str1.length != str2.length)
         return false;
 

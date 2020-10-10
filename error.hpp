@@ -21,8 +21,8 @@ auto delete_error() -> void {
 auto create_error(const char* c_func_name, const char* c_file_name,
                   u32 c_file_line, String type, const char* format, ...) -> void {
 
-    error = new Error;
-    error->type = type;
+    error = (Error*)malloc(sizeof(Error));
+    error->type = std::move(type);
 
     va_list args;
     va_start(args, format);
@@ -44,7 +44,7 @@ auto create_error(const char* c_func_name, const char* c_file_name,
 #define __create_error(keyword, ...)            \
     create_error(                               \
         __FUNCTION__, __FILE__, __LINE__,       \
-        make_heap_string(keyword),              \
+        String(keyword),                        \
         __VA_ARGS__)
 
 #define create_assertion_error(...)             \

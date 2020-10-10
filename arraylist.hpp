@@ -1,6 +1,30 @@
 #pragma once
 #include <stdlib.h>
+#include <utility>
+#include <initializer_list>
 #include "types.hpp"
+
+
+// template<class E> class my_initializer_list {
+//     public:
+//         using value_type      = E;
+//         using reference       = const E&;
+//         using const_reference = const E&;
+//         using size_type       = size_t;
+
+//         using iterator        = const E*;
+//         using const_iterator  = const E*;
+
+//         constexpr my_initializer_list() noexcept;
+
+//         constexpr size_t size() const noexcept;     // number of elements
+//         constexpr const E* begin() const noexcept;  // first element
+//         constexpr const E* end() const noexcept;    // one past the last element
+// };
+
+// // initializer list range access
+// template<class E> constexpr const E* begin(my_initializer_list<E> il) noexcept;
+// template<class E> constexpr const E* end(my_initializer_list<E> il) noexcept;
 
 template <typename type>
 struct Array_List {
@@ -8,17 +32,32 @@ struct Array_List {
     u32 length;
     u32 next_index;
 
-    void alloc(u32 initial_capacity = 16) {
+    Array_List(u32 initial_capacity = 16) {
         data = (type*)malloc(initial_capacity * sizeof(type));
         next_index = 0;
         length = initial_capacity;
     }
 
-    void dealloc() {
+    Array_List(std::initializer_list<type> list)
+        : Array_List(list.size())
+    {
+        for (type e : list) {
+            append(e);
+        }
+    }
+
+    Array_List(Array_List<type>&& other) {
+        data       = other.data;
+        length     = other.length;
+        next_index = other.next_index;
+
+        other.data = nullptr;
+    }
+
+    ~Array_List() {
         free(data);
         data = nullptr;
     }
-
 
     void clear() {
         next_index = 0;
@@ -53,7 +92,7 @@ struct Array_List {
             length *= 2;
             data = (type*)realloc(data, length * sizeof(type));
         }
-        data[next_index] = element;
+        data[next_index] = std::move(element);
         next_index++;
     }
 
