@@ -35,7 +35,7 @@ struct StringSlice {
 inline auto make_heap_string(const char* str) -> String {
     String ret;
     ret.length = strlen(str);
-    ret.data = strdup(str);
+    ret.data = _strdup(str);
     return ret;
 }
 

@@ -75,10 +75,10 @@ struct Hook : Array_List<Lambda<void()>> {
     }
 };
 
-// struct __System_Shutdown_Hook : Hook {
-//     void operator()() = delete;
-//     ~__System_Shutdown_Hook() {
-//         Hook::operator()();
-//         dealloc();
-//     }
-// } system_shutdown_hook;
+struct __System_Shutdown_Hook : Hook {
+    void operator()() = delete;
+    ~__System_Shutdown_Hook() {
+        Hook::operator()();
+        dealloc();
+    }
+} system_shutdown_hook;

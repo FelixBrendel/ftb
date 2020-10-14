@@ -4,6 +4,7 @@
 #define proc auto
 #define concat(x, y) x ## y
 #define label(x, y) concat(x, y)
+#define line_label(x) label(x, __LINE__)
 
 
 /**
