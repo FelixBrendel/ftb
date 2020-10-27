@@ -1,5 +1,6 @@
 #pragma once
 #include <stdlib.h>
+#include <initializer_list>
 #include "types.hpp"
 
 template <typename type>
@@ -16,9 +17,8 @@ struct Array_List {
 
     void dealloc() {
         free(data);
-        data = 0;
+        data = nullptr;
     }
-
 
     void clear() {
         next_index = 0;
@@ -66,6 +66,16 @@ struct Array_List {
 
     type& operator[](u32 index) {
         return data[index];
+    }
+
+    static Array_List<type> alloc_from(std::initializer_list<type> l) {
+        Array_List<type> ret;
+        ret.alloc(l.size());
+        for (auto e : l) {
+            ret.append(e);
+        }
+        ret.auto_free = true;
+        return ret;
     }
 
     void _merge(u32 start, u32 mid, u32 end) {
@@ -136,4 +146,22 @@ struct Array_List {
             return sorted_find(elem, left, middle-1);
         return middle;
     }
+};
+
+
+template <typename type>
+struct Auto_Array_List : public Array_List<type> {
+        Auto_Array_List() = default;
+
+        Auto_Array_List(std::initializer_list<type> l) {
+            this->alloc(l.size());
+            for (type e : l) {
+                this->append(e);
+            }
+        }
+
+        ~Auto_Array_List() {
+            free(this->data);
+            this->data = nullptr;
+        }
 };
