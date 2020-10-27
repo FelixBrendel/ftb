@@ -1,3 +1,5 @@
+#include "./types.hpp"
+
 typedef s32 testresult;
 
 #define epsilon 2.2204460492503131E-16
@@ -84,8 +86,8 @@ typedef s32 testresult;
         for(s32 i = -1; i < 70; ++i)                            \
             fputs((i%3==1)? "." : " ", stdout);                 \
         fputs(console_red "failed\n" console_normal, stdout);   \
-        if(error) {                                    \
-            free(error);                               \
-            error = nullptr;                           \
+        if(error) {                                             \
+            free(error);                                        \
+            error = nullptr;                                    \
         }                                                       \
-    }                                                           \
+    }

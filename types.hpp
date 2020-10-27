@@ -1,5 +1,6 @@
 #pragma once
 
+#include "platform.hpp"
 #include <stdint.h>
 #include <string.h>
 
@@ -22,24 +23,33 @@ typedef wchar_t path_char;
 typedef char    path_char;
 #endif
 
-struct String {
+struct StringSlice {
+    const char* data;
     u64 length;
-    char* data;
 };
 
-struct StringSlice {
+struct String {
+    char* data;
     u64 length;
-    const char* data;
 };
+
+
+inline auto heap_copy_c_string(const char* str) -> char* {
+#ifdef FTB_WINDOWS
+    return _strdup(str);
+#else
+    return strdup(str);
+#endif
+}
 
 inline auto make_heap_string(const char* str) -> String {
     String ret;
     ret.length = strlen(str);
-    ret.data = _strdup(str);
+    ret.data = heap_copy_c_string(str);
     return ret;
 }
 
-inline const StringSlice make_static_string(const char* str) {
+inline auto make_static_string(const char* str) -> const StringSlice {
     StringSlice ret;
     ret.length = strlen(str);
     ret.data = str;
@@ -50,26 +60,21 @@ auto inline string_equal(const char* input, const char* check) -> bool {
     return strcmp(input, check) == 0;
 }
 
-template <typename Str>
-auto inline string_equal(Str str, const char* check) -> bool {
+auto inline string_equal(StringSlice str, const char* check) -> bool {
     if (str.length != strlen(check))
         return false;
     return strncmp(str.data, check, str.length) == 0;
 }
 
-template <typename Str>
-auto inline string_equal(const char* check, Str str) -> bool {
+auto inline string_equal(const char* check, StringSlice str) -> bool {
     if (str.length != strlen(check))
         return false;
     return strncmp(str.data, check, str.length) == 0;
 }
 
-template <typename StrA, typename StrB>
-auto inline string_equal(StrA str1, StrB str2) -> bool {
+auto inline string_equal(StringSlice str1, StringSlice str2) -> bool {
     if (str1.length != str2.length)
         return false;
 
     return strncmp(str1.data, str2.data, str2.length) == 0;
 }
-
-template auto string_equal(StringSlice str1, StringSlice str2) -> bool;

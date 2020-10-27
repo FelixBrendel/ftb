@@ -96,6 +96,7 @@ expands to:
                                 goto TOKENPASTE2(finished, __LINE__);   \
                             }                                           \
                             else TOKENPASTE2(body,__LINE__):
+                                     ;
 
 
 /**
