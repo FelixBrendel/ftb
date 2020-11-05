@@ -49,24 +49,14 @@ s32 main(s32 argc, char* argv[]) {
     // test_printer();
 
     init_printer();
-    // create_generic_error("nothing to lex was found:\n"
-    //                      "  in %{color<}%{->char}%{>color}\n"
-    //                      "  at %{color<}%{->char}%{>color}\n"
-    //                      "bottom text\n",
-    //                      console_green,
-    //                      "some file name",
-    //                      console_cyan,
-    //                      "yesssssss");
+    create_generic_error("nothing to lex was found:\n"
+                         "  in %{color<}%{->char}%{>color}\n"
+                         "  at %{color<}%{->char}%{>color}\n"
+                         "bottom text\n",
+                         console_green,
+                         "some file name",
+                         console_cyan,
+                         "yesssssss");
 
-    create_error(__FUNCTION__, __FILE__, __LINE__,
-                 make_heap_string("generic"),
-                 "nothing to lex was found:\n"
-                 "  in %{color<}%{->char}%{>color}\n"
-                 "  at %{color<}%{->char}%{>color}\n"
-                 "bottom text\n",
-                 console_green,
-                 "some file name",
-                 console_cyan,
-                 "yesssssss");    
     return 0;
 }

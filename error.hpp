@@ -21,14 +21,14 @@ auto delete_error() -> void {
 auto create_error(const char* c_func_name, const char* c_file_name,
                   u32 c_file_line, String type, const char* format, ...) -> void {
 
-    error = new Error;
-    error->type = type;
+    error = (Error*) malloc(sizeof(Error));
 
     va_list args;
     va_start(args, format);
     error->message.length = print_va_args_to_string(&(error->message.data), format, &args);
     va_end(args);
 
+    error->type = type;
     print("\n%{color<}%{->Str} error:%{>color} %{->Str}\n",
           console_red, &(error->type), &(error->message));
 

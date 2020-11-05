@@ -7,11 +7,11 @@ template <typename type>
 struct Array_List {
     type* data;
     u32 length;
-    u32 next_index;
+    u32 count;
 
     void alloc(u32 initial_capacity = 16) {
         data = (type*)malloc(initial_capacity * sizeof(type));
-        next_index = 0;
+        count = 0;
         length = initial_capacity;
     }
 
@@ -21,16 +21,16 @@ struct Array_List {
     }
 
     void clear() {
-        next_index = 0;
+        count = 0;
     }
 
     Array_List<type> clone() {
         Array_List<type> ret;
         ret.length = length;
-        ret.next_index = next_index;
+        ret.count = count;
 
         ret.data = (type*)malloc(length * sizeof(type));
-        for (u32 i = 0; i < next_index; ++i) {
+        for (u32 i = 0; i < count; ++i) {
             ret.data[i] = data[i];
         }
         return ret;
@@ -41,24 +41,24 @@ struct Array_List {
     }
 
     type* end() {
-        return data+(next_index);
+        return data+(count);
     }
 
     void remove_index(u32 index) {
-        data[index] = data[--next_index];
+        data[index] = data[--count];
     }
 
     void append(type element) {
-        if (next_index == length) {
+        if (count == length) {
             length *= 2;
             data = (type*)realloc(data, length * sizeof(type));
         }
-        data[next_index] = element;
-        next_index++;
+        data[count] = element;
+        count++;
     }
 
-    void reserve(u32 count) {
-        if (next_index+count >= (u32)length) {
+    void reserve(u32 amount) {
+        if (count+amount >= (u32)length) {
             length *= 2;
             data = (type*)realloc(data, length * sizeof(type));
         }
@@ -112,9 +112,9 @@ struct Array_List {
 
     void sort(s32 left=-1, s32 right=-1) {
         if (left == -1) {
-            if (next_index == 0)
+            if (count == 0)
                 return;
-            sort(0, next_index - 1);
+            sort(0, count - 1);
             return;
         } else if (left == right) {
             return;
@@ -130,7 +130,7 @@ struct Array_List {
 
     u32 sorted_find(type elem, s32 left=-1, s32 right=-1) {
         if (left == -1) {
-            return sorted_find(elem, 0, next_index - 1);
+            return sorted_find(elem, 0, count - 1);
         } else if (left == right) {
             if ((size_t)data[left] == (size_t)elem)
                 return left;

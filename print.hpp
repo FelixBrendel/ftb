@@ -415,11 +415,11 @@ int print_color_start(FILE* f, char* str) {
 }
 
 int print_color_end(FILE* f) {
-    --color_stack.next_index;
-    if (color_stack.next_index == 0) {
+    --color_stack.count;
+    if (color_stack.count == 0) {
         return print_to_file(f, "%s", console_normal);
     } else {
-        return print_to_file(f, "%s", color_stack[color_stack.next_index-1]);
+        return print_to_file(f, "%s", color_stack[color_stack.count-1]);
     }
 }
 

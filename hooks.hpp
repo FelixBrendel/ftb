@@ -59,19 +59,19 @@ struct Hook : Array_List<Lambda<void()>> {
     }
     void operator<<(Lambda<void()> f) {
         // FIXME(Felix): Why can I not call Array_List::append here??? Hallo?
-        if (next_index == length) {
+        if (count == length) {
             length *= 2;
             data = (Lambda<void()>*)realloc(data, length * sizeof(Lambda<void()>));
         }
-        data[next_index] = f;
-        next_index++;
+        data[count] = f;
+        count++;
     }
     void operator()() {
-        while(next_index --> 0) {
+        while(count --> 0) {
             fflush(stdout);
-            data[next_index]();
+            data[count]();
         }
-        next_index = 0;
+        count = 0;
     }
 };
 
