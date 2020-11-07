@@ -6,6 +6,9 @@
 #define label(x, y) concat(x, y)
 #define line_label(x) label(x, __LINE__)
 
+#define min(a, b) ((a) < (b)) ? (a) : (b)
+#define max(a, b) ((a) > (b)) ? (a) : (b)
+
 
 /**
  *   Defer   *

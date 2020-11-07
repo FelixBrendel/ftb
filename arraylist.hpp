@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <initializer_list>
 #include "types.hpp"
+#include "macros.hpp"
 
 template <typename type>
 struct Array_List {
@@ -13,6 +14,16 @@ struct Array_List {
         data = (type*)malloc(initial_capacity * sizeof(type));
         count = 0;
         length = initial_capacity;
+    }
+
+    void alloc_from(std::initializer_list<type> l) {
+        length = max(l.size(), 1); // alloc at least one
+
+        data = (type*)malloc(length * sizeof(type));
+        count = 0;
+        for (type t : l) {
+            data[count++] = t;
+        }
     }
 
     void dealloc() {
@@ -68,15 +79,6 @@ struct Array_List {
         return data[index];
     }
 
-    static Array_List<type> alloc_from(std::initializer_list<type> l) {
-        Array_List<type> ret;
-        ret.alloc(l.size());
-        for (auto e : l) {
-            ret.append(e);
-        }
-        ret.auto_free = true;
-        return ret;
-    }
 
     void _merge(u32 start, u32 mid, u32 end) {
         u32 start2 = mid + 1;
@@ -151,7 +153,14 @@ struct Array_List {
 
 template <typename type>
 struct Auto_Array_List : public Array_List<type> {
-        Auto_Array_List() = default;
+
+        Auto_Array_List(u32 length) {
+            this->alloc(length);
+        }
+
+        Auto_Array_List() {
+            this->alloc(16);
+        }
 
         Auto_Array_List(std::initializer_list<type> l) {
             this->alloc(l.size());
