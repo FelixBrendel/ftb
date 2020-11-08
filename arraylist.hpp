@@ -26,6 +26,15 @@ struct Array_List {
         }
     }
 
+
+    void extend(std::initializer_list<type> l) {
+        reserve(l.size());
+        for (type e : l) {
+            append(e);
+        }
+    }
+
+
     void dealloc() {
         free(data);
         data = nullptr;
