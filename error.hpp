@@ -53,11 +53,11 @@ auto create_error(const char* c_func_name, const char* c_file_name,
 #define create_generic_error(...)               \
     __create_error("generic", __VA_ARGS__)
 
-#define assert(condition, format, ...)                                  \
+#define assert(condition, ...)                                  \
     do {                                                                \
         if (!(condition)) {                                             \
             char* msg;                                                  \
-            print_to_string(&msg, format, __VA_ARGS__);                 \
+            print_to_string(&msg,  __VA_ARGS__);                 \
             create_assertion_error("Assertion-error: %s\n"              \
                                    "      condition: %s\n"              \
                                    "             in: %s:%d",            \

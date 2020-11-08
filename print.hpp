@@ -269,10 +269,14 @@ int maybe_fprintf(FILE* file, static_string format, int* pos, va_list* arg_list)
 
         // printf("\ntest:: len(%s) = %d\n", temp, writen_len+1);
 
-        writen_len = vfprintf(file, temp, *arg_list);
+        /// NOTE(Felix): Somehow we have to pass a copy of the list to vfprintf
+        // because otherwise it destroys it on some platforms :(
+        va_list arg_list_copy;
+        va_copy(arg_list_copy, *arg_list);
+        writen_len = vfprintf(file, temp, arg_list_copy);
+        va_end(arg_list_copy);
 
-        // NOTE(Felix): For WSL Linux we have to manually overstep the
-        // used args
+        // NOTE(Felix): maually overstep the args that vfprintf will have used
         for (int i = 0; i < used_arg_values;  ++i) {
             va_arg(*arg_list, void*);
         }
