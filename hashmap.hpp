@@ -7,6 +7,15 @@
 #include "arraylist.hpp"
 
 
+u32 hm_hash(const char* str) {
+    u32 value = str[0] << 7;
+    s32 i = 0;
+    while (str[i]) {
+        value = (10000003 * value) ^ str[i++];
+    }
+    return value ^ i;
+}
+
 u32 hm_hash(char* str) {
     u32 value = str[0] << 7;
     s32 i = 0;
@@ -19,6 +28,12 @@ u32 hm_hash(char* str) {
 u32 hm_hash(void* ptr) {
     return ((u64)ptr * 2654435761) % 4294967296;
 }
+
+
+inline bool hm_objects_match(const char* a, const char* b) {
+    return strcmp(a, b) == 0;
+}
+
 
 inline bool hm_objects_match(char* a, char* b) {
     return strcmp(a, b) == 0;
@@ -148,6 +163,18 @@ struct Hash_Map {
 
     value_type get_object(key_type key) {
         return get_object(key, hm_hash((key_type)key));
+    }
+
+    value_type* get_object_ptr(key_type key, u64 hash_val) {
+        s32 index = get_index_of_living_cell_if_it_exists(key, hash_val);
+        if (index != -1) {
+            return &(data[index].object);
+        }
+        return 0;
+    }
+
+    value_type* get_object_ptr(key_type key) {
+        return get_object_ptr(key, hm_hash((key_type)key));
     }
 
 

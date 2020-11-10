@@ -35,7 +35,7 @@ class Bucket_Allocator {
     }
 
 public:
-    void alloc(u32 bucket_size, u32 initial_bucket_count) {
+        void alloc(u32 bucket_size = 16, u32 initial_bucket_count = 8) {
         this->free_list.alloc();
         this->bucket_size = bucket_size;
         next_index_in_latest_bucket = 0;
@@ -54,8 +54,8 @@ public:
         free(buckets);
     }
 
-    template <typename proc>
-    void for_each(proc p) {
+    template <typename lambda>
+    void for_each(lambda p) {
         free_list.sort();
         type* val;
         for (u32 i = 0; i < next_bucket_index; ++i) {
@@ -76,8 +76,8 @@ public:
         type* ret;
         if (amount == 0) return nullptr;
         if (amount == 1) {
-            if (free_list.next_index != 0) {
-                return free_list.data[--free_list.next_index];
+            if (free_list.count != 0) {
+                return free_list.data[--free_list.count];
             }
              ret = buckets[next_bucket_index]+next_index_in_latest_bucket;
              increment_pointers(1);
