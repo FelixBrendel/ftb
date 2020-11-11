@@ -111,6 +111,10 @@ auto test_hm() -> void {
 
     assert(h2.get_object({.x = 1, .y = 2, .z = 3}) == 1, "value should be correct");
     assert(h2.get_object({.x = 3, .y = 3, .z = 3}) == 3, "value should be correct");
+
+    h2.for_each([] (Key k, u32 v, u32 i) {
+        print("%{s32} %{u32} %{u32}\n", k.x, v, i);
+    });
 }
 
 s32 main(s32 argc, char* argv[]) {

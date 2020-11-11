@@ -6,7 +6,6 @@
 #include "types.hpp"
 #include "arraylist.hpp"
 
-
 u32 hm_hash(const char* str) {
     u32 value = str[0] << 7;
     s32 i = 0;
@@ -29,11 +28,9 @@ u32 hm_hash(void* ptr) {
     return ((u64)ptr * 2654435761) % 4294967296;
 }
 
-
 inline bool hm_objects_match(const char* a, const char* b) {
     return strcmp(a, b) == 0;
 }
-
 
 inline bool hm_objects_match(char* a, char* b) {
     return strcmp(a, b) == 0;
@@ -42,15 +39,6 @@ inline bool hm_objects_match(char* a, char* b) {
 inline bool hm_objects_match(void* a, void* b) {
     return a == b;
 }
-
-
-#define for_hash_map(hm)                                           \
-    if (decltype((hm).data[0].original) key   = 0); else           \
-    if (decltype((hm).data[0].object)   value = 0); else           \
-    for(u32 index = 0; index < (hm).current_capacity; ++index)     \
-        if (!((!(hm).data[index].deleted) &&                       \
-              (key   = (hm).data[index].original) &&               \
-              (value = (hm).data[index].object))); else
 
 template <typename key_type, typename value_type>
 struct Hash_Map {
@@ -66,6 +54,13 @@ struct Hash_Map {
         } occupancy;
         value_type object;
     }* data;
+
+    template <typename lambda>
+    void for_each(lambda p) {
+        for(u32 index = 0; index < current_capacity; ++index)
+            if (data[index].occupancy == HM_Cell::Occupancy::Occupied)
+                p(data[index].original, data[index].object, index);
+    }
 
     void alloc(u32 initial_capacity = 8) {
         current_capacity = initial_capacity;

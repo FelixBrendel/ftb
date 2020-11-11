@@ -54,6 +54,25 @@ public:
         free(buckets);
     }
 
+    u32 count_elements() {
+        free_list.sort();
+        type* val;
+        u32 count = 0;
+        for (u32 i = 0; i < next_bucket_index; ++i) {
+            for (u32 j = 0; j < bucket_size; ++j) {
+                val = buckets[i]+j;
+                if (free_list.sorted_find(val) == -1)
+                    count++;
+            }
+        }
+        for (u32 j = 0; j < next_index_in_latest_bucket; ++j) {
+            val = buckets[next_bucket_index]+j;
+            if (free_list.sorted_find(val) == -1)
+                count++;
+        }
+        return count;
+    }
+
     template <typename lambda>
     void for_each(lambda p) {
         free_list.sort();
