@@ -1,12 +1,13 @@
 #pragma once
-#ifdef _PROFILING
+#ifdef PROFILING
 
 # include <stdlib.h>
 # include <stdio.h>
 # include <string.h>
 # include <time.h>
+# include "./platform.hpp"
 
-#ifdef _MSC_VER
+#ifdef FTB_WINDOWS
 #  include <Windows.h>
 #else
 #  include <fcntl.h>
@@ -47,14 +48,14 @@ bool QueryPerformanceCounter(int64_t *performance_count)
 
 
 struct Profiler {
-#ifdef _MSC_VER
+#ifdef FTB_WINDOWS
     LARGE_INTEGER tmp_time;
 #else
     int64_t tmp_time;
 #endif
 
     // same for all threads
-    inline static char file_template[40] = "\0";
+    inline static char file_template[100] = "\0";
 
     // thread local
     inline thread_local static bool   is_initialized = false;
@@ -73,8 +74,13 @@ struct Profiler {
             tm* tm_i = localtime(&t);
 
             // create folder
-#ifdef _MSC_VER
-            _mkdir("./profiler_reports/");
+#ifdef FTB_WINDOWS
+            SECURITY_ATTRIBUTES sa;
+            sa.nLength = sizeof(sa);
+            sa.lpSecurityDescriptor = NULL;
+            sa.bInheritHandle = FALSE;
+            CreateDirectoryA("profiler_reports", &sa);
+            // _mkdir("./profiler_reports/");
 #else
             mkdir("./profiler_reports/", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 #endif
@@ -97,7 +103,7 @@ struct Profiler {
 
             // initially write the performance frequency
             QueryPerformanceFrequency(&tmp_time);
-#ifdef _MSC_VER
+#ifdef FTB_WINDOWS
             fprintf(out_file, "%lld,,,,\n", tmp_time.QuadPart);
 #else
             fprintf(out_file, "%ld,,,,\n", tmp_time);
@@ -106,7 +112,7 @@ struct Profiler {
         }
 
         QueryPerformanceCounter(&tmp_time);
-#ifdef _MSC_VER
+#ifdef FTB_WINDOWS
         fprintf(out_file, "->,%lld,%s,%s,%d,%s,%s\n",
                 tmp_time.QuadPart, name, file,
                 line, comment1, comment2);
@@ -120,7 +126,7 @@ struct Profiler {
     ~Profiler() {
         call_depth -= 1;
         QueryPerformanceCounter(&tmp_time);
-#ifdef _MSC_VER
+#ifdef FTB_WINDOWS
         fprintf(out_file, "<-,%lld,,,,,\n", tmp_time.QuadPart);
 #else
         fprintf(out_file, "<-,%ld,,,,,\n", tmp_time);

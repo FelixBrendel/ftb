@@ -75,6 +75,13 @@ auto test_printer() -> void {
     print(" - %{s32,3}\n", -1,200,-300);
     print(" - %{->} <> %{->,2}\n", &u1, &arr, nullptr);
 
+    print("%{->char}%{->char}%{->char}",
+          true   ? "general "     : "",
+          false  ? "validation "  : "",
+          false  ? "performance " : "");
+
+    // print("%{->char}%{->char}\n\n", "hallo","");
+
 }
 
 auto test_hm() -> void {
@@ -120,7 +127,7 @@ auto test_hm() -> void {
 s32 main(s32 argc, char* argv[]) {
     init_printer();
 
-    test_hm();
+    test_printer();
 
     print("done.");
 

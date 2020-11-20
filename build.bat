@@ -13,7 +13,7 @@ set BINDIR_LINUX=./%BINDIR_RAW%
 
 echo.
 echo clang:
-clang -std=c++17 %SRC% -o %BINDIR_WIN%\clang_%EXE_WIN%
+clang -g -std=c++17 %SRC% -o %BINDIR_WIN%\clang_%EXE_WIN%
 %BINDIR_WIN%\clang_%EXE_WIN%
 
 echo.
@@ -21,14 +21,14 @@ echo g++:
 g++ -std=c++17 %SRC% -o %BINDIR_WIN%\g++_%EXE_WIN%
 %BINDIR_WIN%\g++_%EXE_WIN%
 
-echo.
-echo cl:
-cl %SRC% /std:c++latest /nologo /Zi /Fd: %BINDIR_WIN%\cl_%EXE_WIN%.pdb /Fo: %BINDIR_WIN%\ /Fe: %BINDIR_WIN%\cl_%EXE_WIN% /wd4090
-%BINDIR_WIN%\cl_%EXE_WIN%
+REM echo.
+REM echo cl:
+REM cl %SRC% /std:c++latest /nologo /Zi /Fd: %BINDIR_WIN%\cl_%EXE_WIN%.pdb /Fo: %BINDIR_WIN%\ /Fe: %BINDIR_WIN%\cl_%EXE_WIN% /wd4090
+REM %BINDIR_WIN%\cl_%EXE_WIN%
 
-echo.
-echo bash_clang:
-bash -c "clang -std=c++17 %SRC% -o %BINDIR_LINUX%/bash_clang_%EXE_LINUX% && %BINDIR_LINUX%/bash_clang_%EXE_LINUX%"
+REM echo.
+REM echo bash_clang:
+REM bash -c "clang -std=c++17 %SRC% -o %BINDIR_LINUX%/bash_clang_%EXE_LINUX% && %BINDIR_LINUX%/bash_clang_%EXE_LINUX%"
 
 echo.
 echo bash_g++:

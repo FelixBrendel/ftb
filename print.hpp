@@ -303,9 +303,9 @@ int print_va_args_to_file(FILE* file, static_string format, va_list* arg_list) {
             int move = maybe_special_print(file, format, &pos, arg_list);
             if (move == 0) {
                 move = maybe_fprintf(file, format, &pos, arg_list);
-                if (move == 0) {
-                    putchar('%');
-                    putchar(c);
+                if (move == -1) {
+                    fputc('%', file);
+                    fputc(c, file);
                     move = 1;
                 }
             }
