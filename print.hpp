@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "platform.hpp"
 #include "hashmap.hpp"
 #include "hooks.hpp"
 
@@ -449,6 +450,14 @@ auto print_str_line(FILE* f, char* str) -> s32 {
 }
 
 void init_printer() {
+#ifdef FTB_WINDOWS
+    // enable colored terminal output for windows
+    HANDLE hOut  = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD dwMode = 0;
+    GetConsoleMode(hOut, &dwMode);
+    dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    SetConsoleMode(hOut, dwMode);
+#endif
     color_stack.alloc();
     printer_map.alloc();
     type_map.alloc();
