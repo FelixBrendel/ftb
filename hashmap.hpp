@@ -63,6 +63,15 @@ struct Hash_Map {
     }
 
     void alloc(u32 initial_capacity = 8) {
+        // round up to next pow of 2
+        --initial_capacity;
+        initial_capacity |= initial_capacity >> 1;
+        initial_capacity |= initial_capacity >> 2;
+        initial_capacity |= initial_capacity >> 4;
+        initial_capacity |= initial_capacity >> 8;
+        initial_capacity |= initial_capacity >> 16;
+        ++initial_capacity;
+        // until here
         current_capacity = initial_capacity;
         cell_count = 0;
         data = (HM_Cell*)calloc(initial_capacity, sizeof(HM_Cell));
@@ -74,13 +83,14 @@ struct Hash_Map {
     }
 
     s32 get_index_of_living_cell_if_it_exists(key_type key, u64 hash_val) {
-        // s32 index = hash_val & (current_capacity - 1);
-        s32 index = hash_val % current_capacity;
+        ZoneScoped;
+        s32 index = hash_val & (current_capacity - 1);
         HM_Cell cell = data[index];
         /* test if there is or was something there */
         if (cell.occupancy != HM_Cell::Occupancy::Avaliable) {
             /* check if objects match */
             if (hm_objects_match(key, cell.original)) {
+                ZoneScopedN("hm_objects_match check");
                 /* we found it, now check it it is deleted: */
                 if (cell.occupancy == HM_Cell::Occupancy::Deleted) {
                     /* we found it but it was deleted, we     */
@@ -94,7 +104,7 @@ struct Hash_Map {
                 /* objects dont match, this means we have */
                 /* a collision. We just search forward    */
                 for (u32 i = 0; i < current_capacity; ++i) {
-                    u32 new_idx = (i + index) % current_capacity;
+                    u32 new_idx = (i + index) & (current_capacity - 1);
                     cell = data[new_idx];
                     /* If we find a avaliable cell while looking */
                     /* forward, the object is not in the hm      */
@@ -122,6 +132,7 @@ struct Hash_Map {
     }
 
     bool key_exists(key_type key) {
+        ZoneScoped;
         return get_index_of_living_cell_if_it_exists(key, hm_hash((key_type)key)) != -1;
     }
 
@@ -157,6 +168,7 @@ struct Hash_Map {
     }
 
     value_type get_object(key_type key) {
+        ZoneScoped;
         return get_object(key, hm_hash((key_type)key));
     }
 
@@ -181,7 +193,8 @@ struct Hash_Map {
     }
 
     void set_object(key_type key, value_type obj, u64 hash_val) {
-        u32 index = hash_val % current_capacity;
+        ZoneScoped;
+        u32 index = hash_val & (current_capacity - 1);
 
         /* if we the desired cell is avaliable, write to it and done :) */
         if (data[index].occupancy == HM_Cell::Occupancy::Avaliable) {
@@ -194,6 +207,7 @@ struct Hash_Map {
             } else {
                 /* collision, check resize */
                 if ((cell_count*1.0f / current_capacity) > 0.666f) {
+                    ZoneScopedN("HM Resize");
                     auto old_data = data;
                     data = (HM_Cell*)calloc(current_capacity*4, sizeof(HM_Cell));
                     cell_count = 0;
@@ -207,7 +221,7 @@ struct Hash_Map {
                         }
                     }
                     free(old_data);
-                    index = hash_val % current_capacity;
+                    index = hash_val & (current_capacity - 1);
                 }
                 ++cell_count;
                 /* search for empty slot for new cell starting at desired index; */
@@ -242,5 +256,20 @@ struct Hash_Map {
     void set_object(key_type key, value_type obj) {
         u64 hash_val = hm_hash((key_type)key);
         set_object(key, obj, hash_val);
+    }
+
+    void dump_occupancy(const char* path) {
+        FILE* out = fopen(path, "w");
+        defer { fclose(out); };
+        for (u32 i = 0; i < current_capacity; ++i) {
+            if (data[i].occupancy == HM_Cell::Occupancy::Avaliable) {
+                fprintf(out, "%04u [FREE]\n", i);
+            } else if (data[i].occupancy == HM_Cell::Occupancy::Deleted) {
+                fprintf(out, "%04u [DELETED]  hash: %llu (wants to be %llu)\n", i, data[i].hash, data[i].hash & (current_capacity - 1));
+            } else {
+                fprintf(out, "%04u [OCCUPIED] hash: %llu (wants to be %llu)\n", i, data[i].hash, data[i].hash & (current_capacity - 1));
+            }
+        }
+
     }
 };

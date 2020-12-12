@@ -9,6 +9,9 @@ struct Key;
 u32 hm_hash(Key u);
 inline bool hm_objects_match(Key a, Key b);
 
+#define ZoneScoped
+#define ZoneScopedN(name)
+
 #include "./error.hpp"
 #include "./hooks.hpp"
 #include "./hashmap.hpp"
@@ -127,7 +130,7 @@ auto test_hm() -> void {
 s32 main(s32 argc, char* argv[]) {
     init_printer();
 
-    test_printer();
+    test_hm();
 
     print("done.");
 

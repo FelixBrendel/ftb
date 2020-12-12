@@ -7,6 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef FTB_WINDOWS
+#include <Windows.h>
+#endif
 #include "platform.hpp"
 #include "hashmap.hpp"
 #include "hooks.hpp"
