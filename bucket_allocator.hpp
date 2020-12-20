@@ -11,6 +11,12 @@ struct Bucket_Allocator {
     Array_List<type*> free_list;
     type** buckets;
 
+    void clear() {
+        next_index_in_latest_bucket = 0;
+        next_bucket_index = 0;
+        free_list.clear();
+    }
+
     void expand() {
         buckets = (type**)realloc(buckets, bucket_count * 2 * sizeof(type*));
         bucket_count *= 2;
