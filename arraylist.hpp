@@ -16,19 +16,26 @@ struct Array_List {
         length = initial_capacity;
     }
 
+    static Array_List<type> create_from(std::initializer_list<type> l) {
+        Array_List<type> ret;
+        ret.alloc_from(l);
+        return ret;
+    }
+
     void alloc_from(std::initializer_list<type> l) {
         length = max(l.size(), 1); // alloc at least one
 
         data = (type*)malloc(length * sizeof(type));
         count = 0;
+        // TODO(Felix): Use memcpy here
         for (type t : l) {
             data[count++] = t;
         }
     }
 
-
     void extend(std::initializer_list<type> l) {
         reserve(l.size());
+        // TODO(Felix): Use memcpy here
         for (type e : l) {
             append(e);
         }
@@ -50,12 +57,23 @@ struct Array_List {
         ret.count = count;
 
         ret.data = (type*)malloc(length * sizeof(type));
+        // TODO(Felix): Maybe use memcpy here
         for (u32 i = 0; i < count; ++i) {
             ret.data[i] = data[i];
         }
         return ret;
     }
 
+    void copy_values_from(Array_List<type> other) {
+        // clear the array
+        count = 0;
+        // make sure we have allocated enough
+        reserve(other.count);
+        // copy stuff
+        count = other.count;
+        memcpy(data, other.data, sizeof(type) * other.count);
+    }
+    
     type* begin() {
         return data;
     }
@@ -139,7 +157,7 @@ struct Array_List {
         _merge(left, middle, right);
     }
 
-    u32 sorted_find(type elem, s32 left=-1, s32 right=-1) {
+    s32 sorted_find(type elem, s32 left=-1, s32 right=-1) {
         if (left == -1) {
             return sorted_find(elem, 0, count - 1);
         } else if (left == right) {

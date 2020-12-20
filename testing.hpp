@@ -2,7 +2,7 @@
 
 typedef s32 testresult;
 
-#define epsilon 2.2204460492503131E-16
+#define float_epsilon 2.2204460492503131E-16
 #define pass 1
 #define fail 0
 
@@ -57,13 +57,13 @@ typedef s32 testresult;
     }                                                                   \
 
 #define assert_equal_f64(variable, value)                           \
-    if (fabsl((f64)variable - (f64)value) > epsilon) {              \
+    if (fabsl((f64)variable - (f64)value) > float_epsilon) {        \
         print_assert_equal_fail(variable, value, f64, "%{f64}");    \
         return fail;                                                \
     }
 
 #define assert_not_equal_f64(variable, value)                           \
-    if (fabsl((f64)variable - (f64)value) <= epsilon) {                 \
+    if (fabsl((f64)variable - (f64)value) <= float_epsilon) {           \
         print_assert_not_equal_fail(variable, value, f64, "%{f64}");    \
         return fail;                                                    \
     }

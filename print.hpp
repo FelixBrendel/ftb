@@ -6,11 +6,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "platform.hpp"
 
 #ifdef FTB_WINDOWS
 #include <Windows.h>
 #endif
-#include "platform.hpp"
 #include "hashmap.hpp"
 #include "hooks.hpp"
 
@@ -443,7 +443,6 @@ auto print_Str(FILE* f, String* str) -> s32 {
 
 auto print_str_line(FILE* f, char* str) -> s32 {
     u32 length = 0;
-    char* str_cpy = str;
     while (str[length] != '\0') {
         if (str[length] == '\n')
             break;

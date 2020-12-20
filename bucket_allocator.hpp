@@ -2,7 +2,7 @@
 #include "types.hpp"
 
 template <typename type>
-class Bucket_Allocator {
+struct Bucket_Allocator {
     u32 next_index_in_latest_bucket;
     u32 next_bucket_index;
     u32 bucket_count;
@@ -12,8 +12,6 @@ class Bucket_Allocator {
     type** buckets;
 
     void expand() {
-        // printf("realloc time\n");
-        // realloc time
         buckets = (type**)realloc(buckets, bucket_count * 2 * sizeof(type*));
         bucket_count *= 2;
     }
@@ -34,8 +32,7 @@ class Bucket_Allocator {
         }
     }
 
-public:
-        void alloc(u32 bucket_size = 16, u32 initial_bucket_count = 8) {
+    void alloc(u32 bucket_size = 16, u32 initial_bucket_count = 8) {
         this->free_list.alloc();
         this->bucket_size = bucket_size;
         next_index_in_latest_bucket = 0;
@@ -76,6 +73,7 @@ public:
     template <typename lambda>
     void for_each(lambda p) {
         free_list.sort();
+
         type* val;
         for (u32 i = 0; i < next_bucket_index; ++i) {
             for (u32 j = 0; j < bucket_size; ++j) {
