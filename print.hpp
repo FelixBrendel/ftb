@@ -389,6 +389,20 @@ int print(static_string format, ...) {
     return num_printed_chars;
 }
 
+int println(static_string format, ...) {
+    va_list arg_list;
+    va_start(arg_list, format);
+
+    int num_printed_chars = print_va_args_to_file(ftb_stdout, format, &arg_list);
+    num_printed_chars += print("\n");
+    fflush(stdout);
+
+    va_end(arg_list);
+
+    return num_printed_chars;
+}
+
+
 int print_bool(FILE* f, u32 val) {
     return print_to_file(f, val ? "true" : "false");
 }
