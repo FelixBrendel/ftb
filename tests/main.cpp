@@ -1,7 +1,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <string.h>
-#include "./types.hpp"
+#include "../types.hpp"
 
 u32 hm_hash(u32 u);
 inline bool hm_objects_match(u32 a, u32 b);
@@ -12,14 +12,14 @@ inline bool hm_objects_match(Key a, Key b);
 #define ZoneScoped
 #define ZoneScopedN(name)
 
-#include "./print.hpp"
-#include "./testing.hpp"
-#include "./bucket_allocator.hpp"
-#include "./error.hpp"
-#include "./hooks.hpp"
-#include "./hashmap.hpp"
+#include "../print.hpp"
+#include "../testing.hpp"
+#include "../bucket_allocator.hpp"
+#include "../error.hpp"
+#include "../hooks.hpp"
+#include "../hashmap.hpp"
 
-#include "./error.hpp"
+#include "../error.hpp"
 
 
 u32 hm_hash(u32 u) {
