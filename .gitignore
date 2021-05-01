@@ -2,3 +2,4 @@
 *.report
 /ftb
 vgcore.*
+tests/ftb

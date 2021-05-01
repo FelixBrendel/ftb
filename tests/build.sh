@@ -5,12 +5,12 @@ pushd $SCRIPTPATH > /dev/null
 #  _DEBUG
 # time g++ -fpermissive src/main.cpp -g -o ./bin/slime --std=c++17 || exit 1
 time clang++ -D_DEBUG -D_PROFILING -fpermissive main.cpp -g -o ./ftb --std=c++17 || exit 1
-time clang++ -D_DEBUG -D_PROFILING -fpermissive cpu_info.cpp -g -o ./cpu_info --std=c++17 || exit 1
+# time clang++ -D_DEBUG -D_PROFILING -fpermissive cpu_info.cpp -g -o ./cpu_info --std=c++17 || exit 1
 
 echo ""
 # time valgrind --leak-check=full ./ftb
 time ./ftb
-time ./cpu_info
+# time ./cpu_info
 
 popd > /dev/null
 unset TIMEFORMAT

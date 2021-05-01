@@ -1,8 +1,81 @@
 #pragma once
 #include <stdlib.h>
 #include <initializer_list>
+
+#ifdef FTB_INTERNAL_DEBUG
+#  include <stdio.h>
+#endif
+
 #include "types.hpp"
 #include "macros.hpp"
+
+template <typename type>
+struct Stack_Array_List {
+    type* data;
+    u32 length;
+    u32 count;
+
+    Stack_Array_List(u32 length) {
+        data = (type*)alloca(length);
+#ifdef FTB_INTERNAL_DEBUG
+        if (data == nullptr) {
+            fprintf(stderr, "ERROR: alloca did return nullptr \n");
+        }
+#endif
+        this->length = length;
+        this->count = 0;
+    }
+
+    static Stack_Array_List<type> create_from(std::initializer_list<type> l) {
+        Stack_Array_List<type> ret(l.size());
+
+        for (type t : l) {
+            ret.data[ret.count++] = t;
+        }
+        return ret;
+    }
+
+    void extend(std::initializer_list<type> l) {
+        for (type e : l) {
+            append(e);
+        }
+    }
+
+    void clear() {
+        count = 0;
+    }
+
+    type* begin() {
+        return data;
+    }
+
+    type* end() {
+        return data+(count);
+    }
+
+    void remove_index(u32 index) {
+#ifdef FTB_INTERNAL_DEBUG
+        if (index >= count)
+            fprintf(stderr, "ERROR: removing index that is not in use\n");
+#endif
+        data[index] = data[--count];
+    }
+
+    void append(type element) {
+#ifdef FTB_INTERNAL_DEBUG
+        if (count == length) {
+            fprintf(stderr, "ERROR: Stack_Array_List is full!\n");
+        }
+#endif
+        data[count] = element;
+        count++;
+    }
+
+    type& operator[](u32 index) {
+        return data[index];
+    }
+
+};
 
 template <typename type>
 struct Array_List {
@@ -180,24 +253,64 @@ struct Array_List {
 
 template <typename type>
 struct Auto_Array_List : public Array_List<type> {
+    Auto_Array_List(u32 length) {
+        this->alloc(length);
+    }
 
-        Auto_Array_List(u32 length) {
-            this->alloc(length);
-        }
+    Auto_Array_List() {
+        this->alloc(16);
+    }
 
-        Auto_Array_List() {
-            this->alloc(16);
+    Auto_Array_List(std::initializer_list<type> l) {
+        this->alloc(l.size());
+        for (type e : l) {
+            this->append(e);
         }
+    }
 
-        Auto_Array_List(std::initializer_list<type> l) {
-            this->alloc(l.size());
-            for (type e : l) {
-                this->append(e);
-            }
-        }
+    ~Auto_Array_List() {
+        free(this->data);
+        this->data = nullptr;
+    }
+};
 
-        ~Auto_Array_List() {
-            free(this->data);
-            this->data = nullptr;
+template <typename type>
+struct Queue {
+    Array_List<type> arr_list;
+    u32 next_index;
+
+    void alloc(u32 initial_capacity = 16) {
+        next_index = 0;
+        arr_list.alloc(initial_capacity);
+    }
+
+    void dealloc() {
+        arr_list.dealloc();
+    }
+
+    void push_back(type e) {
+        arr_list.append(e);
+    }
+
+    type get_next() {
+#ifdef FTB_INTERNAL_DEBUG
+        if (next_index >= arr_list.length) {
+            fprintf(stderr, "ERROR: Out of bounds access in queue\n");
         }
+#endif
+        return arr_list.data[next_index++];
+    }
+
+    bool is_empty() {
+        return next_index == arr_list.count;
+    }
+
+    int get_count() {
+        return arr_list.count - next_index;
+    }
+
+    void clear() {
+        next_index = 0;
+        arr_list.clear();
+    }
 };

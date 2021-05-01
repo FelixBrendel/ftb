@@ -146,6 +146,128 @@ auto test_hm() -> void {
     });
 }
 
+proc test_stack_array_lists() -> testresult {
+    Stack_Array_List<int> list(20);
+
+    assert_equal_int(list.count, 0);
+    assert_equal_int(list.length, 20);
+    assert(list.data != NULL, "list should have some data allocated");
+
+    // test sum of empty list
+    int sum = 0;
+    int iter = 0;
+    for (auto e : list) {
+        sum += e;
+        iter++;
+    }
+    assert_equal_int(sum, 0);
+    assert_equal_int(iter, 0);
+
+    // append some elements
+    list.append(1);
+    list.append(2);
+    list.append(3);
+    list.append(4);
+
+    assert_equal_int(list.count, 4);
+    assert_equal_int(list.length, 20);
+
+    // test sum again
+    sum = 0;
+    iter = 0;
+    for (auto e : list) {
+        sum += e;
+        iter++;
+    }
+    assert_equal_int(sum, 10);
+    assert_equal_int(iter, 4);
+
+    // bracketed access
+    list[0] = 11;
+    list[1] = 3;
+    list[2] = 2;
+    list.append(5);
+
+    // test sum again
+    sum = 0;
+    iter = 0;
+    for (auto e : list) {
+        sum += e;
+        ++iter;
+    }
+    assert_equal_int(sum, 25);
+    assert_equal_int(iter, 5);
+
+    // assert memory correct
+    assert_equal_int(list.data[0], 11);
+    assert_equal_int(list.data[1], 3);
+    assert_equal_int(list.data[2], 2);
+    assert_equal_int(list.data[3], 4);
+    assert_equal_int(list.data[4], 5);
+
+    // removing some indices
+    list.remove_index(4);
+
+    // test sum again
+    sum = 0;
+    iter = 0;
+    for (auto e : list) {
+        sum += e;
+        ++iter;
+    }
+    assert_equal_int(sum, 20);
+    assert_equal_int(iter, 4);
+
+    // removing some indices
+    list.remove_index(1);
+    list.remove_index(0);
+
+    // test sum again
+    sum = 0;
+    iter = 0;
+    for (auto e : list) {
+        sum += e;
+        ++iter;
+    }
+
+    assert_equal_int(sum, 6);
+    assert_equal_int(iter, 2);
+
+    return pass;
+}
+
+proc test_queue() -> testresult {
+    Queue<int> q;
+    q.alloc(4);
+
+    assert(q.is_empty(), "queue should start empty");
+    assert_equal_int(q.get_count(), 0);
+
+    q.push_back(1);
+    q.push_back(2);
+    q.push_back(3);
+
+    assert_equal_int(q.get_count(), 3);
+
+    assert_equal_int(q.get_next(), 1);
+    assert_equal_int(q.get_count(), 2);
+    assert(!q.is_empty(), "should not be empty");
+
+    assert_equal_int(q.get_next(), 2);
+    assert_equal_int(q.get_count(), 1);
+    q.push_back(4);
+    assert_equal_int(q.get_count(), 2);
+
+    assert_equal_int(q.get_next(), 3);
+    assert_equal_int(q.get_count(), 1);
+    assert(!q.is_empty(), "should not be empty");
+
+    assert_equal_int(q.get_next(), 4);
+    assert(q.is_empty(), "should be empty");
+    assert_equal_int(q.get_count(), 0);
+
+    return pass;
+}
 
 proc test_array_lists_adding_and_removing() -> testresult {
     // test adding and removing
@@ -446,7 +568,9 @@ s32 main(s32, char**) {
     invoke_test(test_array_lists_sorting);
     invoke_test(test_array_lists_searching);
     invoke_test(test_array_list_sort_many);
+    invoke_test(test_stack_array_lists);
     invoke_test(test_bucket_allocator);
+    invoke_test(test_queue);
 
     return 0;
 }
