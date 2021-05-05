@@ -82,6 +82,12 @@ struct Hash_Map {
         data = nullptr;
     }
 
+    void clear() {
+        cell_count = 0;
+        memset(data, 0, current_capacity * sizeof(HM_Cell));
+    }
+
+
     s32 get_index_of_living_cell_if_it_exists(key_type key, u64 hash_val) {
         s32 index = hash_val & (current_capacity - 1);
         HM_Cell cell = data[index];

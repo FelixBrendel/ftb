@@ -114,7 +114,6 @@ struct Array_List {
         }
     }
 
-
     void dealloc() {
         free(data);
         data = nullptr;
@@ -123,6 +122,19 @@ struct Array_List {
     void clear() {
         count = 0;
     }
+
+    bool contains_linear_search(type elem) {
+        for (u32 i = 0; i < count; ++i) {
+            if (data[i] == elem)
+                return true;
+        }
+        return false;
+    }
+
+    bool contains_binary_search(type elem) {
+        return sorted_find(elem) != -1;
+    }
+
 
     Array_List<type> clone() {
         Array_List<type> ret;
@@ -307,6 +319,14 @@ struct Queue {
 
     int get_count() {
         return arr_list.count - next_index;
+    }
+
+    bool contains(type elem) {
+        for (u32 i = next_index; i < arr_list.count; ++i) {
+            if (arr_list[i] == elem)
+                return true;
+        }
+        return false;
     }
 
     void clear() {
