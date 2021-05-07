@@ -411,6 +411,28 @@ int print_u32(FILE* f, u32 num) {
     return print_to_file(f, "%u", num);
 }
 
+int print_spaces(FILE* f, s32 num) {
+    int sum = 0;
+
+    while (num >= 8) {
+        // println("%d", 8);
+        sum += print_to_file(f, "        ");
+        num -= 8;
+    }
+    while (num >= 4) {
+        // println("%d", 4);
+        sum += print_to_file(f, "    ");
+        num -= 4;
+    }
+    while (num --> 0) {
+        // println("%d", 1);
+        sum += print_to_file(f, " ");
+        num--;
+    }
+    return sum;
+}
+
+
 int print_u64(FILE* f, u64 num) {
     return print_to_file(f, "%llu", num);
 }
@@ -484,6 +506,7 @@ void init_printer() {
         type_map.dealloc();
     };
 
+    register_printer("spaces",      print_spaces,      Printer_Function_Type::_32b);
     register_printer("u32",         print_u32,         Printer_Function_Type::_32b);
     register_printer("u64",         print_u64,         Printer_Function_Type::_64b);
     register_printer("bool",        print_bool,        Printer_Function_Type::_32b);
