@@ -82,15 +82,19 @@ struct Hash_Map {
         data = nullptr;
     }
 
+    void clear() {
+        cell_count = 0;
+        memset(data, 0, current_capacity * sizeof(HM_Cell));
+    }
+
+
     s32 get_index_of_living_cell_if_it_exists(key_type key, u64 hash_val) {
-        ZoneScoped;
         s32 index = hash_val & (current_capacity - 1);
         HM_Cell cell = data[index];
         /* test if there is or was something there */
         if (cell.occupancy != HM_Cell::Occupancy::Avaliable) {
             /* check if objects match */
             if (hm_objects_match(key, cell.original)) {
-                ZoneScopedN("hm_objects_match check");
                 /* we found it, now check it it is deleted: */
                 if (cell.occupancy == HM_Cell::Occupancy::Deleted) {
                     /* we found it but it was deleted, we     */
@@ -132,7 +136,6 @@ struct Hash_Map {
     }
 
     bool key_exists(key_type key) {
-        ZoneScoped;
         return get_index_of_living_cell_if_it_exists(key, hm_hash((key_type)key)) != -1;
     }
 
@@ -168,7 +171,6 @@ struct Hash_Map {
     }
 
     value_type get_object(key_type key) {
-        ZoneScoped;
         return get_object(key, hm_hash((key_type)key));
     }
 
@@ -193,7 +195,6 @@ struct Hash_Map {
     }
 
     void set_object(key_type key, value_type obj, u64 hash_val) {
-        ZoneScoped;
         u32 index = hash_val & (current_capacity - 1);
 
         /* if we the desired cell is avaliable, write to it and done :) */
@@ -207,7 +208,6 @@ struct Hash_Map {
             } else {
                 /* collision, check resize */
                 if ((cell_count*1.0f / current_capacity) > 0.666f) {
-                    ZoneScopedN("HM Resize");
                     auto old_data = data;
                     data = (HM_Cell*)calloc(current_capacity*4, sizeof(HM_Cell));
                     cell_count = 0;
