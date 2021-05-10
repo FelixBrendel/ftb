@@ -1,3 +1,4 @@
+#pragma once
 #include "arraylist.hpp"
 #include "types.hpp"
 

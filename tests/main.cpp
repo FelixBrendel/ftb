@@ -18,6 +18,8 @@ inline bool hm_objects_match(Key a, Key b);
 #include "../error.hpp"
 #include "../hooks.hpp"
 #include "../hashmap.hpp"
+#include "../stacktrace.hpp"
+#include "../scheduler.cpp"
 
 #include "../error.hpp"
 
@@ -179,6 +181,7 @@ proc test_stack_array_lists() -> testresult {
         sum += e;
         iter++;
     }
+
     assert_equal_int(sum, 10);
     assert_equal_int(iter, 4);
 
@@ -239,6 +242,9 @@ proc test_stack_array_lists() -> testresult {
 proc test_queue() -> testresult {
     Queue<int> q;
     q.alloc(4);
+    defer {
+        q.dealloc();
+    };
 
     assert(q.is_empty(), "queue should start empty");
     assert_equal_int(q.get_count(), 0);
@@ -603,8 +609,92 @@ auto test_hooks() -> testresult {
     return pass;
 }
 
+auto test_scheduler_animations() -> testresult {
+    using namespace Scheduler;
+
+    Scheduler::init();
+    defer { Scheduler::deinit(); };
+
+    f32 val = 0;
+
+    f32 from = 1;
+    f32 to   = 2;
+    schedule_animation({
+            .seconds_to_start   = 1,
+            .seconds_to_end     = 2,
+            .interpolant        = &val,
+            .interpolant_type   = Interpolant_Type::F32,
+            .from               = &from,
+            .to                 = &to,
+            .interpolation_type = Interpolation_Type::Lerp
+        });
+
+    assert_equal_f64((f64)val, 0.0);
+
+    update_all(1);
+    assert_equal_f64((f64)val, 1.0);
+
+    update_all(0.1);
+    assert_equal_int(abs(val - 1.1) < 0.001, true);
+
+    update_all(0.1);
+    assert_equal_int(abs(val - 1.2) < 0.001, true);
+
+    update_all(0.2);
+    assert_equal_int(abs(val - 1.4) < 0.001, true);
+
+    update_all(1);
+    assert_equal_int(abs(val - 2) < 0.001, true);
+
+    // testing custom type interpolation
+    enum My_Interpolant_Type : u8 {
+        S32
+    };
+
+    register_interpolator([](void* p_from, f32 t, void* p_to, void* p_interpolant) {
+        s32 from = *(s32*)p_from;
+        s32 to   = *(s32*)p_to;
+        s32* target = (s32*)p_interpolant;
+        *target = from + (to - from) * t;
+    }, (Interpolant_Type)My_Interpolant_Type::S32, sizeof(s32));
+
+    s32 test = 0;
+
+    s32 s_from = 1;
+    s32 s_to   = 11;
+    schedule_animation({
+            .seconds_to_start   = 1,
+            .seconds_to_end     = 2,
+            .interpolant        = &test,
+            .interpolant_type   = (Interpolant_Type)My_Interpolant_Type::S32,
+            .from               = &s_from,
+            .to                 = &s_to,
+            .interpolation_type = Interpolation_Type::Lerp
+        });
+
+    assert_equal_int(test, 0);
+
+    update_all(1);
+    assert_equal_int(test, 1);
+
+    update_all(0.1);
+    assert_equal_int(test, 2);
+
+    update_all(0.1);
+    assert_equal_int(test, 3);
+
+    update_all(0.2);
+    assert_equal_int(test, 5);
+
+    update_all(1);
+    assert_equal_int(test, 11);
+
+    return pass;
+}
+
 s32 main(s32, char**) {
     init_printer();
+    defer { deinit_printer(); };
     testresult result;
 
     invoke_test(test_array_lists_adding_and_removing);
@@ -615,6 +705,8 @@ s32 main(s32, char**) {
     invoke_test(test_bucket_allocator);
     invoke_test(test_queue);
     invoke_test(test_hooks);
+    invoke_test(test_scheduler_animations);
+
 
     return 0;
 }

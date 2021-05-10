@@ -1,4 +1,11 @@
 #pragma once
+#include "platform.hpp"
+
+#ifdef FTB_WINDOWS
+#else
+#  include <signal.h> // for sigtrap
+#endif
+
 #include <functional>
 
 #define proc auto
@@ -131,3 +138,42 @@ else
                               call2(var);
                           }
 */
+
+#define panic(...)                                                          \
+    do {                                                                    \
+        print("%{color<}[Panic]%{>color} in "                               \
+              "file %{color<}%{->char}%{>color} "                           \
+              "line %{color<}%{u32}%{>color}: "                             \
+              "(%{color<}%{->char}%{>color})\n",                            \
+              console_red, console_cyan, __FILE__, console_cyan, __LINE__,  \
+              console_cyan, __func__);                                      \
+        print("%{color<}", console_red);                                    \
+        print(__VA_ARGS__);                                                 \
+        print("%{>color}\n");                                               \
+        fflush(stdout);                                                     \
+        print_stacktrace();                                                 \
+        debug_break();                                                      \
+    } while(0)
+
+
+#define panic_if(cond, ...)                     \
+    if(!(cond));                                \
+    else panic(__VA_ARGS__)
+
+#ifdef FTB_DEBUG_LOG
+#  define debug_log(...)                                        \
+    do {                                                        \
+        print("%{color<}[INFO " __FILE__ ":%{color<}%{->char}"  \
+              "%{>color}]%{>color} ",                           \
+              console_green, console_cyan, __func__);           \
+        println(__VA_ARGS__);                                   \
+    } while (0)
+#else
+#  define debug_log(...)
+#endif
+
+#ifdef FTB_WINDOWS
+#  define debug_break() __debugbreak()
+#else
+#  define debug_break() raise(SIGTRAP);
+#endif

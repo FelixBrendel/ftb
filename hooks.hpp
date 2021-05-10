@@ -68,10 +68,10 @@ struct Hook {
     }
 };
 
-struct __System_Shutdown_Hook : Hook {
-    void operator()() = delete;
-    ~__System_Shutdown_Hook() {
-        Hook::operator()();
-        lambdas.dealloc();
-    }
-} system_shutdown_hook;
+// struct __System_Shutdown_Hook : Hook {
+//     void operator()() = delete;
+//     ~__System_Shutdown_Hook() {
+//         Hook::operator()();
+//         lambdas.dealloc();
+//     }
+// } system_shutdown_hook;

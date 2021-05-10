@@ -500,12 +500,6 @@ void init_printer() {
     printer_map.alloc();
     type_map.alloc();
 
-    system_shutdown_hook << [](){
-        color_stack.dealloc();
-        printer_map.dealloc();
-        type_map.dealloc();
-    };
-
     register_printer("spaces",      print_spaces,      Printer_Function_Type::_32b);
     register_printer("u32",         print_u32,         Printer_Function_Type::_32b);
     register_printer("u64",         print_u64,         Printer_Function_Type::_64b);
@@ -520,4 +514,10 @@ void init_printer() {
     register_printer(">color",      print_color_end,   Printer_Function_Type::_void);
     register_printer("->Str",       print_Str,         Printer_Function_Type::_ptr);
     register_printer("->char_line", print_str_line,    Printer_Function_Type::_ptr);
+}
+
+void deinit_printer() {
+    color_stack.dealloc();
+    printer_map.dealloc();
+    type_map.dealloc();
 }
