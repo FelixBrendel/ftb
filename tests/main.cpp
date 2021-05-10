@@ -560,6 +560,49 @@ auto test_array_list_sort_many() -> testresult {
     return pass;
 }
 
+auto test_hooks() -> testresult {
+    s32 a = 0;
+    s32 b = 0;
+    s32 c = 0;
+
+    Hook hook;
+    hook << [&]() {
+        a = 1;
+    };
+    hook << [&]() {
+        // NOTE(Felix): assert correct execution order
+        if (a == 1 && c == 0) {
+            b = 2;
+        }
+    };
+    hook << [&]() {
+        c = 3;
+    };
+
+    assert_equal_int(a, 0);
+    assert_equal_int(b, 0);
+    assert_equal_int(c, 0);
+
+    hook();
+
+    assert_equal_int(a, 1);
+    assert_equal_int(b, 2);
+    assert_equal_int(c, 3);
+
+    a = 0;
+    b = 0;
+    c = 0;
+
+    // NOTE(Felix): hook should be empty now
+    hook();
+
+    assert_equal_int(a, 0);
+    assert_equal_int(b, 0);
+    assert_equal_int(c, 0);
+
+    return pass;
+}
+
 s32 main(s32, char**) {
     init_printer();
     testresult result;
@@ -571,6 +614,7 @@ s32 main(s32, char**) {
     invoke_test(test_stack_array_lists);
     invoke_test(test_bucket_allocator);
     invoke_test(test_queue);
+    invoke_test(test_hooks);
 
     return 0;
 }
