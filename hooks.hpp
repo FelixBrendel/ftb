@@ -50,28 +50,28 @@ struct Lambda<R(Args...)>
 };
 
 
-struct Hook : Array_List<Lambda<void()>> {
+struct Hook {
+    Array_List<Lambda<void()>> lambdas;
     Hook() {
-        alloc();
+        lambdas.alloc();
     }
     ~Hook () {
-        dealloc();
+        lambdas.dealloc();
     }
     void operator<<(Lambda<void()> f) {
         // FIXME(Felix): Why can I not call Array_List::append here??? Hallo?
-        if (count == length) {
-            length *= 2;
-            data = (Lambda<void()>*)realloc(data, length * sizeof(Lambda<void()>));
+        if (lambdas.count == lambdas.length) {
+            lambdas.length *= 2;
+            lambdas.data = (Lambda<void()>*)realloc(lambdas.data, lambdas.length * sizeof(Lambda<void()>));
         }
-        data[count] = f;
-        count++;
+        lambdas.data[lambdas.count] = f;
+        lambdas.count++;
     }
     void operator()() {
-        while(count --> 0) {
-            fflush(stdout);
-            data[count]();
+        while(lambdas.count --> 0) {
+            lambdas.data[lambdas.count]();
         }
-        count = 0;
+        lambdas.count = 0;
     }
 };
 
@@ -79,6 +79,6 @@ struct __System_Shutdown_Hook : Hook {
     void operator()() = delete;
     ~__System_Shutdown_Hook() {
         Hook::operator()();
-        dealloc();
+        lambdas.dealloc();
     }
 } system_shutdown_hook;
