@@ -19,7 +19,7 @@ struct Bucket_Allocator {
     }
 
     void expand() {
-        buckets = (type**)realloc(buckets, bucket_count * 2 * sizeof(type*));
+        buckets = (type**)ftb_realloc(buckets, bucket_count * 2 * sizeof(type*));
         bucket_count *= 2;
     }
 
@@ -29,7 +29,7 @@ struct Bucket_Allocator {
         if (next_bucket_index >= bucket_count) {
             expand();
         }
-        buckets[next_bucket_index] = (type*)malloc(bucket_size * sizeof(type));
+        buckets[next_bucket_index] = (type*)ftb_malloc(bucket_size * sizeof(type));
     }
 
     void increment_pointers(s32 amount = 1) {
@@ -46,16 +46,16 @@ struct Bucket_Allocator {
         next_bucket_index = 0;
         bucket_count = initial_bucket_count;
 
-        buckets = (type**)malloc(bucket_count * sizeof(type*));
-        buckets[0] = (type*)malloc(bucket_size * sizeof(type));
+        buckets = (type**)ftb_malloc(bucket_count * sizeof(type*));
+        buckets[0] = (type*)ftb_malloc(bucket_size * sizeof(type));
     }
 
     void dealloc() {
         for (u32 i = 0; i <= next_bucket_index; ++i) {
-            free(buckets[i]);
+            ftb_free(buckets[i]);
         }
         this->free_list.dealloc();
-        free(buckets);
+        ftb_free(buckets);
     }
 
     u32 count_elements() {

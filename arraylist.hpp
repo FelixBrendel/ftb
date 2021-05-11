@@ -7,6 +7,7 @@
 #endif
 
 #include "types.hpp"
+#include "allocation_stats.hpp"
 #include "macros.hpp"
 
 template <typename type>
@@ -84,7 +85,7 @@ struct Array_List {
     u32 count;
 
     void alloc(u32 initial_capacity = 16) {
-        data = (type*)malloc(initial_capacity * sizeof(type));
+        data = (type*)ftb_malloc(initial_capacity * sizeof(type));
         count = 0;
         length = initial_capacity;
     }
@@ -98,7 +99,7 @@ struct Array_List {
     void alloc_from(std::initializer_list<type> l) {
         length = max(l.size(), 1); // alloc at least one
 
-        data = (type*)malloc(length * sizeof(type));
+        data = (type*)ftb_malloc(length * sizeof(type));
         count = 0;
         // TODO(Felix): Use memcpy here
         for (type t : l) {
@@ -115,7 +116,7 @@ struct Array_List {
     }
 
     void dealloc() {
-        free(data);
+        ftb_free(data);
         data = nullptr;
     }
 
@@ -141,7 +142,7 @@ struct Array_List {
         ret.length = length;
         ret.count = count;
 
-        ret.data = (type*)malloc(length * sizeof(type));
+        ret.data = (type*)ftb_malloc(length * sizeof(type));
         // TODO(Felix): Maybe use memcpy here
         for (u32 i = 0; i < count; ++i) {
             ret.data[i] = data[i];
@@ -174,7 +175,7 @@ struct Array_List {
     void append(type element) {
         if (count == length) {
             length *= 2;
-            data = (type*)realloc(data, length * sizeof(type));
+            data = (type*)ftb_realloc(data, length * sizeof(type));
         }
         data[count] = element;
         count++;
@@ -183,7 +184,7 @@ struct Array_List {
     void reserve(u32 amount) {
         if (count+amount >= (u32)length) {
             length *= 2;
-            data = (type*)realloc(data, length * sizeof(type));
+            data = (type*)ftb_realloc(data, length * sizeof(type));
         }
     }
 
@@ -281,7 +282,7 @@ struct Auto_Array_List : public Array_List<type> {
     }
 
     ~Auto_Array_List() {
-        free(this->data);
+        ftb_free(this->data);
         this->data = nullptr;
     }
 };

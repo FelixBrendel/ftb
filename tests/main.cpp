@@ -12,6 +12,7 @@ inline bool hm_objects_match(Key a, Key b);
 #define ZoneScoped
 #define ZoneScopedN(name)
 
+#define USE_FTB_MALLOC
 #include "../print.hpp"
 #include "../testing.hpp"
 #include "../bucket_allocator.hpp"
@@ -693,6 +694,8 @@ auto test_scheduler_animations() -> testresult {
 }
 
 s32 main(s32, char**) {
+    defer { print_malloc_stats(); };
+
     init_printer();
     defer { deinit_printer(); };
     testresult result;

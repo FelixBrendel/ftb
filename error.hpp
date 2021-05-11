@@ -15,14 +15,14 @@ struct Error {
 Error* error = nullptr;
 
 auto delete_error() -> void {
-    free(error);
+    ftb_free(error);
     error = nullptr;
 }
 
 auto create_error(const char* c_func_name, const char* c_file_name,
                   u32 c_file_line, String type, const char* format, ...) -> void {
 
-    error = (Error*) malloc(sizeof(Error));
+    error = (Error*) ftb_malloc(sizeof(Error));
 
     va_list args;
     va_start(args, format);

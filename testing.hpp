@@ -1,4 +1,5 @@
 #include "./types.hpp"
+#include "./allocation_stats.hpp"
 
 typedef s32 testresult;
 
@@ -87,7 +88,7 @@ typedef s32 testresult;
             fputs((i%3==1)? "." : " ", stdout);                 \
         fputs(console_red "failed\n" console_normal, stdout);   \
         if(error) {                                             \
-            free(error);                                        \
+            ftb_free(error);                                    \
             error = nullptr;                                    \
         }                                                       \
     }

@@ -65,7 +65,7 @@ int maybe_special_print(FILE* file, static_string format, int* pos, va_list* arg
     if (format[end_pos] == 0)
         return 0;
 
-    char* spec = (char*)malloc(end_pos - (*pos));
+    char* spec = (char*)ftb_alloca(end_pos - (*pos));
     strncpy(spec, format+(*pos)+1, end_pos - (*pos));
     spec[end_pos - (*pos)-1] = '\0';
 
@@ -86,11 +86,10 @@ int maybe_special_print(FILE* file, static_string format, int* pos, va_list* arg
 
     if (type == Printer_Function_Type::unknown) {
         printf("ERROR: %s printer not found\n", spec);
-        free(spec);
+        ftb_free(spec);
         return 0;
     }
-    free(spec);
-    
+
     if (format[end_pos] == ',') {
         int element_count;
 
@@ -265,7 +264,7 @@ int maybe_fprintf(FILE* file, static_string format, int* pos, va_list* arg_list)
        format[end_pos] == '%')
     {
         writen_len = end_pos - *pos + 2;
-        char* temp = (char*)malloc((writen_len+1)* sizeof(char));
+        char* temp = (char*)alloca((writen_len+1)* sizeof(char));
         temp[0] = '%';
         temp[1] = 0;
         strncpy(temp+1, format+*pos, writen_len);
@@ -285,7 +284,6 @@ int maybe_fprintf(FILE* file, static_string format, int* pos, va_list* arg_list)
             va_arg(*arg_list, void*);
         }
 
-        free(temp);
         *pos = end_pos;
     }
 
@@ -328,7 +326,7 @@ int print_va_args_to_string(char** out, static_string format, va_list* arg_list)
 
     int num_printed_chars = print_va_args_to_file(t_file, format, arg_list);
 
-    *out = (char*)malloc(sizeof(char) * (num_printed_chars+1));
+    *out = (char*)ftb_malloc(sizeof(char) * (num_printed_chars+1));
 
     rewind(t_file);
     fread(*out, sizeof(char), num_printed_chars, t_file);
@@ -356,7 +354,7 @@ int print_to_string(char** out, static_string format, ...) {
     va_end(arg_list);
 
 
-    *out = (char*)malloc(sizeof(char) * (num_printed_chars+1));
+    *out = (char*)ftb_malloc(sizeof(char) * (num_printed_chars+1));
 
     rewind(t_file);
     fread(*out, sizeof(char), num_printed_chars, t_file);

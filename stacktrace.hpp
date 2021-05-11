@@ -45,7 +45,6 @@ auto print_stacktrace() -> void {
     for (i = 0; i < size; i++)
         printf("  %3lu: %s\n", size - i - 1, strings[i]);
     puts("");
-    free(strings);
-
+    ftb_free(strings);
 #endif
 }

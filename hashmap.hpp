@@ -74,11 +74,11 @@ struct Hash_Map {
         // until here
         current_capacity = initial_capacity;
         cell_count = 0;
-        data = (HM_Cell*)calloc(initial_capacity, sizeof(HM_Cell));
+        data = (HM_Cell*)ftb_calloc(initial_capacity, sizeof(HM_Cell));
     }
 
     void dealloc() {
-        free(data);
+        ftb_free(data);
         data = nullptr;
     }
 
@@ -209,7 +209,7 @@ struct Hash_Map {
                 /* collision, check resize */
                 if ((cell_count*1.0f / current_capacity) > 0.666f) {
                     auto old_data = data;
-                    data = (HM_Cell*)calloc(current_capacity*4, sizeof(HM_Cell));
+                    data = (HM_Cell*)ftb_calloc(current_capacity*4, sizeof(HM_Cell));
                     cell_count = 0;
                     current_capacity *= 4;
 
@@ -220,7 +220,7 @@ struct Hash_Map {
                             set_object(cell.original, cell.object, cell.hash);
                         }
                     }
-                    free(old_data);
+                    ftb_free(old_data);
                     index = hash_val & (current_capacity - 1);
                 }
                 ++cell_count;
