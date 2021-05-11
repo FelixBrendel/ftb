@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "types.hpp"
+#include "macros.hpp"
 
 #ifdef USE_FTB_MALLOC
 namespace Ftb_Malloc_Stats {
@@ -21,8 +22,8 @@ namespace Ftb_Malloc_Stats {
 
 void print_malloc_stats() {
     printf("\n"
-           "Malloc Stats:\n"
-           "-------------\n"
+           "Global Malloc Stats:\n"
+           "--------------------\n"
            "  ftb_malloc  calls: %u\n"
            "  ftb_free    calls: %u\n"
            "  ftb_realloc calls: %u\n"
@@ -34,6 +35,30 @@ void print_malloc_stats() {
            Ftb_Malloc_Stats::calloc_calls,
            Ftb_Malloc_Stats::alloca_calls);
 }
+
+#define profile_mallocs                                                 \
+    MPP_DECLARE(0, u32 MPI_LABEL(profile_mallocs, old_malloc_calls)  = Ftb_Malloc_Stats::malloc_calls) \
+    MPP_DECLARE(1, u32 MPI_LABEL(profile_mallocs, old_free_calls)    = Ftb_Malloc_Stats::free_calls) \
+    MPP_DECLARE(2, u32 MPI_LABEL(profile_mallocs, old_realloc_calls) = Ftb_Malloc_Stats::realloc_calls) \
+    MPP_DECLARE(3, u32 MPI_LABEL(profile_mallocs, old_calloc_calls)  = Ftb_Malloc_Stats::calloc_calls) \
+    MPP_DECLARE(4, u32 MPI_LABEL(profile_mallocs, old_alloca_calls)  = Ftb_Malloc_Stats::alloca_calls) \
+    MPP_AFTER(5, {                                                      \
+            printf("\n"                                                 \
+                   "Local Malloc Stats: (%s %s %d)\n"                   \
+                   "-------------------\n"                              \
+                   "  ftb_malloc  calls: %u\n"                          \
+                   "  ftb_free    calls: %u\n"                          \
+                   "  ftb_realloc calls: %u\n"                          \
+                   "  ftb_calloc  calls: %u\n"                          \
+                   "  ftb_alloca  calls: %u\n" ,                        \
+                   __func__, __FILE__, __LINE__,                        \
+                   Ftb_Malloc_Stats::malloc_calls  - MPI_LABEL(profile_mallocs, old_malloc_calls)  , \
+                   Ftb_Malloc_Stats::free_calls    - MPI_LABEL(profile_mallocs, old_free_calls)    , \
+                   Ftb_Malloc_Stats::realloc_calls - MPI_LABEL(profile_mallocs, old_realloc_calls) , \
+                   Ftb_Malloc_Stats::calloc_calls  - MPI_LABEL(profile_mallocs, old_calloc_calls)  , \
+                   Ftb_Malloc_Stats::alloca_calls  - MPI_LABEL(profile_mallocs, old_alloca_calls)); \
+        })
+
 #else
 # define ftb_malloc  malloc
 # define ftb_realloc realloc

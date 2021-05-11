@@ -13,6 +13,43 @@
 #define label(x, y) concat(x, y)
 #define line_label(x) label(x, __LINE__)
 
+#define MPI_LABEL(id1,id2)                                      \
+    concat(MPI_LABEL_ ## id1 ## _ ## id2 ## _, __LINE__)
+
+#define MPP_DECLARE(labid, declaration)                 \
+    if (0)                                              \
+        ;                                               \
+    else                                                \
+        for (declaration;;)                             \
+            if (1) {                                    \
+                goto MPI_LABEL(labid, body);            \
+              MPI_LABEL(labid, done): break;            \
+            } else                                      \
+                while (1)                               \
+                    if (1)                              \
+                        goto MPI_LABEL(labid, done);    \
+                    else                                \
+                        MPI_LABEL(labid, body):
+
+#define MPP_BEFORE(labid,before)                \
+    if (1) {                                    \
+        before;                                 \
+        goto MPI_LABEL(labid, body);            \
+    } else                                      \
+    MPI_LABEL(labid, body):
+
+#define MPP_AFTER(labid,after)                  \
+    if (1)                                      \
+        goto MPI_LABEL(labid, body);            \
+    else                                        \
+        while (1)                               \
+            if (1) {                            \
+                after;                          \
+                break;                          \
+            } else                              \
+                MPI_LABEL(labid, body):
+
+
 // #ifndef min
 // #define min(a, b) ((a) < (b)) ? (a) : (b)
 // #endif
