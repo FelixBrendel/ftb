@@ -1,14 +1,23 @@
 #pragma once
 
 #include "platform.hpp"
+#include "allocation_stats.hpp"
 
 #if defined FTB_WINDOWS
 #  include <dbghelp.h>
 #else
-#  include <execinfo.h>
-#  include <unistd.h>
-#  include "stdio.h"
-#  include "stdlib.h"
+#  ifdef FTB_LINUX_STACK_TRACE_USE_GDB
+#    include <stdio.h>
+#    include <stdlib.h>
+#    include <sys/wait.h>
+#    include <unistd.h>
+#    include <sys/prctl.h>
+#  else
+#    include <execinfo.h>
+#    include <unistd.h>
+#    include "stdio.h"
+#    include "stdlib.h"
+#  endif
 #endif
 
 auto print_stacktrace() -> void {
@@ -34,6 +43,22 @@ auto print_stacktrace() -> void {
     }
     fflush(stdout);
 #else
+#ifdef FTB_LINUX_STACK_TRACE_USE_GDB
+    printf("Stacktrace: \n");
+    char pid_buf[30];
+    sprintf(pid_buf, "%d", getpid());
+    char name_buf[512];
+    name_buf[readlink("/proc/self/exe", name_buf, 511)]=0;
+    prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0);
+    int child_pid = fork();
+    if (!child_pid) {
+        dup2(2,1); // redirect output to stderr - edit: unnecessary?
+        execl("/usr/bin/gdb", "gdb", "--batch", "-n", "-ex", "thread", "-ex", "bt", name_buf, pid_buf, NULL);
+        abort(); /* If gdb failed to start */
+    } else {
+        waitpid(child_pid,NULL,0);
+   }
+#else
     // NOTE(Felix): Don't forget to compile with "-rdynamic"
     printf("Stacktrace (this is unmagled -- sorry): \n");
     char **strings;
@@ -46,5 +71,6 @@ auto print_stacktrace() -> void {
         printf("  %3lu: %s\n", size - i - 1, strings[i]);
     puts("");
     ftb_free(strings);
+#endif
 #endif
 }

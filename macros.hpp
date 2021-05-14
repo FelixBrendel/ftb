@@ -11,10 +11,9 @@
 #define proc auto
 #define concat(x, y) x ## y
 #define label(x, y) concat(x, y)
-#define line_label(x) label(x, __LINE__)
 
 #define MPI_LABEL(id1,id2)                                      \
-    concat(MPI_LABEL_ ## id1 ## _ ## id2 ## _, __LINE__)
+    label(MPI_LABEL_ ## id1 ## _ ## id2 ## _, __LINE__)
 
 #define MPP_DECLARE(labid, declaration)                 \
     if (0)                                              \
@@ -51,10 +50,10 @@
 
 
 // #ifndef min
-// #define min(a, b) ((a) < (b)) ? (a) : (b)
+#define min(a, b) ((a) < (b)) ? (a) : (b)
 // #endif
 // #ifndef max
-// #define max(a, b) ((a) > (b)) ? (a) : (b)
+#define max(a, b) ((a) > (b)) ? (a) : (b)
 // #endif
 
 /**
