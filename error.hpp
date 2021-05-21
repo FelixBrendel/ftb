@@ -57,7 +57,7 @@ auto create_error(const char* c_func_name, const char* c_file_name,
 #ifdef assert
 #undef assert
 #endif
-#define assert(condition, ...)                                          \
+#define assert_msg(condition, ...)                                      \
     do {                                                                \
         if (!(condition)) {                                             \
             char* msg;                                                  \
@@ -69,6 +69,19 @@ auto create_error(const char* c_func_name, const char* c_file_name,
                                    __FILE__, __LINE__ );                \
         }                                                               \
     } while(0)
+
+#define assert(condition)                                               \
+    do {                                                                \
+        if (!(condition)) {                                             \
+            char* msg;                                                  \
+            create_assertion_error("Assertion-error:\n"                 \
+                                   "      condition: %s\n"              \
+                                   "             in: %s:%d",            \
+                                   #condition,                          \
+                                   __FILE__, __LINE__ );                \
+        }                                                               \
+    } while(0)
+
 
 #define log_location()                                                  \
     do {                                                                \
