@@ -78,6 +78,55 @@ struct Stack_Array_List {
 
 };
 
+struct Untyped_Array_List {
+    u32   element_size;
+    void* data;
+    u32   length;
+    u32   count;
+
+    void alloc(u32 e_size, u32 initial_capacity = 16) {
+        element_size = e_size;
+        data   = ftb_malloc(initial_capacity * element_size);
+        count  = 0;
+        length = initial_capacity;
+    }
+
+    void dealloc() {
+        ftb_free(data);
+        data = nullptr;
+    }
+
+    void clear() {
+        count = 0;
+    }
+
+    void append(void* elem) {
+        if (count == length) {
+            length *= 2;
+            data = ftb_realloc(data, length * element_size);
+        }
+
+        memcpy(((u8*)(data))+(element_size*count), elem, element_size);
+        count++;
+    }
+
+    void* reserve_next_slot() {
+        if (count == length) {
+            length *= 2;
+            data = ftb_realloc(data, length * element_size);
+        }
+        count++;
+        return ((u8*)(data)) + (element_size*(count-1));
+    }
+
+
+
+    void* get_at(u32 idx) {
+        return ((u8*)(data)) + (element_size*idx);
+    }
+
+};
+
 template <typename type>
 struct Array_List {
     type* data;
