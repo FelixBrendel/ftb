@@ -146,7 +146,7 @@ struct Array_List {
     }
 
     void alloc_from(std::initializer_list<type> l) {
-        length = max(l.size(), 1); // alloc at least one
+        length = MAX(l.size(), 1); // alloc at least one
 
         data = (type*)ftb_malloc(length * sizeof(type));
         count = 0;

@@ -49,12 +49,12 @@
                 MPI_LABEL(labid, body):
 
 
-// #ifndef min
-// #define min(a, b) (((a) < (b)) ? (a) : (b))
-// #endif
-// #ifndef max
-// #define max(a, b) (((a) > (b)) ? (a) : (b))
-// #endif
+#ifndef min
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#endif
+#ifndef max
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#endif
 
 /**
  *   Defer   *
