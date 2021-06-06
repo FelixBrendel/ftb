@@ -6,121 +6,126 @@
 #include "arraylist.hpp"
 #include "stacktrace.hpp"
 
-namespace Scheduler {
 
-    // NOTE(Felix): since we want to be able to interpolate any data in
-    //   principle, and the animation needs the start and end values, but the
-    //   size of the stuff we want to interpolate may vary, we just give it a
-    //   small chunk of memory to be stored
-    typedef s64 Data_Block[22];
+// NOTE(Felix): since we want to be able to interpolate any data in principle,
+//   and the animation needs the start and end values, but the size of the stuff
+//   we want to interpolate may vary, we just give it a small chunk of memory to
+//   be stored
+typedef s64 Data_Block[22];
 
 
-    typedef void (*Closure_F)(Data_Block);
-    typedef void (*Lambda_F)();
+typedef void (*Closure_F)(Data_Block);
+typedef void (*Lambda_F)();
 
-    typedef f32  (*Shaper_F)(f32 t);
-    typedef void (*Interpolator_F)(void* from, f32 t, void* to, void* interpolant);
+typedef f32  (*Shaper_F)(f32 t);
+typedef void (*Interpolator_F)(void* from, f32 t, void* to, void* interpolant);
 
-    enum struct Interpolation_Type : u8 {
-        Lerp = 1 << 7,
-        Ease_In,
-        Ease_Out,
-        Ease_Middle,
-        Ease_In_And_Out
+
+enum struct Interpolation_Type : u8 {
+    Lerp = 1 << 7,
+    Ease_In,
+    Ease_Out,
+    Ease_Middle,
+    Ease_In_And_Out
+};
+
+enum struct Interpolant_Type : u8 {
+    F32 = 1 << 7,
+};
+
+
+enum struct Function_Type {
+    Closure,
+    Lambda
+};
+
+
+struct Scheduled_Animation_Create_Info {
+    float seconds_to_start;
+    float seconds_to_end;
+
+    void* interpolant;
+    Interpolant_Type interpolant_type;
+
+    void* from;
+    void* to;
+
+    Interpolation_Type interpolation_type = Interpolation_Type::Lerp;
+    const char* name = "";
+};
+
+
+
+struct Action_Create_Info {
+    Function_Type type;
+    union {
+        Lambda_F  lambda;
+        Closure_F closure;
     };
+    void* param      = nullptr;
+    u32   param_size = 0;
+    const char* name = "";
+};
 
-    enum struct Interpolant_Type : u8 {
-        F32 = 1 << 7,
+struct Scheduled_Action_Create_Info {
+    float seconds_to_run;
+    Action_Create_Info action;
+};
+
+struct Action {
+    Function_Type type;
+    union {
+        Lambda_F  lambda;
+        Closure_F closure;
     };
-
-
-    struct Scheduled_Animation_Create_Info {
-        float seconds_to_start;
-        float seconds_to_end;
-
-        void* interpolant;
-        Interpolant_Type interpolant_type;
-
-        void* from;
-        void* to;
-
-        Interpolation_Type interpolation_type = Interpolation_Type::Lerp;
-        const char* name = "";
-    };
-
-
-    enum struct Function_Type {
-        Closure,
-        Lambda
-    };
-
-    struct Action_Create_Info {
-        Function_Type type;
-        union {
-            Lambda_F  lambda;
-            Closure_F closure;
-        };
-        void* param      = nullptr;
-        u32   param_size = 0;
-        const char* name = "";
-    };
-
-    struct Scheduled_Action_Create_Info {
-        float seconds_to_run;
-        Action_Create_Info action;
-    };
-
-    struct Action {
-        Function_Type type;
-        union {
-            Lambda_F  lambda;
-            Closure_F closure;
-        };
-        Data_Block    param;
-        Action*       next;
-        u64           creation_stamp;
-        bool          already_ran;
+    Data_Block    param;
+    Action*       next;
+    u64           creation_stamp;
+    bool          already_ran;
 #ifdef FTB_INTERNAL_DEBUG
-        const char* name;
+    const char* name;
 #endif
-    };
+};
 
-    struct Scheduled_Action {
-        f32    seconds_to_run;
-        Action action;
-    };
+struct Scheduled_Action {
+    f32    seconds_to_run;
+    Action action;
+};
 
-    struct Scheduled_Animation {
-        Interpolation_Type interpolation_type;
-        Interpolant_Type   interpolant_type;
+struct Scheduled_Animation {
+    Interpolation_Type interpolation_type;
+    Interpolant_Type   interpolant_type;
 
-        f32 seconds_to_start;
-        f32 seconds_to_end;
+    f32 seconds_to_start;
+    f32 seconds_to_end;
 
-        void* interpolant;
+    void* interpolant;
 
-        Data_Block from;
-        Data_Block to;
+    Data_Block from;
+    Data_Block to;
 
-        Action* next;
+    Action* next;
 #ifdef FTB_INTERNAL_DEBUG
-        const char* name;
+    const char* name;
 #endif
-    };
+};
 
-    enum struct Schedulee_Type : u8 {
-        None,
-        Action,
-        Animation,
-    };
+enum struct Schedulee_Type : u8 {
+    None,
+    Action,
+    Animation,
+};
 
-    struct Action_Or_Animation {
-        Schedulee_Type type;
-        union {
-            Action* action;
-            Scheduled_Animation* animation;
-        };
+struct Action_Or_Animation {
+    Schedulee_Type type;
+    union {
+        Action* action;
+        Scheduled_Animation* animation;
     };
+};
+
+
+struct Scheduler {
 
     // For user defined shapers t -> t
     Shaper_F       _shapers[127];
@@ -604,4 +609,4 @@ namespace Scheduler {
             _actions_marked_for_deletion.clear();
         }
     }
-}
+};

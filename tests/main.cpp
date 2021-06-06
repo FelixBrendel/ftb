@@ -119,16 +119,16 @@ auto test_hm() -> void {
     h1.set_object(3, 6);
     h1.set_object(4, 8);
 
-    assert(h1.key_exists(1), "key shoud exist");
-    assert(h1.key_exists(2), "key shoud exist");
-    assert(h1.key_exists(3), "key shoud exist");
-    assert(h1.key_exists(4), "key shoud exist");
-    assert(!h1.key_exists(5), "key shoud not exist");
+    assert_msg(h1.key_exists(1), "key shoud exist");
+    assert_msg(h1.key_exists(2), "key shoud exist");
+    assert_msg(h1.key_exists(3), "key shoud exist");
+    assert_msg(h1.key_exists(4), "key shoud exist");
+    assert_msg(!h1.key_exists(5), "key shoud not exist");
 
-    assert(h1.get_object(1) == 2, "value should be correct");
-    assert(h1.get_object(2) == 4, "value should be correct");
-    assert(h1.get_object(3) == 6, "value should be correct");
-    assert(h1.get_object(4) == 8, "value should be correct");
+    assert_msg(h1.get_object(1) == 2, "value should be correct");
+    assert_msg(h1.get_object(2) == 4, "value should be correct");
+    assert_msg(h1.get_object(3) == 6, "value should be correct");
+    assert_msg(h1.get_object(4) == 8, "value should be correct");
 
 
     Hash_Map<Key, u32> h2;
@@ -138,11 +138,11 @@ auto test_hm() -> void {
     h2.set_object({.x = 1, .y = 2, .z = 3}, 1);
     h2.set_object({.x = 3, .y = 3, .z = 3}, 3);
 
-    assert(h2.key_exists({.x = 1, .y = 2, .z = 3}), "key shoud exist");
-    assert(h2.key_exists({.x = 3, .y = 3, .z = 3}), "key shoud exist");
+    assert_msg(h2.key_exists({.x = 1, .y = 2, .z = 3}), "key shoud exist");
+    assert_msg(h2.key_exists({.x = 3, .y = 3, .z = 3}), "key shoud exist");
 
-    assert(h2.get_object({.x = 1, .y = 2, .z = 3}) == 1, "value should be correct");
-    assert(h2.get_object({.x = 3, .y = 3, .z = 3}) == 3, "value should be correct");
+    assert_msg(h2.get_object({.x = 1, .y = 2, .z = 3}) == 1, "value should be correct");
+    assert_msg(h2.get_object({.x = 3, .y = 3, .z = 3}) == 3, "value should be correct");
 
     h2.for_each([] (Key k, u32 v, u32 i) {
         print("%{s32} %{u32} %{u32}\n", k.x, v, i);
@@ -154,7 +154,7 @@ proc test_stack_array_lists() -> testresult {
 
     assert_equal_int(list.count, 0);
     assert_equal_int(list.length, 20);
-    assert(list.data != NULL, "list should have some data allocated");
+    assert_msg(list.data != NULL, "list should have some data allocated");
 
     // test sum of empty list
     int sum = 0;
@@ -247,7 +247,7 @@ proc test_queue() -> testresult {
         q.dealloc();
     };
 
-    assert(q.is_empty(), "queue should start empty");
+    assert_msg(q.is_empty(), "queue should start empty");
     assert_equal_int(q.get_count(), 0);
 
     q.push_back(1);
@@ -258,7 +258,7 @@ proc test_queue() -> testresult {
 
     assert_equal_int(q.get_next(), 1);
     assert_equal_int(q.get_count(), 2);
-    assert(!q.is_empty(), "should not be empty");
+    assert_msg(!q.is_empty(), "should not be empty");
 
     assert_equal_int(q.get_next(), 2);
     assert_equal_int(q.get_count(), 1);
@@ -267,10 +267,10 @@ proc test_queue() -> testresult {
 
     assert_equal_int(q.get_next(), 3);
     assert_equal_int(q.get_count(), 1);
-    assert(!q.is_empty(), "should not be empty");
+    assert_msg(!q.is_empty(), "should not be empty");
 
     assert_equal_int(q.get_next(), 4);
-    assert(q.is_empty(), "should be empty");
+    assert_msg(q.is_empty(), "should be empty");
     assert_equal_int(q.get_count(), 0);
 
     return pass;
@@ -611,16 +611,21 @@ auto test_hooks() -> testresult {
 }
 
 auto test_scheduler_animations() -> testresult {
-    using namespace Scheduler;
+    Scheduler scheduler;
+    Scheduler scheduler2;
 
-    Scheduler::init();
-    defer { Scheduler::deinit(); };
+    scheduler.init();
+    scheduler2.init();
+    defer {
+        scheduler.deinit();
+        scheduler2.deinit();
+    };
 
     f32 val = 0;
 
     f32 from = 1;
     f32 to   = 2;
-    schedule_animation({
+    scheduler.schedule_animation({
             .seconds_to_start   = 1,
             .seconds_to_end     = 2,
             .interpolant        = &val,
@@ -630,21 +635,40 @@ auto test_scheduler_animations() -> testresult {
             .interpolation_type = Interpolation_Type::Lerp
         });
 
-    assert_equal_f64((f64)val, 0.0);
 
-    update_all(1);
+    f32 val2 = 0;
+
+    f32 from2 = 1;
+    f32 to2   = 2;
+    scheduler2.schedule_animation({
+            .seconds_to_start   = 1,
+            .seconds_to_end     = 2,
+            .interpolant        = &val2,
+            .interpolant_type   = Interpolant_Type::F32,
+            .from               = &from2,
+            .to                 = &to2,
+            .interpolation_type = Interpolation_Type::Lerp
+        });
+
+    assert_equal_f64((f64)val2, 0.0);
+
+    scheduler.update_all(1);
     assert_equal_f64((f64)val, 1.0);
 
-    update_all(0.1);
+    assert_equal_f64((f64)val2, 0.0);
+    scheduler2.update_all(1);
+    assert_equal_f64((f64)val2, 1.0);
+
+    scheduler.update_all(0.1);
     assert_equal_int(abs(val - 1.1) < 0.001, true);
 
-    update_all(0.1);
+    scheduler.update_all(0.1);
     assert_equal_int(abs(val - 1.2) < 0.001, true);
 
-    update_all(0.2);
+    scheduler.update_all(0.2);
     assert_equal_int(abs(val - 1.4) < 0.001, true);
 
-    update_all(1);
+    scheduler.update_all(1);
     assert_equal_int(abs(val - 2) < 0.001, true);
 
     // testing custom type interpolation
@@ -652,7 +676,7 @@ auto test_scheduler_animations() -> testresult {
         S32
     };
 
-    register_interpolator([](void* p_from, f32 t, void* p_to, void* p_interpolant) {
+    scheduler.register_interpolator([](void* p_from, f32 t, void* p_to, void* p_interpolant) {
         s32 from = *(s32*)p_from;
         s32 to   = *(s32*)p_to;
         s32* target = (s32*)p_interpolant;
@@ -663,7 +687,7 @@ auto test_scheduler_animations() -> testresult {
 
     s32 s_from = 1;
     s32 s_to   = 11;
-    schedule_animation({
+    scheduler.schedule_animation({
             .seconds_to_start   = 1,
             .seconds_to_end     = 2,
             .interpolant        = &test,
@@ -675,19 +699,19 @@ auto test_scheduler_animations() -> testresult {
 
     assert_equal_int(test, 0);
 
-    update_all(1);
+    scheduler.update_all(1);
     assert_equal_int(test, 1);
 
-    update_all(0.1);
+    scheduler.update_all(0.1);
     assert_equal_int(test, 2);
 
-    update_all(0.1);
+    scheduler.update_all(0.1);
     assert_equal_int(test, 3);
 
-    update_all(0.2);
+    scheduler.update_all(0.2);
     assert_equal_int(test, 5);
 
-    update_all(1);
+    scheduler.update_all(1);
     assert_equal_int(test, 11);
 
     return pass;
