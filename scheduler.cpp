@@ -111,7 +111,7 @@ struct Scheduled_Animation {
 };
 
 enum struct Schedulee_Type : u8 {
-    None,
+    None = 0,
     Action,
     Animation,
 };
@@ -135,13 +135,13 @@ struct Scheduler {
 
     // Per reset cycle:
     // PING
-    Bucket_Allocator<Scheduled_Animation> active_animations_1;
-    Bucket_Allocator<Scheduled_Action>    scheduled_actions_1;
-    Bucket_Allocator<Action>              chained_actions_1;
+    Bucket_Allocator<Scheduled_Animation> _active_animations_1;
+    Bucket_Allocator<Scheduled_Action>    _scheduled_actions_1;
+    Bucket_Allocator<Action>              _chained_actions_1;
     // PONG
-    Bucket_Allocator<Scheduled_Animation> active_animations_2;
-    Bucket_Allocator<Scheduled_Action>    scheduled_actions_2;
-    Bucket_Allocator<Action>              chained_actions_2;
+    Bucket_Allocator<Scheduled_Animation> _active_animations_2;
+    Bucket_Allocator<Scheduled_Action>    _scheduled_actions_2;
+    Bucket_Allocator<Action>              _chained_actions_2;
 
     Bucket_Allocator<Scheduled_Animation>* active_animations;
     Bucket_Allocator<Scheduled_Action>*    scheduled_actions;
@@ -164,21 +164,21 @@ struct Scheduler {
     u64 _action_stamp_counter = 0;
 
     auto init() -> void {
-        active_animations_1.alloc();
-        scheduled_actions_1.alloc();
-        chained_actions_1.alloc();
+        _active_animations_1.alloc();
+        _scheduled_actions_1.alloc();
+        _chained_actions_1.alloc();
 
-        active_animations_2.alloc();
-        scheduled_actions_2.alloc();
-        chained_actions_2.alloc();
+        _active_animations_2.alloc();
+        _scheduled_actions_2.alloc();
+        _chained_actions_2.alloc();
 
-        active_animations = &active_animations_1;
-        scheduled_actions = &scheduled_actions_1;
-        chained_actions   = &chained_actions_1;
+        active_animations = &_active_animations_1;
+        scheduled_actions = &_scheduled_actions_1;
+        chained_actions   = &_chained_actions_1;
 
-        future_active_animations = &active_animations_2;
-        future_scheduled_actions = &scheduled_actions_2;
-        future_chained_actions   = &chained_actions_2;
+        future_active_animations = &_active_animations_2;
+        future_scheduled_actions = &_scheduled_actions_2;
+        future_chained_actions   = &_chained_actions_2;
 
 
         _animations_marked_for_deletion.alloc();
@@ -187,13 +187,13 @@ struct Scheduler {
     }
 
     auto deinit() -> void {
-        active_animations_1.dealloc();
-        scheduled_actions_1.dealloc();
-        chained_actions_1.dealloc();
+        _active_animations_1.dealloc();
+        _scheduled_actions_1.dealloc();
+        _chained_actions_1.dealloc();
 
-        active_animations_2.dealloc();
-        scheduled_actions_2.dealloc();
-        chained_actions_2.dealloc();
+        _active_animations_2.dealloc();
+        _scheduled_actions_2.dealloc();
+        _chained_actions_2.dealloc();
 
         _animations_marked_for_deletion.dealloc();
         _actions_marked_for_deletion.dealloc();
