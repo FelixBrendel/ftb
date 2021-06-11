@@ -26,7 +26,8 @@ enum struct Interpolation_Type : u8 {
     Ease_In,
     Ease_Out,
     Ease_Middle,
-    Ease_In_And_Out
+    Ease_In_And_Out,
+    Constant
 };
 
 enum struct Interpolant_Type : u8 {
@@ -276,6 +277,11 @@ struct Scheduler {
                 //     -2 * t * (t - 1) :
                 //     +2 * t * (t - 1) + 1;
                 t = 4.0f / 5.0f * t*t*t - 6.0f/5.0f *t*t + 7.0f/5.0f * t;
+            } break;
+            case Interpolation_Type::Constant: {
+                t = (t < 0.5) ?
+                    0 :
+                    1;
             } break;
             default: {
                 // try user supported shaper
