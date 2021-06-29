@@ -232,7 +232,7 @@ struct Scheduler {
 
         anim->interpolant = aci.interpolant;
 
-        u32 data_size;
+        size_t data_size;
         switch(anim->interpolant_type) {
             case Interpolant_Type::F32:  data_size = sizeof(f32); break;
             default: {
@@ -256,7 +256,7 @@ struct Scheduler {
         // otherwise run it:
         f32 perf_diff = anim->seconds_to_end - anim->seconds_to_start;
         f32 perf_inside = -anim->seconds_to_start;
-        f64 t = 1.0 * perf_inside / perf_diff;
+        f32 t = 1.0f * perf_inside / perf_diff;
 
         switch (anim->interpolation_type) {
             case Interpolation_Type::Lerp: break;
@@ -279,9 +279,9 @@ struct Scheduler {
                 t = 4.0f / 5.0f * t*t*t - 6.0f/5.0f *t*t + 7.0f/5.0f * t;
             } break;
             case Interpolation_Type::Constant: {
-                t = (t < 0.5) ?
-                    0 :
-                    1;
+                t = (t < 0.5f) ?
+                    0.0f :
+                    1.0f;
             } break;
             default: {
                 // try user supported shaper
@@ -486,7 +486,8 @@ struct Scheduler {
               pending_actions.count,
               sizeof(pending_actions.data[0]),
               [] (const void* a1, const void* a2) -> int {
-                  return (*((Action**)(a1)))->creation_stamp - (*((Action**)(a2)))->creation_stamp;
+                  return (int)((*((Action**)(a1)))->creation_stamp -
+                               (*((Action**)(a2)))->creation_stamp);
               });
 
         for (auto action : pending_actions) {
@@ -567,7 +568,8 @@ struct Scheduler {
                   _chained_actions_to_be_run_after_iteration.count,
                   sizeof(_chained_actions_to_be_run_after_iteration.data[0]),
                   [] (const void* a1, const void* a2) -> int {
-                      return (*((Action**)(a1)))->creation_stamp - (*((Action**)(a2)))->creation_stamp;
+                      return (int)((*((Action**)(a1)))->creation_stamp -
+                                   (*((Action**)(a2)))->creation_stamp);
                   });
         }
         // excute all due actions:

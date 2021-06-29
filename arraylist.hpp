@@ -146,7 +146,7 @@ struct Array_List {
     }
 
     void alloc_from(std::initializer_list<type> l) {
-        length = MAX(l.size(), 1); // alloc at least one
+        length = MAX((u32)l.size(), 1); // alloc at least one
 
         data = (type*)ftb_malloc(length * sizeof(type));
         count = 0;
@@ -157,7 +157,7 @@ struct Array_List {
     }
 
     void extend(std::initializer_list<type> l) {
-        reserve(l.size());
+        reserve((u32)l.size());
         // TODO(Felix): Use memcpy here
         for (type e : l) {
             append(e);
@@ -324,7 +324,7 @@ struct Auto_Array_List : public Array_List<type> {
     }
 
     Auto_Array_List(std::initializer_list<type> l) {
-        this->alloc(l.size());
+        this->alloc((u32)l.size());
         for (type e : l) {
             this->append(e);
         }

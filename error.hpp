@@ -73,7 +73,6 @@ auto create_error(const char* c_func_name, const char* c_file_name,
 #define assert(condition)                                               \
     do {                                                                \
         if (!(condition)) {                                             \
-            char* msg;                                                  \
             create_assertion_error("Assertion-error:\n"                 \
                                    "      condition: %s\n"              \
                                    "             in: %s:%d",            \
