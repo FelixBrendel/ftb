@@ -40,6 +40,7 @@ auto create_error(const char* c_func_name, const char* c_file_name,
         print(" ");
     print("%s (%u) ", c_file_name, c_file_line);
     print("-> %s\n", c_func_name);
+    fflush(stdout);
 }
 
 #define __create_error(keyword, ...)            \
@@ -67,6 +68,7 @@ auto create_error(const char* c_func_name, const char* c_file_name,
                                    "             in: %s:%d",            \
                                    msg, #condition,                     \
                                    __FILE__, __LINE__ );                \
+            debug_break();                                              \
         }                                                               \
     } while(0)
 
@@ -78,6 +80,7 @@ auto create_error(const char* c_func_name, const char* c_file_name,
                                    "             in: %s:%d",            \
                                    #condition,                          \
                                    __FILE__, __LINE__ );                \
+            debug_break();                                              \
         }                                                               \
     } while(0)
 
