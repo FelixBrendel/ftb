@@ -86,7 +86,7 @@ int maybe_special_print(FILE* file, static_string format, int* pos, va_list* arg
 
     if (type == Printer_Function_Type::unknown) {
         printf("ERROR: %s printer not found\n", spec);
-        ftb_free(spec);
+        fflush(stdout);
         return 0;
     }
 
