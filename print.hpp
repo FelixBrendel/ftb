@@ -205,7 +205,7 @@ int maybe_fprintf(FILE* file, static_string format, int* pos, va_list* arg_list)
     // length    ::= [h l L]
     // specifier ::= [c d i e E f g G o s u x X p n %]
     int end_pos = *pos;
-    int writen_len = 0;
+    int written_len = 0;
     int used_arg_values = 1;
 
     // overstep flags:
@@ -263,31 +263,43 @@ int maybe_fprintf(FILE* file, static_string format, int* pos, va_list* arg_list)
        format[end_pos] == 'n' ||
        format[end_pos] == '%')
     {
-        writen_len = end_pos - *pos + 2;
-        char* temp = (char*)alloca((writen_len+1)* sizeof(char));
+        written_len = end_pos - *pos + 2;
+        char* temp = (char*)alloca((written_len+1)* sizeof(char));
         temp[0] = '%';
         temp[1] = 0;
-        strncpy(temp+1, format+*pos, writen_len);
-        temp[writen_len] = 0;
+        strncpy(temp+1, format+*pos, written_len);
+        temp[written_len] = 0;
 
-        // printf("\ntest:: len(%s) = %d\n", temp, writen_len+1);
+        // printf("\ntest:: len(%s) = %d\n", temp, written_len+1);
 
         /// NOTE(Felix): Somehow we have to pass a copy of the list to vfprintf
         // because otherwise it destroys it on some platforms :(
         va_list arg_list_copy;
         va_copy(arg_list_copy, *arg_list);
-        writen_len = vfprintf(file, temp, arg_list_copy);
+        written_len = vfprintf(file, temp, arg_list_copy);
         va_end(arg_list_copy);
 
-        // NOTE(Felix): maually overstep the args that vfprintf will have used
-        for (int i = 0; i < used_arg_values;  ++i) {
+        // NOTE(Felix): manually overstep the args that vfprintf will have used
+        //   all except the last used_arg will be integers (I hope) like for the
+        //   padding and width and stuff, so we can overstep them with asking
+        //   for a void*, but for the last one we need to check if it is a float
+        //   so we can overstep it as a float.
+
+        for (int i = 0; i < used_arg_values-1;  ++i) {
+            va_arg(*arg_list, void*);
+        }
+        if (format[end_pos] == 'f' || format[end_pos] == 'g' || format[end_pos] == 'G' ||
+            format[end_pos] == 'e' || format[end_pos] == 'E')
+        {
+            va_arg(*arg_list, f64);
+        } else {
             va_arg(*arg_list, void*);
         }
 
         *pos = end_pos;
     }
 
-    return writen_len;
+    return written_len;
 }
 
 
