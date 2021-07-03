@@ -483,7 +483,7 @@ int print_ptr(FILE* f, void* ptr) {
     return print_to_file(f, "nullptr");
 }
 
-auto print_Str(FILE* f, String* str) -> s32 {
+auto print_Str(FILE* f, Ftb_String* str) -> s32 {
     return print_to_file(f, "%.*s", str->length, str->data);
 }
 
