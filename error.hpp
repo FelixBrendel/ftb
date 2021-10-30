@@ -8,8 +8,8 @@
 #include "print.hpp"
 
 struct Error {
-    Ftb_String type;
-    Ftb_String message;
+    String type;
+    String message;
 };
 
 Error* error = nullptr;
@@ -20,7 +20,7 @@ auto delete_error() -> void {
 }
 
 auto create_error(const char* c_func_name, const char* c_file_name,
-                  u32 c_file_line, Ftb_String type, const char* format, ...) -> void {
+                  u32 c_file_line, String type, const char* format, ...) -> void {
 
     error = (Error*) ftb_malloc(sizeof(Error));
 

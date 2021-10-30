@@ -4,6 +4,7 @@
 #include "allocation_stats.hpp"
 
 #if defined FTB_WINDOWS
+#  include <Windows.h>
 #  include <dbghelp.h>
 #else
 #  ifdef FTB_LINUX_STACK_TRACE_USE_GDB
@@ -21,8 +22,8 @@
 #endif
 
 auto print_stacktrace() -> void {
-#if defined FTB_WINDOWS
     printf("Stacktrace: \n");
+#if defined FTB_WINDOWS
     unsigned int   i;
     void         * stack[ 100 ];
     HANDLE         process;
@@ -44,7 +45,6 @@ auto print_stacktrace() -> void {
     fflush(stdout);
 #else
 #ifdef FTB_LINUX_STACK_TRACE_USE_GDB
-    printf("Stacktrace: \n");
     char pid_buf[30];
     sprintf(pid_buf, "%d", getpid());
     char name_buf[512];
@@ -60,7 +60,8 @@ auto print_stacktrace() -> void {
    }
 #else
     // NOTE(Felix): Don't forget to compile with "-rdynamic"
-    printf("Stacktrace (this is unmagled -- sorry): \n");
+    printf("Stacktrace (this is unmagled -- sorry\n"
+           "  (you can recompile with -DFTB_LINUX_STACK_TRACE_USE_GDB and -rdynamic to get one) \n");
     char **strings;
     size_t i, size;
     enum Constexpr { MAX_SIZE = 1024 };

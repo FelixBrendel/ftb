@@ -12,7 +12,7 @@
 #define concat(x, y) x ## y
 #define label(x, y) concat(x, y)
 
-#define MPI_LABEL(id1,id2)                                      \
+#define MPI_LABEL(id1,id2)                              \
     label(MPI_LABEL_ ## id1 ## _ ## id2 ## _, __LINE__)
 
 #define MPP_DECLARE(labid, declaration)                 \
@@ -49,46 +49,26 @@
                 MPI_LABEL(labid, body):
 
 
-#ifndef min
+#ifndef MIN
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #endif
-#ifndef max
+#ifndef MAX
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #endif
 
 /**
  *   Defer   *
  */
-template<typename F>
-class defer_finalizer {
-    F f;
-    bool moved;
-public:
-    template<typename T>
-    defer_finalizer(T && f_) : f(std::forward<T>(f_)), moved(false) { }
-
-    defer_finalizer(const defer_finalizer &) = delete;
-
-    defer_finalizer(defer_finalizer && other) : f(std::move(other.f)), moved(other.moved) {
-        other.moved = true;
-    }
-
-    ~defer_finalizer() {
-        if (!moved) f();
-    }
-};
-
-static struct {
-    template<typename F>
-    defer_finalizer<F> operator<<(F && f) {
-        return defer_finalizer<F>(std::forward<F>(f));
-    }
-} deferrer;
-
-#define defer auto label(__deferred_lambda_call, __COUNTER__) = deferrer << [&]
+#ifndef defer
+struct defer_dummy {};
+template <class F> struct deferrer { F f; ~deferrer() { f(); } };
+template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
+#define DEFER_(LINE) zz_defer##LINE
+#define DEFER(LINE) DEFER_(LINE)
+#define defer auto DEFER(__LINE__) = defer_dummy{} *[&]()
+#endif // defer
 
 #define defer_free(var) defer { free(var); }
-
 
 /*
    defer {
@@ -97,7 +77,7 @@ static struct {
 
 expands to:
 
-    auto __deferred_lambda_call0 = deferrer << [&] {
+    auto zz_defer74 = defer_dummy{} * [&] {
        call();
     };
 */

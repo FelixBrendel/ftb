@@ -23,12 +23,12 @@ typedef wchar_t path_char;
 typedef char    path_char;
 #endif
 
-struct Ftb_StringSlice {
+struct String_Slice {
     const char* data;
     u64 length;
 };
 
-struct Ftb_String {
+struct String {
     char* data;
     u64 length;
 };
@@ -42,15 +42,15 @@ inline auto heap_copy_c_string(const char* str) -> char* {
 #endif
 }
 
-inline auto make_heap_string(const char* str) -> Ftb_String {
-    Ftb_String ret;
+inline auto make_heap_string(const char* str) -> String {
+    String ret;
     ret.length = strlen(str);
     ret.data = heap_copy_c_string(str);
     return ret;
 }
 
-inline auto make_static_string(const char* str) -> const Ftb_StringSlice {
-    Ftb_StringSlice ret;
+inline auto make_static_string(const char* str) -> const String_Slice {
+    String_Slice ret;
     ret.length = strlen(str);
     ret.data = str;
     return ret;
@@ -60,19 +60,19 @@ auto inline string_equal(const char* input, const char* check) -> bool {
     return strcmp(input, check) == 0;
 }
 
-auto inline string_equal(Ftb_StringSlice str, const char* check) -> bool {
+auto inline string_equal(String_Slice str, const char* check) -> bool {
     if (str.length != strlen(check))
         return false;
     return strncmp(str.data, check, str.length) == 0;
 }
 
-auto inline string_equal(const char* check, Ftb_StringSlice str) -> bool {
+auto inline string_equal(const char* check, String_Slice str) -> bool {
     if (str.length != strlen(check))
         return false;
     return strncmp(str.data, check, str.length) == 0;
 }
 
-auto inline string_equal(Ftb_StringSlice str1, Ftb_StringSlice str2) -> bool {
+auto inline string_equal(String_Slice str1, String_Slice str2) -> bool {
     if (str1.length != str2.length)
         return false;
 
