@@ -186,6 +186,32 @@ auto load_obj(const char* path) -> Mesh* {
 
                     fprints.append(vfp);
                 }
+                {
+                    // NOTE(Felix): check for quads
+                    eat_whitespace();
+                    if (*cursor >= '0' &&  *cursor <= '9') {
+                        vfp.pos_i  = read_int();
+                        ++cursor; // overstep slash
+                        vfp.uv_i   = read_int();
+                        ++cursor; // overstep slash
+                        vfp.norm_i = read_int();
+
+                        --vfp.pos_i;  // NOTE(Felix): the indices in the obj file start at 1
+                        --vfp.uv_i;   // NOTE(Felix): the indices in the obj file start at 1
+                        --vfp.norm_i; // NOTE(Felix): the indices in the obj file start at 1
+
+                        fprints.append(vfp);
+                        fprints.append(fprints[fprints.count-2]);
+                        fprints.append(fprints[fprints.count-4]);
+                    }
+                }
+                {
+                    // NOTE(Felix): check for polygon with more verts than 4
+                    eat_whitespace();
+                    if (*cursor >= '0' &&  *cursor <= '9') {
+                        panic("Only tris and quads are supported");
+                    }
+                }
             } else {
                 panic("unknown marker \"%c\" (pos: %ld)", *cursor, cursor-obj_str.data);
                 return nullptr;

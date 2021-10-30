@@ -8,7 +8,6 @@
 
 #include <functional>
 
-#define proc auto
 #define concat(x, y) x ## y
 #define label(x, y) concat(x, y)
 
@@ -49,12 +48,12 @@
                 MPI_LABEL(labid, body):
 
 
-#ifndef MIN
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#endif
-#ifndef MAX
-#define MAX(a, b) (((a) > (b)) ? (a) : (b))
-#endif
+// #ifndef MIN
+// #define MIN(a, b) (((a) < (b)) ? (a) : (b))
+// #endif
+// #ifndef MAX
+// #define MAX(a, b) (((a) > (b)) ? (a) : (b))
+// #endif
 
 /**
  *   Defer   *

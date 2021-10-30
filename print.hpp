@@ -16,12 +16,14 @@
 
 FILE* ftb_stdout = stdout;
 
-#define str_eq(s1, s2) (strcmp(s1, s2) == 0)
-
-#define console_normal "\x1B[0m"
-#define console_red    "\x1B[31m"
-#define console_green  "\x1B[32m"
-#define console_cyan   "\x1B[36m"
+const char* console_red     = "\x1B[31m";
+const char* console_green   = "\x1B[32m";
+const char* console_yellow  = "\x1B[33m";
+const char* console_blue    = "\x1B[34m";
+const char* console_magenta = "\x1B[35m";
+const char* console_cyan    = "\x1B[36m";
+const char* console_white   = "\x1B[37m";
+const char* console_normal  = "\x1B[0m";
 
 typedef const char* static_string;
 typedef int (*printer_function_32b)(FILE*, u32);
@@ -531,3 +533,16 @@ void deinit_printer() {
     printer_map.dealloc();
     type_map.dealloc();
 }
+
+#ifndef FTB_NO_INIT_PRINTER
+namespace {
+    struct Printer_Initter {
+        Printer_Initter() {
+            init_printer();
+        }
+        ~Printer_Initter() {
+            deinit_printer();
+        }
+    } p_initter;
+}
+#endif
