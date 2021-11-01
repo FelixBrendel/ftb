@@ -81,8 +81,8 @@ auto load_obj(const char* path) -> Mesh* {
 
     Mesh* result = (Mesh*)malloc(sizeof(Mesh));
 
-    result->vertices.alloc();
-    result->faces.alloc();
+    result->vertices.init();
+    result->faces.init();
 
     Auto_Array_List<f32> positions(512);
     Auto_Array_List<f32> normals(512);
@@ -241,8 +241,8 @@ auto load_obj(const char* path) -> Mesh* {
         }
     }
     Hash_Map<Vertex_Fingerprint, u32> vertex_fp_to_index;
-    vertex_fp_to_index.alloc(fprints.count);
-    defer { vertex_fp_to_index.dealloc(); };
+    vertex_fp_to_index.init(fprints.count);
+    defer { vertex_fp_to_index.deinit(); };
 
     {
         u32 counter{0};
