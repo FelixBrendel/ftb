@@ -473,7 +473,7 @@ int print_spaces(FILE* f, s32 num) {
         num -= 4;
     }
     while (num --> 0) {
-        // println("%d", 1);
+        // println("%d", 1);
         sum += print_to_file(f, " ");
         num--;
     }
@@ -541,6 +541,9 @@ void init_printer() {
     HANDLE hOut  = GetStdHandle(STD_OUTPUT_HANDLE);
     DWORD dwMode = 0;
     GetConsoleMode(hOut, &dwMode);
+#ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING // g++ does not seem to define it
+#define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
+#endif
     dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
     SetConsoleMode(hOut, dwMode);
 #endif
