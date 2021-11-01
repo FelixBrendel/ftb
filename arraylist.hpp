@@ -142,7 +142,7 @@ struct Array_List {
     }
 
     void init_from(std::initializer_list<type> l) {
-        length = MAX((u32)l.size(), 1); // alloc at least one
+        length = l.size() > 1 ? l.size() : 1; // alloc at least one
 
         data = (type*)malloc(length * sizeof(type));
         count = 0;
