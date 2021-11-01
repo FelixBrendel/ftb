@@ -1044,13 +1044,13 @@ auto test_math() -> testresult {
         assert_equal_f32(res._01, 36);
         assert_equal_f32(res._02, 42);
 
-        assert_equal_f32(res._10, 69);
-        assert_equal_f32(res._11, m._11);
-        assert_equal_f32(res._12, m._12);
+        assert_equal_f32(res._10, 66);
+        assert_equal_f32(res._11, 81);
+        assert_equal_f32(res._12, 96);
 
-        assert_equal_f32(res._20, m._20);
-        assert_equal_f32(res._21, m._21);
-        assert_equal_f32(res._22, m._22);
+        assert_equal_f32(res._20, 102);
+        assert_equal_f32(res._21, 126);
+        assert_equal_f32(res._22, 150);
 
 
     }
@@ -1063,15 +1063,15 @@ s32 main(s32, char**) {
     testresult result;
 
     invoke_test(test_math);
-    // invoke_test(test_array_lists_adding_and_removing);
-    // invoke_test(test_array_lists_sorting);
-    // invoke_test(test_array_lists_searching);
-    // invoke_test(test_array_list_sort_many);
-    // invoke_test(test_stack_array_lists);
-    // invoke_test(test_bucket_allocator);
-    // invoke_test(test_queue);
-    // invoke_test(test_hooks);
-    // invoke_test(test_scheduler_animations);
+    invoke_test(test_array_lists_adding_and_removing);
+    invoke_test(test_array_lists_sorting);
+    invoke_test(test_array_lists_searching);
+    invoke_test(test_array_list_sort_many);
+    invoke_test(test_stack_array_lists);
+    invoke_test(test_bucket_allocator);
+    invoke_test(test_queue);
+    invoke_test(test_hooks);
+    invoke_test(test_scheduler_animations);
 
     return 0;
 }

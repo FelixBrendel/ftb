@@ -10,9 +10,23 @@ struct Vertex {
     V2 texture_coordinates;
 };
 
+
+union Face {
+    struct {
+        u32 v1;
+        u32 v2;
+        u32 v3;
+    };
+    u32 elements[3];
+
+    inline u32 &operator[](const int &index) {
+        return elements[index];
+    }
+};
+
 struct Mesh {
-    Array_List<Vertex> vertices;
-    Array_List<u32>    indices;
+    Array_List<Vertex>  vertices;
+    Array_List<Face>    faces;
 };
 
 struct Vertex_Fingerprint {
@@ -25,7 +39,7 @@ struct Vertex_Fingerprint {
 #ifndef FTB_MESH_IMPL
 
 auto hm_hash(Vertex_Fingerprint v) -> u64;
-inline auto hm_objects_match(Vertex_Fingerprint a, Vertex_Fingerprint b) -> bool;
+auto hm_objects_match(Vertex_Fingerprint a, Vertex_Fingerprint b) -> bool;
 auto load_obj(const char* path) -> Mesh*;
 
 #else // implementations
@@ -67,8 +81,8 @@ auto load_obj(const char* path) -> Mesh* {
 
     Mesh* result = (Mesh*)malloc(sizeof(Mesh));
 
-    result->vertices.init();
-    result->indices.init();
+    result->vertices.alloc();
+    result->faces.alloc();
 
     Auto_Array_List<f32> positions(512);
     Auto_Array_List<f32> normals(512);
@@ -227,14 +241,19 @@ auto load_obj(const char* path) -> Mesh* {
         }
     }
     Hash_Map<Vertex_Fingerprint, u32> vertex_fp_to_index;
-    vertex_fp_to_index.init(fprints.count);
-    defer { vertex_fp_to_index.deinit(); };
+    vertex_fp_to_index.alloc(fprints.count);
+    defer { vertex_fp_to_index.dealloc(); };
 
     {
+        u32 counter{0};
         for (auto vfp : fprints) {
-            u32 index = vertex_fp_to_index.get_index_of_living_cell_if_it_exists(vfp, hm_hash(vfp));
+            s32 index = vertex_fp_to_index.get_index_of_living_cell_if_it_exists(vfp, hm_hash(vfp));
+            if(counter%3 == 0) {
+                Face f;
+                result->faces.append(f);
+            }
             if (index != -1) {
-                result->indices.append(vertex_fp_to_index.data[index].object);
+                result->faces.data[result->faces.count-1][counter%3] = vertex_fp_to_index.data[index].object;
             } else {
                 Vertex v {
                     .position {
@@ -251,12 +270,12 @@ auto load_obj(const char* path) -> Mesh* {
                 };
                 u32 new_index = result->vertices.count;
                 result->vertices.append(v);
-                result->indices.append(new_index);
+                result->faces.data[result->faces.count-1][counter%3] = new_index;
                 vertex_fp_to_index.set_object(vfp, new_index);
             }
+            counter++;
         }
     }
-
     return result;
 }
 

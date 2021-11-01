@@ -6,6 +6,7 @@
 // TODO(Felix): Operations missing:
 //   - unlerp
 //   - remap
+//   - cross
 
 union V2 {
     struct {
@@ -246,6 +247,7 @@ auto lerp(f32 from, f32 t, f32 to) -> f32;
 auto clamp(f32 from, f32 x, f32 to) -> f32;
 auto clamp01(f32 x) -> f32;
 auto clamped_lerp(f32 from, f32 t, f32 to) -> f32;
+auto cross(V3 a, V3 b) -> V3;
 
 /* matrix functions */
 // NOTE(Felix): The operator + and - and * <scalar> are already covered by the
@@ -282,6 +284,14 @@ inline auto clamped_lerp(f32 from, f32 t, f32 to) -> f32 {
     t = clamp01(t);
     return from + (to - from) * t;
 }
+
+auto cross(V3 a, V3 b) -> V3 {
+    return {
+        (a.y*b.z - a.z*b.y),
+        (a.z*b.x - a.x*b.z),
+        (a.x*b.y - a.y*b.x)};
+}
+
 
 // ---------------------
 //    matrix functions
