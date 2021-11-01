@@ -6,6 +6,18 @@
 #include "types.hpp"
 #include "arraylist.hpp"
 
+#ifndef FTB_HASHMAP_IMPL
+
+u32 hm_hash(const char* str);
+u32 hm_hash(char* str);
+u32 hm_hash(void* ptr);
+
+inline bool hm_objects_match(const char* a, const char* b);
+inline bool hm_objects_match(char* a, char* b);
+inline bool hm_objects_match(void* a, void* b);
+
+#else // implementations
+
 u32 hm_hash(const char* str) {
     u32 value = str[0] << 7;
     s32 i = 0;
@@ -39,6 +51,8 @@ inline bool hm_objects_match(char* a, char* b) {
 inline bool hm_objects_match(void* a, void* b) {
     return a == b;
 }
+#endif //FTB_HASHMAP_IMPL
+
 
 template <typename key_type, typename value_type>
 struct Hash_Map {
@@ -62,7 +76,7 @@ struct Hash_Map {
                 p(data[index].original, data[index].object, index);
     }
 
-    void alloc(u32 initial_capacity = 8) {
+    void init(u32 initial_capacity = 8) {
         // round up to next pow of 2
         --initial_capacity;
         initial_capacity |= initial_capacity >> 1;
@@ -74,11 +88,11 @@ struct Hash_Map {
         // until here
         current_capacity = initial_capacity;
         cell_count = 0;
-        data = (HM_Cell*)ftb_calloc(initial_capacity, sizeof(HM_Cell));
+        data = (HM_Cell*)calloc(initial_capacity, sizeof(HM_Cell));
     }
 
-    void dealloc() {
-        ftb_free(data);
+    void deinit() {
+        free(data);
         data = nullptr;
     }
 
@@ -152,7 +166,7 @@ struct Hash_Map {
 
     Array_List<key_type> get_all_keys() {
         Array_List<key_type> ret;
-        ret.alloc();
+        ret.init();
         // QUESTION(Felix): Does it make sense to
         // ret.reserve(this->cell_count)?
         for (u32 i = 0; i < current_capacity; ++i) {
@@ -209,7 +223,7 @@ struct Hash_Map {
                 /* collision, check resize */
                 if ((cell_count*1.0f / current_capacity) > 0.666f) {
                     auto old_data = data;
-                    data = (HM_Cell*)ftb_calloc(current_capacity*4, sizeof(HM_Cell));
+                    data = (HM_Cell*)calloc(current_capacity*4, sizeof(HM_Cell));
                     cell_count = 0;
                     current_capacity *= 4;
 
@@ -220,7 +234,7 @@ struct Hash_Map {
                             set_object(cell.original, cell.object, cell.hash);
                         }
                     }
-                    ftb_free(old_data);
+                    free(old_data);
                     index = hash_val & (current_capacity - 1);
                 }
                 ++cell_count;

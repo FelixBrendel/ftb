@@ -1,9 +1,11 @@
+#include <math.h>
 #include "./types.hpp"
 #include "./allocation_stats.hpp"
 
 typedef s32 testresult;
 
-#define float_epsilon 2.2204460492503131E-16
+#define f64_epsilon DBL_EPSILON
+#define f32_epsilon FLT_EPSILON
 #define pass 1
 #define fail 0
 
@@ -29,6 +31,7 @@ typedef s32 testresult;
         }                                                                 \
     } while (0)
 
+
 #define assert_equal_int(variable, value)                               \
     if (variable != value) {                                            \
         print_assert_equal_fail(variable, value, size_t, "%{u64}");     \
@@ -41,30 +44,27 @@ typedef s32 testresult;
         return fail;                                                    \
     }
 
-#define assert_no_error()                                               \
-    if (error) {                                                        \
-        print_assert_equal_fail(error, 0, size_t, "%{u64}");            \
-        printf("\nExpected no error to occur,"                          \
-               " but an error occured anyways:\n");                     \
-        return fail;                                                    \
-    }                                                                   \
 
-#define assert_error()                                                  \
-    if (!error) {                                                       \
-        print_assert_not_equal_fail(error, 0, void*, "%{->}");          \
-        printf("\nExpected an error to occur,"                          \
-               " but no error occured:\n");                             \
+#define assert_equal_f32(variable, value)                           \
+    if (fabsl((f32)variable - (f32)value) > f32_epsilon) {          \
+        print_assert_equal_fail(variable, value, f32, "%{f32}");    \
+        return fail;                                                \
+    }
+
+#define assert_not_equal_f32(variable, value)                           \
+    if (fabsl((f32)variable - (f32)value) <= f32_epsilon) {             \
+        print_assert_not_equal_fail(variable, value, f32, "%{f32}");    \
         return fail;                                                    \
-    }                                                                   \
+    }
 
 #define assert_equal_f64(variable, value)                           \
-    if (fabsl((f64)variable - (f64)value) > float_epsilon) {        \
+    if (fabsl((f64)variable - (f64)value) > f64_epsilon) {          \
         print_assert_equal_fail(variable, value, f64, "%{f64}");    \
         return fail;                                                \
     }
 
 #define assert_not_equal_f64(variable, value)                           \
-    if (fabsl((f64)variable - (f64)value) <= float_epsilon) {           \
+    if (fabsl((f64)variable - (f64)value) <= f64_epsilon) {             \
         print_assert_not_equal_fail(variable, value, f64, "%{f64}");    \
         return fail;                                                    \
     }
@@ -74,6 +74,9 @@ typedef s32 testresult;
 
 #define assert_not_null(variable)               \
     assert_not_equal_int(variable, nullptr)
+
+#define assert_true(value)                      \
+    assert_equal_int(value, true)
 
 #define invoke_test(name)                                       \
     fputs("" #name ":", stdout);                                \
@@ -87,8 +90,4 @@ typedef s32 testresult;
         for(s32 i = -1; i < 70; ++i)                            \
             fputs((i%3==1)? "." : " ", stdout);                 \
         fputs(console_red "failed\n" console_normal, stdout);   \
-        if(error) {                                             \
-            ftb_free(error);                                    \
-            error = nullptr;                                    \
-        }                                                       \
     }

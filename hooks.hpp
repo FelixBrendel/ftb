@@ -8,8 +8,7 @@ template<typename>
 struct Lambda; // intentionally not defined
 
 template<typename R, typename ...Args>
-struct Lambda<R(Args...)>
-{
+struct Lambda<R(Args...)> {
     using Dispatcher = R(*)(void*, Args...);
 
     Dispatcher m_Dispatcher; // A pointer to the static function that will call the
@@ -52,10 +51,10 @@ struct Lambda<R(Args...)>
 struct Hook {
     Array_List<Lambda<void()>> lambdas;
     Hook() {
-        lambdas.alloc();
+        lambdas.init();
     }
     ~Hook () {
-        lambdas.dealloc();
+        lambdas.deinit();
     }
     void operator<<(Lambda<void()>&& f) {
         lambdas.append(f);
@@ -68,10 +67,12 @@ struct Hook {
     }
 };
 
-// struct __System_Shutdown_Hook : Hook {
-//     void operator()() = delete;
-//     ~__System_Shutdown_Hook() {
-//         Hook::operator()();
-//         lambdas.dealloc();
-//     }
-// } system_shutdown_hook;
+#ifdef FTB_GLOBAL_SHUTDOWN_HOOK
+struct __System_Shutdown_Hook : Hook {
+    void operator()() = delete;
+    ~__System_Shutdown_Hook() {
+        Hook::operator()();
+        lambdas.deinit();
+    }
+} system_shutdown_hook;
+#endif

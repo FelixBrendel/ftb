@@ -1,6 +1,8 @@
 #pragma once
 #include "platform.hpp"
 
+#define array_length(arr) (sizeof(arr) / sizeof(arr[0]))
+
 #ifdef FTB_WINDOWS
 #else
 #  include <signal.h> // for sigtrap

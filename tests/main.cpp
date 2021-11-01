@@ -12,17 +12,23 @@ inline bool hm_objects_match(Key a, Key b);
 #define ZoneScoped
 #define ZoneScopedN(name)
 
-#define USE_FTB_MALLOC
+#define FTB_TRACK_MALLOCS
+#define FTB_PRINT_IMPL
+#define FTB_ALLOCATION_STATS_IMPL
+#define FTB_HASHMAP_IMPL
+#define FTB_SCHEDULER_IMPL
+#define FTB_STACKTRACE_IMPL
+#define FTB_MATH_IMPL
+
 #include "../print.hpp"
 #include "../testing.hpp"
 #include "../bucket_allocator.hpp"
-#include "../error.hpp"
+
 #include "../hooks.hpp"
 #include "../hashmap.hpp"
 #include "../stacktrace.hpp"
 #include "../scheduler.cpp"
-
-#include "../error.hpp"
+#include "../math.hpp"
 
 
 u32 hm_hash(u32 u) {
@@ -55,7 +61,7 @@ auto print_dots(FILE* f) -> u32 {
     return print_to_file(f, "...");
 }
 
-proc is_sorted = [](Array_List<s32> list) -> bool {
+auto is_sorted = [](Array_List<s32> list) -> bool {
     for (u32 i = 0; i < list.count - 1; ++i) {
         if (list.data[i] > list.data[i+1])
             return false;
@@ -63,7 +69,7 @@ proc is_sorted = [](Array_List<s32> list) -> bool {
     return true;
  };
 
-proc is_sorted_vp = [](Array_List<void*> list) -> bool {
+auto is_sorted_vp = [](Array_List<void*> list) -> bool {
     for (u32 i = 0; i < list.count - 1; ++i) {
         if (list.data[i] > list.data[i+1])
             return false;
@@ -109,52 +115,54 @@ auto test_printer() -> void {
 
 }
 
-auto test_hm() -> void {
+auto test_hm() -> testresult {
     Hash_Map<u32, u32> h1;
-    h1.alloc();
-    defer { h1.dealloc(); };
+    h1.init();
+    defer { h1.deinit(); };
 
     h1.set_object(1, 2);
     h1.set_object(2, 4);
     h1.set_object(3, 6);
     h1.set_object(4, 8);
 
-    assert_msg(h1.key_exists(1), "key shoud exist");
-    assert_msg(h1.key_exists(2), "key shoud exist");
-    assert_msg(h1.key_exists(3), "key shoud exist");
-    assert_msg(h1.key_exists(4), "key shoud exist");
-    assert_msg(!h1.key_exists(5), "key shoud not exist");
+    assert_true(h1.key_exists(1));
+    assert_true(h1.key_exists(2));
+    assert_true(h1.key_exists(3));
+    assert_true(h1.key_exists(4));
+    assert_true(!h1.key_exists(5));
 
-    assert_msg(h1.get_object(1) == 2, "value should be correct");
-    assert_msg(h1.get_object(2) == 4, "value should be correct");
-    assert_msg(h1.get_object(3) == 6, "value should be correct");
-    assert_msg(h1.get_object(4) == 8, "value should be correct");
+    assert_true(h1.get_object(1) == 2);
+    assert_true(h1.get_object(2) == 4);
+    assert_true(h1.get_object(3) == 6);
+    assert_true(h1.get_object(4) == 8);
 
 
     Hash_Map<Key, u32> h2;
-    h2.alloc();
-    defer { h2.dealloc(); };
+    h2.init();
+    defer { h2.deinit(); };
 
     h2.set_object({.x = 1, .y = 2, .z = 3}, 1);
     h2.set_object({.x = 3, .y = 3, .z = 3}, 3);
 
-    assert_msg(h2.key_exists({.x = 1, .y = 2, .z = 3}), "key shoud exist");
-    assert_msg(h2.key_exists({.x = 3, .y = 3, .z = 3}), "key shoud exist");
+    assert_true(h2.key_exists({.x = 1, .y = 2, .z = 3}));
+    assert_true(h2.key_exists({.x = 3, .y = 3, .z = 3}));
 
-    assert_msg(h2.get_object({.x = 1, .y = 2, .z = 3}) == 1, "value should be correct");
-    assert_msg(h2.get_object({.x = 3, .y = 3, .z = 3}) == 3, "value should be correct");
+    assert_true(h2.get_object({.x = 1, .y = 2, .z = 3}) == 1);
+    assert_true(h2.get_object({.x = 3, .y = 3, .z = 3}) == 3);
 
     h2.for_each([] (Key k, u32 v, u32 i) {
         print("%{s32} %{u32} %{u32}\n", k.x, v, i);
     });
+
+    return pass;
 }
 
-proc test_stack_array_lists() -> testresult {
-    Stack_Array_List<int> list(20);
+auto test_stack_array_lists() -> testresult {
+    Stack_Array_List<int> list = create_stack_array_list(int, 20);
 
     assert_equal_int(list.count, 0);
     assert_equal_int(list.length, 20);
-    assert_msg(list.data != NULL, "list should have some data allocated");
+    assert_true(list.data != NULL);
 
     // test sum of empty list
     int sum = 0;
@@ -240,14 +248,14 @@ proc test_stack_array_lists() -> testresult {
     return pass;
 }
 
-proc test_queue() -> testresult {
+auto test_queue() -> testresult {
     Queue<int> q;
-    q.alloc(4);
+    q.init(4);
     defer {
-        q.dealloc();
+        q.deinit();
     };
 
-    assert_msg(q.is_empty(), "queue should start empty");
+    assert_true(q.is_empty());
     assert_equal_int(q.get_count(), 0);
 
     q.push_back(1);
@@ -258,7 +266,7 @@ proc test_queue() -> testresult {
 
     assert_equal_int(q.get_next(), 1);
     assert_equal_int(q.get_count(), 2);
-    assert_msg(!q.is_empty(), "should not be empty");
+    assert_true(!q.is_empty());
 
     assert_equal_int(q.get_next(), 2);
     assert_equal_int(q.get_count(), 1);
@@ -267,22 +275,22 @@ proc test_queue() -> testresult {
 
     assert_equal_int(q.get_next(), 3);
     assert_equal_int(q.get_count(), 1);
-    assert_msg(!q.is_empty(), "should not be empty");
+    assert_true(!q.is_empty());
 
     assert_equal_int(q.get_next(), 4);
-    assert_msg(q.is_empty(), "should be empty");
+    assert_true(q.is_empty());
     assert_equal_int(q.get_count(), 0);
 
     return pass;
 }
 
-proc test_array_lists_adding_and_removing() -> testresult {
+auto test_array_lists_adding_and_removing() -> testresult {
     // test adding and removing
     Array_List<s32> list;
-    list.alloc();
+    list.init();
 
     defer {
-        list.dealloc();
+        list.deinit();
     };
 
     list.append(1);
@@ -309,16 +317,16 @@ proc test_array_lists_adding_and_removing() -> testresult {
 }
 
 
-proc test_array_lists_sorting() -> testresult {
+auto test_array_lists_sorting() -> testresult {
     //
     //
     //  Test simple numbers
     //
     //
     Array_List<s32> list;
-    list.alloc();
+    list.init();
     defer {
-        list.dealloc();
+        list.deinit();
     };
 
     list.append(1);
@@ -353,9 +361,9 @@ proc test_array_lists_sorting() -> testresult {
     //
     //
     Array_List<s32> list1;
-    list1.alloc();
+    list1.init();
     defer {
-        list1.dealloc();
+        list1.deinit();
     };
 
     list1.append(1);
@@ -394,9 +402,9 @@ proc test_array_lists_sorting() -> testresult {
     //
     // pointer list
     Array_List<void*> al;
-    al.alloc();
+    al.init();
     defer {
-        al.dealloc();
+        al.deinit();
     };
     al.append((void*)0x1703102F100);
     al.append((void*)0x1703102F1D8);
@@ -419,11 +427,11 @@ proc test_array_lists_sorting() -> testresult {
     return pass;
 }
 
-proc test_array_lists_searching() -> testresult {
+auto test_array_lists_searching() -> testresult {
     Array_List<s32> list1;
-    list1.alloc();
+    list1.init();
     defer {
-        list1.dealloc();
+        list1.deinit();
     };
 
     list1.append(1);
@@ -442,11 +450,11 @@ proc test_array_lists_searching() -> testresult {
     return pass;
 }
 
-proc test_bucket_allocator() -> testresult {
+auto test_bucket_allocator() -> testresult {
     Bucket_Allocator<s32> ba;
-    ba.alloc();
+    ba.init();
     defer {
-        ba.dealloc();
+        ba.deinit();
     };
 
     s32* s1 = ba.allocate();
@@ -473,9 +481,9 @@ proc test_bucket_allocator() -> testresult {
 
 
     Bucket_Allocator<s32> ba2;
-    ba2.alloc();
+    ba2.init();
     defer {
-        ba2.dealloc();
+        ba2.deinit();
     };
 
     s1 = ba2.allocate();
@@ -519,9 +527,9 @@ proc test_bucket_allocator() -> testresult {
 
 auto test_array_list_sort_many() -> testresult {
     Array_List<s32> list;
-    list.alloc();
+    list.init();
     defer {
-        list.dealloc();
+        list.deinit();
     };
 
     for (int i = 0; i < 10000; ++i) {
@@ -717,23 +725,353 @@ auto test_scheduler_animations() -> testresult {
     return pass;
 }
 
+auto test_math() -> testresult {
+    // unary operator-
+    {
+        V3 v { 1, 2, 3 };
+        v = -v;
+
+        assert_equal_f32(v.x, -1);
+        assert_equal_f32(v.y, -2);
+        assert_equal_f32(v.z, -3);
+    }
+    {
+        V2 v { -1, -2 };
+        v = -v;
+
+        assert_equal_f32(v.x, 1);
+        assert_equal_f32(v.y, 2);
+    }
+    // binary operator+
+    {
+        V3 v1 { 1, 2, 3 };
+        V3 v2 { 3, 3, 3 };
+
+        V3 sum = v1 + v2;
+
+        assert_equal_f32(sum.x, 4);
+        assert_equal_f32(sum.y, 5);
+        assert_equal_f32(sum.z, 6);
+    }
+    {
+        V2 v1 { 1, -2 };
+        V2 v2 { -3, 3 };
+
+        V2 sum = v1 + v2;
+
+        assert_equal_f32(sum.x, -2);
+        assert_equal_f32(sum.y,  1);
+    }
+    // binary operator-
+    {
+        V3 v1 { 1, 2, 3 };
+        V3 v2 { 3, 3, 3 };
+
+        V3 diff = v1 - v2;
+
+        assert_equal_f32(diff.x, -2);
+        assert_equal_f32(diff.y, -1);
+        assert_equal_f32(diff.z,  0);
+    }
+    {
+        V2 v1 { 1, -2 };
+        V2 v2 { -3, 3 };
+
+        V2 diff = v1 - v2;
+
+        assert_equal_f32(diff.x,  4);
+        assert_equal_f32(diff.y, -5);
+    }
+    // binary operator* with scalar
+    {
+        V3 v1 { 1, -2, 3 };
+        f32 s = 2.5;
+
+        V3 r = v1 * s;
+
+        assert_equal_f32(r.x, 2.5);
+        assert_equal_f32(r.y, -5);
+        assert_equal_f32(r.z, 7.5);
+
+        r = s * v1;
+
+        assert_equal_f32(r.x, 2.5);
+        assert_equal_f32(r.y, -5);
+        assert_equal_f32(r.z, 7.5);
+    }
+    {
+        V2 v1 { 1, -2 };
+        f32 s = -3;
+
+        V2 r = v1 * s;
+
+        assert_equal_f32(r.x, -3);
+        assert_equal_f32(r.y,  6);
+
+        r = s * v1;
+
+        assert_equal_f32(r.x, -3);
+        assert_equal_f32(r.y,  6);
+    }
+    // operator* with mat
+    {
+        V3   v1 { 1, 2, 3 };
+        M3x3 identity {
+            {1, 0, 0,
+             0, 1, 0,
+             0, 0, 1},
+        };
+
+        V3 r = identity * v1;
+        assert_equal_f32(r.x, 1);
+        assert_equal_f32(r.y, 2);
+        assert_equal_f32(r.z, 3);
+
+        M3x3 permute_scale {
+            {0, 2, 0,
+             0, 0, 2,
+             2, 0, 0},
+        };
+
+        r = permute_scale * v1;
+        assert_equal_f32(r.x, 4);
+        assert_equal_f32(r.y, 6);
+        assert_equal_f32(r.z, 2);
+    }
+    {
+        V2   v1 { 1, 2 };
+        M2x2 identity {
+            {1, 0,
+             0, 1},
+        };
+
+        V2 r = identity * v1;
+        assert_equal_f32(r.x, 1);
+        assert_equal_f32(r.y, 2);
+
+        M2x2 permute_scale {
+            {0, 2,
+             2, 0},
+        };
+
+        r = permute_scale * v1;
+        assert_equal_f32(r.x, 4);
+        assert_equal_f32(r.y, 2);
+    }
+    // dot
+    {
+        V3 v1 { 1, 2, 3 };
+        V3 v2 { 3, 3, 3 };
+
+        f32 d = dot(v1, v2);
+
+        assert_equal_f32(d, 18.0)
+    }
+    {
+        V2 v1 { 1, 2 };
+        V2 v2 { 3, 3 };
+
+        f32 d = dot(v1, v2);
+
+        assert_equal_f32(d, 9.0)
+    }
+    // hadamard
+    {
+        V3 v1 { 1, 2, 3 };
+        V3 v2 { 3, 3, 3 };
+
+        auto h = hadamard(v1, v2);
+
+        assert_equal_f32(h.x, 3);
+        assert_equal_f32(h.y, 6);
+        assert_equal_f32(h.z, 9);
+    }
+    {
+        V2 v1 { 6,  2 };
+        V2 v2 { -2, 12 };
+
+        V2 h = hadamard(v1, v2);
+
+        assert_equal_f32(h.x, -12);
+        assert_equal_f32(h.y, 24);
+    }
+    // reflect
+    {
+        V3 dir    { 1, 2, -3 };
+        V3 normal { 0, 0,  1 };
+        V3 r = reflect(dir, normal);
+
+        assert_equal_f32(r.x, 1);
+        assert_equal_f32(r.y, 2);
+        assert_equal_f32(r.z, 3);
+
+        normal = {0, -1, 0};
+        r = reflect(dir, normal);
+        assert_equal_f32(r.x,  1);
+        assert_equal_f32(r.y, -2);
+        assert_equal_f32(r.z, -3);
+    }
+    {
+        V2 dir    { 1,  2 };
+        V2 normal { 0,  1 };
+        V2 r = reflect(dir, normal);
+
+        assert_equal_f32(r.x,  1);
+        assert_equal_f32(r.y, -2);
+
+        normal = {-1, 0 };
+        r = reflect(dir, normal);
+
+        assert_equal_f32(r.x, -1);
+        assert_equal_f32(r.y,  2);
+    }
+    // length
+    {
+        assert_equal_f32(length(V3{ 2, 0, 0 }), 2);
+        assert_equal_f32(length(V3{ 1, 1, 1 }), sqrt(3));
+
+        assert_equal_f32(length(V2{ 0, 2 }), 2);
+        assert_equal_f32(length(V2{ 1, 1 }), sqrt(2));
+    }
+    // noz
+    {
+        assert_equal_f32(length(noz(V3{ 2,    0, 0 })), 1);
+        assert_equal_f32(length(noz(V3{ 2,    2, 2 })), 1);
+        assert_equal_f32(length(noz(V3{ 2, -100, 1 })), 1);
+        assert_equal_f32(length(noz(V3{ 0,    0, 0 })), 0);
+
+        assert_equal_f32(length(noz(V3{ 2,    0 })), 1);
+        assert_equal_f32(length(noz(V3{ 2,    2 })), 1);
+        assert_equal_f32(length(noz(V3{ 2, -100 })), 1);
+        assert_equal_f32(length(noz(V3{ 0,    0 })), 0);
+
+        V3 v = { 1, 1, 1 };
+        v = noz(v);
+        assert_equal_f32(v.x, 1/sqrt(3));
+        assert_equal_f32(v.y, 1/sqrt(3));
+        assert_equal_f32(v.z, 1/sqrt(3));
+    }
+    // lerp
+    {
+        V3 a = { 1,  1, 1 };
+        V3 b = { 0, 21, 0 };
+        V3 l = lerp(a, 0, b);
+
+        assert_equal_f32(l.x, a.x);
+        assert_equal_f32(l.y, a.y);
+        assert_equal_f32(l.z, a.z);
+
+        l = lerp(a, 1, b);
+
+        assert_equal_f32(l.x, b.x);
+        assert_equal_f32(l.y, b.y);
+        assert_equal_f32(l.z, b.z);
+
+        l = lerp(a, 0.5, b);
+
+        assert_equal_f32(l.x, 0.5);
+        assert_equal_f32(l.y, 11.0);
+        assert_equal_f32(l.z, 0.5);
+    }
+    {
+        V2 a = { 1,  1 };
+        V2 b = { 0, 21 };
+        V2 l = lerp(a, 0, b);
+
+        assert_equal_f32(l.x, a.x);
+        assert_equal_f32(l.y, a.y);
+
+        l = lerp(a, 1, b);
+
+        assert_equal_f32(l.x, b.x);
+        assert_equal_f32(l.y, b.y);
+
+        l = lerp(a, 0.5, b);
+
+        assert_equal_f32(l.x, 0.5);
+        assert_equal_f32(l.y, 11.0);
+    }
+    {
+        M3x3 ident {
+            1, 0, 0,
+            0, 1, 0,
+            0, 0, 1,
+        };
+
+        M3x3 m {
+            1, 0, 0,
+            0, 1, 0,
+            0, 0, 1,
+        };
+
+        auto res = ident * m;
+
+        assert_equal_f32(res._00, m._00);
+        assert_equal_f32(res._01, m._01);
+        assert_equal_f32(res._02, m._02);
+
+        assert_equal_f32(res._10, m._10);
+        assert_equal_f32(res._11, m._11);
+        assert_equal_f32(res._12, m._12);
+
+        assert_equal_f32(res._20, m._20);
+        assert_equal_f32(res._21, m._21);
+        assert_equal_f32(res._22, m._22);
+
+        m = {
+            1, 2, 3,
+            4, 5, 6,
+            7, 8, 9,
+        };
+
+        res = ident * m;
+
+        assert_equal_f32(res._00, m._00);
+        assert_equal_f32(res._01, m._01);
+        assert_equal_f32(res._02, m._02);
+
+        assert_equal_f32(res._10, m._10);
+        assert_equal_f32(res._11, m._11);
+        assert_equal_f32(res._12, m._12);
+
+        assert_equal_f32(res._20, m._20);
+        assert_equal_f32(res._21, m._21);
+        assert_equal_f32(res._22, m._22);
+
+        res = m * m;
+
+        assert_equal_f32(res._00, 30);
+        assert_equal_f32(res._01, 36);
+        assert_equal_f32(res._02, 42);
+
+        assert_equal_f32(res._10, 69);
+        assert_equal_f32(res._11, m._11);
+        assert_equal_f32(res._12, m._12);
+
+        assert_equal_f32(res._20, m._20);
+        assert_equal_f32(res._21, m._21);
+        assert_equal_f32(res._22, m._22);
+
+
+    }
+    return pass;
+}
+
 s32 main(s32, char**) {
     defer { print_malloc_stats(); };
 
-    init_printer();
-    defer { deinit_printer(); };
     testresult result;
 
-    invoke_test(test_array_lists_adding_and_removing);
-    invoke_test(test_array_lists_sorting);
-    invoke_test(test_array_lists_searching);
-    invoke_test(test_array_list_sort_many);
-    invoke_test(test_stack_array_lists);
-    invoke_test(test_bucket_allocator);
-    invoke_test(test_queue);
-    invoke_test(test_hooks);
-    invoke_test(test_scheduler_animations);
-
+    invoke_test(test_math);
+    // invoke_test(test_array_lists_adding_and_removing);
+    // invoke_test(test_array_lists_sorting);
+    // invoke_test(test_array_lists_searching);
+    // invoke_test(test_array_list_sort_many);
+    // invoke_test(test_stack_array_lists);
+    // invoke_test(test_bucket_allocator);
+    // invoke_test(test_queue);
+    // invoke_test(test_hooks);
+    // invoke_test(test_scheduler_animations);
 
     return 0;
 }

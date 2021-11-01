@@ -2,24 +2,23 @@
 #include <string.h>
 
 #ifdef MSVC
-#include <immintrin.h>
-#define platform_independent_cpuid(function_id, array_of_registers)     \
+#  include <immintrin.h>
+#  define platform_independent_cpuid(function_id, array_of_registers)   \
     __cpuid(array_of_registers, function_id)
 
-#define platform_independent_cpuidex(function_id, sub_function_id, array_of_registers) \
+#  define platform_independent_cpuidex(function_id, sub_function_id, array_of_registers) \
     __cpuid_count(array_of_registers, function_id, sub_function_id)
 #else
-#include <cpuid.h>
-#define platform_independent_cpuid(function_id, array_of_registers)     \
+#  include <cpuid.h>
+#  define platform_independent_cpuid(function_id, array_of_registers)   \
     __cpuid(function_id, array_of_registers[0], array_of_registers[1],  \
             array_of_registers[2],array_of_registers[3])
 
-#define platform_independent_cpuidex(function_id, sub_function_id, array_of_registers) \
+#  define platform_independent_cpuidex(function_id, sub_function_id, array_of_registers) \
     __cpuid_count (function_id, sub_function_id, array_of_registers[0], \
                    array_of_registers[1], array_of_registers[2],        \
                    array_of_registers[3])
 #endif
-
 
 
 enum struct Edx_1_Feature_Flags {
@@ -266,6 +265,19 @@ struct Cpu_Info {
     int f_81_EDX;
 };
 
+#ifndef FTB_CPU_INFO_IMPL
+
+inline auto query_cpu_feature(Cpu_Info* info, Edx_1_Feature_Flags flag) -> bool;
+inline auto query_cpu_feature(Cpu_Info* info, Ecx_1_Feature_Flags flag) -> bool;
+inline auto query_cpu_feature(Cpu_Info* info, Ebx_7_Extended_Feature_Flags flag) -> bool;
+inline auto query_cpu_feature(Cpu_Info* info, Ecx_7_Extended_Feature_Flags flag) -> bool;
+inline auto query_cpu_feature(Cpu_Info* info, Edx_7_Extended_Feature_Flags flag) -> bool;
+inline auto query_cpu_feature(Cpu_Info* info, Edx_81_Extended_Feature_Flags flag) -> bool;
+inline auto query_cpu_feature(Cpu_Info* info, Ecx_81_Extended_Feature_Flags flag) -> bool;
+auto get_cpu_info(Cpu_Info* info) -> void;
+
+#else // implementations
+
 inline auto query_cpu_feature(Cpu_Info* info, Edx_1_Feature_Flags flag) -> bool {
     return info->f_1_EDX & (int)flag;
 }
@@ -360,3 +372,5 @@ auto get_cpu_info(Cpu_Info* info) -> void {
         }
     }
 }
+
+#endif // FTB_CPU_INFO_IMPL

@@ -33,6 +33,17 @@ struct String {
     u64 length;
 };
 
+#ifndef FTB_TYPES_IMPL
+
+inline auto heap_copy_c_string(const char* str) -> char*;
+inline auto make_heap_string(const char* str) -> String;
+inline auto make_static_string(const char* str) -> const String_Slice;
+inline auto string_equal(const char* input, const char* check) -> bool;
+inline auto string_equal(String_Slice str, const char* check) -> bool;
+inline auto string_equal(const char* check, String_Slice str) -> bool;
+inline auto string_equal(String_Slice str1, String_Slice str2) -> bool;
+
+#else // implementations
 
 inline auto heap_copy_c_string(const char* str) -> char* {
 #ifdef FTB_WINDOWS
@@ -78,3 +89,5 @@ auto inline string_equal(String_Slice str1, String_Slice str2) -> bool {
 
     return strncmp(str1.data, str2.data, str2.length) == 0;
 }
+
+#endif // FTB_TYPES_IMPL

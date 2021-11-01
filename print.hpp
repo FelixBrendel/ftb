@@ -14,16 +14,18 @@
 #include "hashmap.hpp"
 #include "hooks.hpp"
 
-FILE* ftb_stdout = stdout;
+extern FILE* ftb_stdout;
 
-const char* console_red     = "\x1B[31m";
-const char* console_green   = "\x1B[32m";
-const char* console_yellow  = "\x1B[33m";
-const char* console_blue    = "\x1B[34m";
-const char* console_magenta = "\x1B[35m";
-const char* console_cyan    = "\x1B[36m";
-const char* console_white   = "\x1B[37m";
-const char* console_normal  = "\x1B[0m";
+// NOTE(Felix): These are defines, so that the preprocessor can concat string
+//   literals as in: `console_red "hello" console_normal'
+#define console_red     "\x1B[31m"
+#define console_green   "\x1B[32m"
+#define console_yellow  "\x1B[33m"
+#define console_blue    "\x1B[34m"
+#define console_magenta "\x1B[35m"
+#define console_cyan    "\x1B[36m"
+#define console_white   "\x1B[37m"
+#define console_normal  "\x1B[0m"
 
 typedef const char* static_string;
 typedef int (*printer_function_32b)(FILE*, u32);
@@ -41,12 +43,46 @@ enum struct Printer_Function_Type {
     _void
 };
 
+#define register_printer(spec, fun, type)                       \
+    register_printer_ptr(spec, (printer_function_ptr)fun, type)
+
+#ifndef FTB_PRINT_IMPL
+
+auto register_printer_ptr(const char* spec, printer_function_ptr fun, Printer_Function_Type type) -> void;
+
+// auto maybe_special_print(FILE* file, static_string format, int* pos, va_list* arg_list) -> s32;
+// auto maybe_fprintf(FILE* file, static_string format, int* pos, va_list* arg_list) -> s32 ;
+auto print_va_args_to_file(FILE* file, static_string format, va_list* arg_list) -> s32;
+auto print_va_args_to_string(char** out, static_string format, va_list* arg_list)  -> s32;
+auto print_va_args(static_string format, va_list* arg_list) -> s32;
+auto print_to_string(char** out, static_string format, ...) -> s32;
+auto print_to_file(FILE* file, static_string format, ...) -> s32;
+auto print(static_string format, ...) -> s32;
+auto println(static_string format, ...) -> s32;
+
+// auto print_bool(FILE* f, u32 val) -> s32;
+// auto print_u32(FILE* f, u32 num) -> s32;
+// auto print_spaces(FILE* f, s32 num) -> s32;
+// auto print_u64(FILE* f, u64 num) -> s32;
+// auto print_s32(FILE* f, s32 num) -> s32;
+// auto print_s64(FILE* f, s64 num) -> s32;
+// auto print_flt(FILE* f, double arg) -> s32;
+// auto print_str(FILE* f, char* str) -> s32;
+// auto print_color_start(FILE* f, char* str) -> s32;
+// auto print_color_end(FILE* f) -> s32;
+// auto print_ptr(FILE* f, void* ptr) -> s32;
+// auto print_Str(FILE* f, String* str) -> s32;
+// auto print_str_line(FILE* f, char* str) -> s32;
+
+auto init_printer() -> void;
+auto deinit_printer() -> void;
+
+#else // implementations
+FILE* ftb_stdout = stdout;
+
 Array_List<char*>                     color_stack  = {0};
 Hash_Map<char*, printer_function_ptr> printer_map  = {0};
 Hash_Map<char*, int>                  type_map     = {0};
-
-#define register_printer(spec, fun, type)                       \
-    register_printer_ptr(spec, (printer_function_ptr)fun, type)
 
 void register_printer_ptr(const char* spec, printer_function_ptr fun, Printer_Function_Type type) {
     printer_map.set_object((char*)spec, fun);
@@ -67,7 +103,7 @@ int maybe_special_print(FILE* file, static_string format, int* pos, va_list* arg
     if (format[end_pos] == 0)
         return 0;
 
-    char* spec = (char*)ftb_alloca(end_pos - (*pos));
+    char* spec = (char*)alloca(end_pos - (*pos));
     strncpy(spec, format+(*pos)+1, end_pos - (*pos));
     spec[end_pos - (*pos)-1] = '\0';
 
@@ -340,7 +376,7 @@ int print_va_args_to_string(char** out, static_string format, va_list* arg_list)
 
     int num_printed_chars = print_va_args_to_file(t_file, format, arg_list);
 
-    *out = (char*)ftb_malloc(sizeof(char) * (num_printed_chars+1));
+    *out = (char*)malloc(sizeof(char) * (num_printed_chars+1));
 
     rewind(t_file);
     fread(*out, sizeof(char), num_printed_chars, t_file);
@@ -368,7 +404,7 @@ int print_to_string(char** out, static_string format, ...) {
     va_end(arg_list);
 
 
-    *out = (char*)ftb_malloc(sizeof(char) * (num_printed_chars+1));
+    *out = (char*)malloc(sizeof(char) * (num_printed_chars+1));
 
     rewind(t_file);
     fread(*out, sizeof(char), num_printed_chars, t_file);
@@ -508,9 +544,9 @@ void init_printer() {
     dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
     SetConsoleMode(hOut, dwMode);
 #endif
-    color_stack.alloc();
-    printer_map.alloc();
-    type_map.alloc();
+    color_stack.init();
+    printer_map.init();
+    type_map.init();
 
     register_printer("spaces",      print_spaces,      Printer_Function_Type::_32b);
     register_printer("u32",         print_u32,         Printer_Function_Type::_32b);
@@ -529,9 +565,9 @@ void init_printer() {
 }
 
 void deinit_printer() {
-    color_stack.dealloc();
-    printer_map.dealloc();
-    type_map.dealloc();
+    color_stack.deinit();
+    printer_map.deinit();
+    type_map.deinit();
 }
 
 #ifndef FTB_NO_INIT_PRINTER
@@ -545,4 +581,5 @@ namespace {
         }
     } p_initter;
 }
-#endif
+#endif // FTB_NO_INIT_PRINTER
+#endif // FTB_PRINT_IMPL

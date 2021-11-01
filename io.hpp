@@ -4,7 +4,13 @@
 #include "macros.hpp"
 #include "stacktrace.hpp"
 
-String read_entire_file(const char* filename)  {
+#ifndef FTB_IO_IMPL
+
+auto read_entire_file(const char* filename) -> String;
+
+#else // implementations
+
+auto read_entire_file(const char* filename) -> String  {
     String ret;
     ret.data = nullptr;
     FILE *fp = fopen(filename, "rb");
@@ -44,3 +50,5 @@ String read_entire_file(const char* filename)  {
     return ret;
     /* Don't forget to call free() later! */
 }
+
+#endif // FTB_IO_IMPL

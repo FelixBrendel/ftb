@@ -10,22 +10,18 @@
 #include "allocation_stats.hpp"
 #include "macros.hpp"
 
+// NOTE(Felix): This is a macro, because we call alloca, which is stack-frame
+//   sensitive. So we really have to avoid calling alloca in another function
+//   (or constructor), with the macro the alloca is called in the callers
+//   stack-frame
+#define create_stack_array_list(type, length)     \
+    Stack_Array_List<type> { (type*)alloca(length * sizeof(type)), length, 0 }
+
 template <typename type>
 struct Stack_Array_List {
     type* data;
     u32 length;
     u32 count;
-
-    Stack_Array_List(u32 length) {
-        data = (type*)alloca(length);
-#ifdef FTB_INTERNAL_DEBUG
-        if (data == nullptr) {
-            fprintf(stderr, "ERROR: alloca did return nullptr \n");
-        }
-#endif
-        this->length = length;
-        this->count = 0;
-    }
 
     static Stack_Array_List<type> create_from(std::initializer_list<type> l) {
         Stack_Array_List<type> ret(l.size());
@@ -84,15 +80,15 @@ struct Untyped_Array_List {
     u32   length;
     u32   count;
 
-    void alloc(u32 e_size, u32 initial_capacity = 16) {
+    void init(u32 e_size, u32 initial_capacity = 16) {
         element_size = e_size;
-        data   = ftb_malloc(initial_capacity * element_size);
+        data   = malloc(initial_capacity * element_size);
         count  = 0;
         length = initial_capacity;
     }
 
-    void dealloc() {
-        ftb_free(data);
+    void deinit() {
+        free(data);
         data = nullptr;
     }
 
@@ -103,7 +99,7 @@ struct Untyped_Array_List {
     void append(void* elem) {
         if (count == length) {
             length *= 2;
-            data = ftb_realloc(data, length * element_size);
+            data = realloc(data, length * element_size);
         }
 
         memcpy(((u8*)(data))+(element_size*count), elem, element_size);
@@ -113,7 +109,7 @@ struct Untyped_Array_List {
     void* reserve_next_slot() {
         if (count == length) {
             length *= 2;
-            data = ftb_realloc(data, length * element_size);
+            data = realloc(data, length * element_size);
         }
         count++;
         return ((u8*)(data)) + (element_size*(count-1));
@@ -133,22 +129,22 @@ struct Array_List {
     u32 length;
     u32 count;
 
-    void alloc(u32 initial_capacity = 16) {
-        data = (type*)ftb_malloc(initial_capacity * sizeof(type));
+    void init(u32 initial_capacity = 16) {
+        data = (type*)malloc(initial_capacity * sizeof(type));
         count = 0;
         length = initial_capacity;
     }
 
     static Array_List<type> create_from(std::initializer_list<type> l) {
         Array_List<type> ret;
-        ret.alloc_from(l);
+        ret.init_from(l);
         return ret;
     }
 
-    void alloc_from(std::initializer_list<type> l) {
+    void init_from(std::initializer_list<type> l) {
         length = MAX((u32)l.size(), 1); // alloc at least one
 
-        data = (type*)ftb_malloc(length * sizeof(type));
+        data = (type*)malloc(length * sizeof(type));
         count = 0;
         // TODO(Felix): Use memcpy here
         for (type t : l) {
@@ -164,8 +160,8 @@ struct Array_List {
         }
     }
 
-    void dealloc() {
-        ftb_free(data);
+    void deinit() {
+        free(data);
         data = nullptr;
     }
 
@@ -191,7 +187,7 @@ struct Array_List {
         ret.length = length;
         ret.count = count;
 
-        ret.data = (type*)ftb_malloc(length * sizeof(type));
+        ret.data = (type*)malloc(length * sizeof(type));
         // TODO(Felix): Maybe use memcpy here
         for (u32 i = 0; i < count; ++i) {
             ret.data[i] = data[i];
@@ -208,7 +204,7 @@ struct Array_List {
         count = other.count;
         memcpy(data, other.data, sizeof(type) * other.count);
     }
-    
+
     type* begin() {
         return data;
     }
@@ -224,7 +220,7 @@ struct Array_List {
     void append(type element) {
         if (count == length) {
             length *= 2;
-            data = (type*)ftb_realloc(data, length * sizeof(type));
+            data = (type*)realloc(data, length * sizeof(type));
         }
         data[count] = element;
         count++;
@@ -233,7 +229,7 @@ struct Array_List {
     void reserve(u32 amount) {
         if (count+amount >= (u32)length) {
             length *= 2;
-            data = (type*)ftb_realloc(data, length * sizeof(type));
+            data = (type*)realloc(data, length * sizeof(type));
         }
     }
 
@@ -316,22 +312,22 @@ struct Array_List {
 template <typename type>
 struct Auto_Array_List : public Array_List<type> {
     Auto_Array_List(u32 length) {
-        this->alloc(length);
+        this->init(length);
     }
 
     Auto_Array_List() {
-        this->alloc(16);
+        this->init(16);
     }
 
     Auto_Array_List(std::initializer_list<type> l) {
-        this->alloc((u32)l.size());
+        this->init((u32)l.size());
         for (type e : l) {
             this->append(e);
         }
     }
 
     ~Auto_Array_List() {
-        ftb_free(this->data);
+        free(this->data);
         this->data = nullptr;
     }
 };
@@ -341,13 +337,13 @@ struct Queue {
     Array_List<type> arr_list;
     u32 next_index;
 
-    void alloc(u32 initial_capacity = 16) {
+    void init(u32 initial_capacity = 16) {
         next_index = 0;
-        arr_list.alloc(initial_capacity);
+        arr_list.init(initial_capacity);
     }
 
-    void dealloc() {
-        arr_list.dealloc();
+    void deinit() {
+        arr_list.deinit();
     }
 
     void push_back(type e) {

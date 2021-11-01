@@ -22,6 +22,14 @@ struct Vertex_Fingerprint {
     u64 uv_i;
 };
 
+#ifndef FTB_MESH_IMPL
+
+auto hm_hash(Vertex_Fingerprint v) -> u64;
+inline auto hm_objects_match(Vertex_Fingerprint a, Vertex_Fingerprint b) -> bool;
+auto load_obj(const char* path) -> Mesh*;
+
+#else // implementations
+
 auto hm_hash(Vertex_Fingerprint v) -> u64 {
     u32 h = 0;
     u32 highorder = h & 0xf8000000;     // extract high-order 5 bits from h
@@ -59,8 +67,8 @@ auto load_obj(const char* path) -> Mesh* {
 
     Mesh* result = (Mesh*)malloc(sizeof(Mesh));
 
-    result->vertices.alloc();
-    result->indices.alloc();
+    result->vertices.init();
+    result->indices.init();
 
     Auto_Array_List<f32> positions(512);
     Auto_Array_List<f32> normals(512);
@@ -219,8 +227,8 @@ auto load_obj(const char* path) -> Mesh* {
         }
     }
     Hash_Map<Vertex_Fingerprint, u32> vertex_fp_to_index;
-    vertex_fp_to_index.alloc(fprints.count);
-    defer { vertex_fp_to_index.dealloc(); };
+    vertex_fp_to_index.init(fprints.count);
+    defer { vertex_fp_to_index.deinit(); };
 
     {
         for (auto vfp : fprints) {
@@ -251,3 +259,5 @@ auto load_obj(const char* path) -> Mesh* {
 
     return result;
 }
+
+#endif // FTB_MESH_IMPL

@@ -1,0 +1,85 @@
+#+TITLE: ftb headers
+
+
+* Files
+
+|----------------------+--------------------------------------------------------------------|
+| File                 | Purpose                                                            |
+|----------------------+--------------------------------------------------------------------|
+| plaform.hpp          | defines FTB_WINDOWS or FTB_LINUX depending on compiling platform   |
+| types.hpp            | defines concise typenames and the String type                      |
+| io.h                 | basic functions for files                                          |
+| allocation_stats.hpp | can keep track of global and local memory allocation statistics    |
+| cpu_info.hpp         | get info about the cup and which featrues/instructions it supports |
+| arraylist.hpp        | implements a simple growing array                                  |
+| bucket_allocator.hpp | a memory allocator that allocates in buckets                       |
+| hashmap.hpp          | implements a hashmap that uses linear probing                      |
+| hooks.hpp            | hooks are a storage for lambdas that can be run in bulk later      |
+| macros.hpp           | useful macros                                                      |
+| math.hpp             | vector math                                                        |
+| mesh.hpp             | loading .obj files                                                 |
+| print.hpp            | implements a print function that can be extended by the user       |
+| scheduler.hpp        | a system for handling animations and cude that should run later    |
+| stacktrace.hpp       | function for printing the stack trace of the current execution     |
+| testing.hpp          | simple functions and macros that can be used to write tests        |
+
+
+
+* Macros
+These macros can be defined by the user to adjust the behavior of ftb.
+
+- =FTB_INTERNAL_DEBUG= enables ftb-internal checks and asserts
+- =FTB_TRACK_MALLOCS= to track the global use of calls to
+  - malloc
+  - free
+  - realloc
+  - calloc
+- =FTB_STACKTRACE_INFO= when enabled, the function =print_stacktrace= will print
+  the stack trace of the current execution, this function is also used in other
+  parts of ftb. If =FTB_STACKTRACE_INFO= is not set, no stack info will be
+  printed also in these cases.
+  - On linux systems, if additionally =FTB_STACKTRACE_USE_GDB= is defined, gdb
+    will be used intanally to get a nice demangled view of the stacktrace. This
+    macro only is relevant on Linux systems, it has no effect on other
+    platforms.
+- =FTB_GLOBAL_SHUTDOWN_HOOK= enable the =system_shutdown_hook= that is run when
+  the program exits
+
+* TODOS
+- [ ] Bucket list / allocator
+- [ ] number index for bucket list
+- [ ] queue with bucket list
+- [X] single header libraries
+  - [X]  plaform.hpp
+  - [X]  types.hpp
+  - [X]  io.h
+  - [X]  allocation_stats.hpp
+  - [X]  cpu_info.hpp
+  - [X]  arraylist.hpp
+  - [X]  bucket_allocator.hpp
+  - [X]  hashmap.hpp
+  - [X]  hooks.hpp
+  - [X]  macros.hpp
+  - [X]  math.hpp
+  - [X]  mesh.hpp
+  - [X]  print.hpp
+  - [X]  scheduler.hpp
+  - [X]  stacktrace.hpp
+  - [X]  testing.hpp
+- [ ] move impl-only-dependencies of single header files into the impl block
+  - [ ]  plaform.hpp
+  - [ ]  types.hpp
+  - [ ]  io.h
+  - [ ]  allocation_stats.hpp
+  - [ ]  cpu_info.hpp
+  - [ ]  arraylist.hpp
+  - [ ]  bucket_allocator.hpp
+  - [ ]  hashmap.hpp
+  - [ ]  hooks.hpp
+  - [ ]  macros.hpp
+  - [ ]  math.hpp
+  - [ ]  mesh.hpp
+  - [ ]  print.hpp
+  - [ ]  scheduler.hpp
+  - [ ]  stacktrace.hpp
+  - [ ]  testing.hpp

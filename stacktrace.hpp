@@ -3,27 +3,25 @@
 #include "platform.hpp"
 #include "allocation_stats.hpp"
 
-#if defined FTB_WINDOWS
-#  include <Windows.h>
-#  include <dbghelp.h>
-#else
-#  ifdef FTB_LINUX_STACK_TRACE_USE_GDB
-#    include <stdio.h>
-#    include <stdlib.h>
-#    include <sys/wait.h>
-#    include <unistd.h>
-#    include <sys/prctl.h>
-#  else
-#    include <execinfo.h>
-#    include <unistd.h>
-#    include "stdio.h"
-#    include "stdlib.h"
-#  endif
-#endif
+#ifndef FTB_STACKTRACE_IMPL
+
+auto print_stacktrace() -> void;
+
+#else // implementations
+
+#  ifndef FTB_STACKTRACE_INFO
+
+auto print_stacktrace() -> void {
+    printf("No stacktrace info available (recompile with FTB_STACKTRACE_INFO defined)\n");
+}
+
+#  else // stacktace should be present
+#    if defined FTB_WINDOWS
+#      include <Windows.h>
+#      include <dbghelp.h>
 
 auto print_stacktrace() -> void {
     printf("Stacktrace: \n");
-#if defined FTB_WINDOWS
     unsigned int   i;
     void         * stack[ 100 ];
     HANDLE         process;
@@ -43,8 +41,18 @@ auto print_stacktrace() -> void {
         printf( "  %3i: %s\n", frames - i - 1, symbol->Name);
     }
     fflush(stdout);
-#else
-#ifdef FTB_LINUX_STACK_TRACE_USE_GDB
+}
+
+#    else // not windows
+#      include <stdio.h>
+#      include <stdlib.h>
+#      include <unistd.h>
+#      ifdef FTB_STACKTRACE_USE_GDB
+#        include <sys/wait.h>
+#        include <sys/prctl.h>
+
+auto print_stacktrace() -> void {
+    printf("Stacktrace: \n");
     char pid_buf[30];
     sprintf(pid_buf, "%d", getpid());
     char name_buf[512];
@@ -58,10 +66,14 @@ auto print_stacktrace() -> void {
     } else {
         waitpid(child_pid,NULL,0);
    }
-#else
-    // NOTE(Felix): Don't forget to compile with "-rdynamic"
+}
+
+#      else // linux, but not using gdb
+#        include <execinfo.h>
+
+auto print_stacktrace() -> void {
     printf("Stacktrace (this is unmagled -- sorry\n"
-           "  (you can recompile with -DFTB_LINUX_STACK_TRACE_USE_GDB and -rdynamic to get one) \n");
+           "  (you can recompile with FTB_STACKTRACE_USE_GDB defined and -rdynamic to get one) \n");
     char **strings;
     size_t i, size;
     enum Constexpr { MAX_SIZE = 1024 };
@@ -71,7 +83,10 @@ auto print_stacktrace() -> void {
     for (i = 0; i < size; i++)
         printf("  %3lu: %s\n", size - i - 1, strings[i]);
     puts("");
-    ftb_free(strings);
-#endif
-#endif
+    free(strings);
 }
+
+#      endif // FTB_STACKTRACE_USE_GDB
+#    endif   // FTB_WINDOWS
+#  endif     // FTB_STACKTRACE_INFO
+#endif       // FTB_STACKTRACE_IMPL
