@@ -1,4 +1,6 @@
 #include <stdio.h>
+
+#define FTB_CPU_INFO_IMPL
 #include "../cpu_info.hpp"
 
 auto print_full_cpu_info() -> void {

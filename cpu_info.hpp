@@ -1,13 +1,14 @@
 #pragma once
 #include <string.h>
 
-#ifdef MSVC
+#ifdef _MSC_VER
+#  include <intrin.h>
 #  include <immintrin.h>
 #  define platform_independent_cpuid(function_id, array_of_registers)   \
     __cpuid(array_of_registers, function_id)
 
 #  define platform_independent_cpuidex(function_id, sub_function_id, array_of_registers) \
-    __cpuid_count(array_of_registers, function_id, sub_function_id)
+    __cpuidex(array_of_registers, function_id, sub_function_id)
 #else
 #  include <cpuid.h>
 #  define platform_independent_cpuid(function_id, array_of_registers)   \

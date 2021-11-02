@@ -19,6 +19,7 @@ inline bool hm_objects_match(Key a, Key b);
 #define FTB_SCHEDULER_IMPL
 #define FTB_STACKTRACE_IMPL
 #define FTB_MATH_IMPL
+#define FTB_SOA_SORT_IMPL
 
 #include "../print.hpp"
 #include "../testing.hpp"
@@ -29,6 +30,7 @@ inline bool hm_objects_match(Key a, Key b);
 #include "../stacktrace.hpp"
 #include "../scheduler.cpp"
 #include "../math.hpp"
+#include "../soa_sort.hpp"
 
 
 u32 hm_hash(u32 u) {
@@ -1057,21 +1059,41 @@ auto test_math() -> testresult {
     return pass;
 }
 
+auto test_sort() -> testresult {
+
+    u32 arr[16] {
+        1, 2000, 2, 3, 3, 3, 3, 2, 1, 1, 1,1, 2, 12, 1, 19912
+    };
+
+    soa_sort(arr, sizeof(arr[0]), 16, [] (const void* a, const void* b) -> s32 {
+        u32 sa = *(u32*)a;
+        u32 sb = *(u32*)b;
+        return sa - sb;
+    });
+
+    for (u32 i = 0; i < array_length(arr); ++i) {
+        print("\n%d", arr[i]);
+    }
+
+    return pass;
+}
+
 s32 main(s32, char**) {
     defer { print_malloc_stats(); };
 
     testresult result;
 
-    invoke_test(test_math);
-    invoke_test(test_array_lists_adding_and_removing);
-    invoke_test(test_array_lists_sorting);
-    invoke_test(test_array_lists_searching);
-    invoke_test(test_array_list_sort_many);
-    invoke_test(test_stack_array_lists);
-    invoke_test(test_bucket_allocator);
-    invoke_test(test_queue);
-    invoke_test(test_hooks);
-    invoke_test(test_scheduler_animations);
+    invoke_test(test_sort);
+    // invoke_test(test_math);
+    // invoke_test(test_array_lists_adding_and_removing);
+    // invoke_test(test_array_lists_sorting);
+    // invoke_test(test_array_lists_searching);
+    // invoke_test(test_array_list_sort_many);
+    // invoke_test(test_stack_array_lists);
+    // invoke_test(test_bucket_allocator);
+    // invoke_test(test_queue);
+    // invoke_test(test_hooks);
+    // invoke_test(test_scheduler_animations);
 
     return 0;
 }
