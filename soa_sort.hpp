@@ -45,6 +45,7 @@ typedef int (*cmpfun)(const void *, const void *);
 //     u64   element_size;
 // };
 
+#define FTB_SOA_SORT_IMPL
 #ifndef FTB_SOA_SORT_IMPL
 
 // void soa_sort_r(Array_Description* arrays, u32 array_count, u32 array_element_count, cmpfun_r cmp, void* arg);
@@ -65,10 +66,13 @@ static inline int pntz(size_t p[2]) {
     return 0;
 }
 
-static void cycle(size_t width, byte* ar[], int n)
-{
-    byte tmp[256];
-    size_t l;
+inline auto get_element_idx(void* base, void* element, u64 width) -> u32 {
+    return ((byte*)element - (byte*)base) / width;
+}
+
+static void cycle(byte* ar[], int n, void *base1, size_t width1, void* base2, size_t width2) {
+    byte* tmp = (byte*)alloca(width1 > width2 ? width1 : width2); // max of all widths
+
     int i;
 
     if(n < 2) {
@@ -76,14 +80,27 @@ static void cycle(size_t width, byte* ar[], int n)
     }
 
     ar[n] = tmp;
-    while(width) {
-        l = sizeof(tmp) < width ? sizeof(tmp) : width;
-        memcpy(ar[n], ar[0], l);
-        for(i = 0; i < n; i++) {
-            memcpy(ar[i], ar[i + 1], l);
-            ar[i] += l;
+
+    // second array
+    {
+
+        memcpy(ar[n],
+               ((byte*)base2)+(get_element_idx(base1, ar[0], width1) * width2), width2);
+        for(i = 0; i < n-1; i++) {
+            memcpy(((byte*)base2)+(get_element_idx(base1, ar[i], width1) * width2),
+                   ((byte*)base2)+(get_element_idx(base1, ar[i+1], width1) * width2), width2);
         }
-        width -= l;
+        memcpy(((byte*)base2)+(get_element_idx(base1, ar[n-1], width1) * width2),
+               ar[n], width2);
+    }
+
+    // original array
+    {
+        memcpy(ar[n], ar[0], width1);
+        for(i = 0; i < n; i++) {
+            memcpy(ar[i], ar[i + 1], width1);
+            ar[i] += width1;
+        }
     }
 }
 
@@ -112,8 +129,7 @@ static inline void shr(size_t p[2], int n)
     p[1] >>= n;
 }
 
-static void sift(byte *head, size_t width, cmpfun_r cmp, void *arg, int pshift, size_t lp[])
-{
+static void sift(byte *head, size_t width, cmpfun_r cmp, void *arg, int pshift, size_t lp[], void* base1, void *base2, size_t width2) {
     byte *rt, *lf;
     byte *ar[14 * sizeof(size_t) + 1];
     int i = 1;
@@ -136,11 +152,10 @@ static void sift(byte *head, size_t width, cmpfun_r cmp, void *arg, int pshift, 
             pshift -= 2;
         }
     }
-    cycle(width, ar, i);
+    cycle(ar, i, base1, width, base2, width2);
 }
 
-static void trinkle(byte *head, size_t width, cmpfun_r cmp, void *arg, size_t pp[2], int pshift, int trusty, size_t lp[])
-{
+static void trinkle(byte *head, size_t width, cmpfun_r cmp, void *arg, size_t pp[2], int pshift, int trusty, size_t lp[], void* base1, void *base2, size_t width2) {
     byte *stepson,
         *rt, *lf;
     size_t p[2];
@@ -173,14 +188,14 @@ static void trinkle(byte *head, size_t width, cmpfun_r cmp, void *arg, size_t pp
         trusty = 0;
     }
     if(!trusty) {
-        cycle(width, ar, i);
-        sift(head, width, cmp, arg, pshift, lp);
+        cycle(ar, i, base1, width, base2, width2);
+        sift(head, width, cmp, arg, pshift, lp, base1, base2, width2);
     }
 }
 
-void soa_sort_r(void *base, size_t width, size_t nel, cmpfun_r cmp, void *arg) {
+void soa_sort_r(void *base1, size_t width1, void *base2, size_t width2, size_t nel, cmpfun_r cmp, void *arg) {
     size_t lp[12*sizeof(size_t)];
-    size_t i, size = width * nel;
+    size_t i, size = width1 * nel;
     byte *head, *high;
     size_t p[2] = {1, 0};
     int pshift = 1;
@@ -188,22 +203,22 @@ void soa_sort_r(void *base, size_t width, size_t nel, cmpfun_r cmp, void *arg) {
 
     if (!size) return;
 
-    head = (byte*)base;
-    high = head + size - width;
+    head = (byte*)base1;
+    high = head + size - width1;
 
     /* Precompute Leonardo numbers, scaled by element width */
-    for(lp[0]=lp[1]=width, i=2; (lp[i]=lp[i-2]+lp[i-1]+width) < size; i++);
+    for(lp[0]=lp[1]=width1, i=2; (lp[i]=lp[i-2]+lp[i-1]+width1) < size; i++);
 
     while(head < high) {
         if((p[0] & 3) == 3) {
-            sift(head, width, cmp, arg, pshift, lp);
+            sift(head, width1, cmp, arg, pshift, lp, base1, base2, width2);
             shr(p, 2);
             pshift += 2;
         } else {
             if(lp[pshift - 1] >= high - head) {
-                trinkle(head, width, cmp, arg, p, pshift, 0, lp);
+                trinkle(head, width1, cmp, arg, p, pshift, 0, lp, base1, base2, width2);
             } else {
-                sift(head, width, cmp, arg, pshift, lp);
+                sift(head, width1, cmp, arg, pshift, lp, base1, base2, width2);
             }
 
             if(pshift == 1) {
@@ -216,10 +231,10 @@ void soa_sort_r(void *base, size_t width, size_t nel, cmpfun_r cmp, void *arg) {
         }
 
         p[0] |= 1;
-        head += width;
+        head += width1;
     }
 
-    trinkle(head, width, cmp, arg, p, pshift, 0, lp);
+    trinkle(head, width1, cmp, arg, p, pshift, 0, lp, base1, base2, width2);
 
     while(pshift != 1 || p[0] != 1 || p[1] != 0) {
         if(pshift <= 1) {
@@ -231,12 +246,12 @@ void soa_sort_r(void *base, size_t width, size_t nel, cmpfun_r cmp, void *arg) {
             pshift -= 2;
             p[0] ^= 7;
             shr(p, 1);
-            trinkle(head - lp[pshift] - width, width, cmp, arg, p, pshift + 1, 1, lp);
+            trinkle(head - lp[pshift] - width1, width1, cmp, arg, p, pshift + 1, 1, lp, base1, base2, width2);
             shl(p, 1);
             p[0] |= 1;
-            trinkle(head - width, width, cmp, arg, p, pshift, 1, lp);
+            trinkle(head - width1, width1, cmp, arg, p, pshift, 1, lp, base1, base2, width2);
         }
-        head -= width;
+        head -= width1;
     }
 }
 
@@ -244,8 +259,8 @@ static int wrapper_cmp(const void *v1, const void *v2, void *cmp) {
     return ((cmpfun)cmp)(v1, v2);
 }
 
-void soa_sort(void *base, size_t width, size_t nel, cmpfun cmp) {
-    soa_sort_r(base, width, nel, wrapper_cmp, cmp);
+void soa_sort(void *base1, size_t width1, void *base2, size_t width2, size_t nel, cmpfun cmp) {
+    soa_sort_r(base1, width1, base2, width2, nel, wrapper_cmp, cmp);
 }
 
 #endif // FTB_SOA_SORT_IMPL

@@ -1059,20 +1059,34 @@ auto test_math() -> testresult {
     return pass;
 }
 
+
 auto test_sort() -> testresult {
 
-    u32 arr[16] {
-        1, 2000, 2, 3, 3, 3, 3, 2, 1, 1, 1,1, 2, 12, 1, 19912
+    u64 arr1[4] {
+        4,1,2,3
     };
 
-    soa_sort(arr, sizeof(arr[0]), 16, [] (const void* a, const void* b) -> s32 {
+    struct LageTest {
+        u64 stuff[4];
+        const char* s;
+        u32 lotta_stuff[12];
+    };
+
+    LageTest arr2[4] {
+        {.s = "happy"},
+        {.s = "Hello"},
+        {.s = "World"},
+        {.s = "I am"},
+    };
+
+    soa_sort(arr1, sizeof(arr1[0]), arr2, sizeof(arr2[0]), array_length(arr1), [] (const void* a, const void* b) -> s32 {
         u32 sa = *(u32*)a;
         u32 sb = *(u32*)b;
         return sa - sb;
     });
 
-    for (u32 i = 0; i < array_length(arr); ++i) {
-        print("\n%d", arr[i]);
+    for (u32 i = 0; i < array_length(arr1); ++i) {
+        print("\n%d - %s", arr1[i], arr2[i].s);
     }
 
     return pass;
