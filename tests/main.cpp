@@ -1,6 +1,17 @@
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <string.h>
+
+#define FTB_TRACK_MALLOCS
+#define FTB_PRINT_IMPL
+#define FTB_ALLOCATION_STATS_IMPL
+#define FTB_HASHMAP_IMPL
+#define FTB_SCHEDULER_IMPL
+#define FTB_STACKTRACE_IMPL
+#define FTB_MATH_IMPL
+#define FTB_SOA_SORT_IMPL
+#define FTB_TYPES_IMPL
+
 #include "../types.hpp"
 
 u32 hm_hash(u32 u);
@@ -11,15 +22,6 @@ inline bool hm_objects_match(Key a, Key b);
 
 #define ZoneScoped
 #define ZoneScopedN(name)
-
-#define FTB_TRACK_MALLOCS
-#define FTB_PRINT_IMPL
-#define FTB_ALLOCATION_STATS_IMPL
-#define FTB_HASHMAP_IMPL
-#define FTB_SCHEDULER_IMPL
-#define FTB_STACKTRACE_IMPL
-#define FTB_MATH_IMPL
-#define FTB_SOA_SORT_IMPL
 
 #include "../print.hpp"
 #include "../testing.hpp"
@@ -1061,9 +1063,8 @@ auto test_math() -> testresult {
 
 
 auto test_sort() -> testresult {
-
     u64 arr1[4] {
-        4,1,2,3
+        4,1,3,2
     };
 
     struct LageTest {
@@ -1075,39 +1076,104 @@ auto test_sort() -> testresult {
     LageTest arr2[4] {
         {.s = "happy"},
         {.s = "Hello"},
-        {.s = "World"},
         {.s = "I am"},
+        {.s = "World"},
     };
 
-    soa_sort(arr1, sizeof(arr1[0]), arr2, sizeof(arr2[0]), array_length(arr1), [] (const void* a, const void* b) -> s32 {
-        u32 sa = *(u32*)a;
-        u32 sb = *(u32*)b;
-        return sa - sb;
-    });
+    byte arr3[4] {
+        1, 2, 3, 4
+    };
 
-    for (u32 i = 0; i < array_length(arr1); ++i) {
-        print("\n%d - %s", arr1[i], arr2[i].s);
+    Array_Description arr_decs[] {
+        {.base = arr2, .width = sizeof(arr2[0])},
+        {.base = arr3, .width = sizeof(arr3[0])},
+    };
+
+    soa_sort({arr1, sizeof(arr1[0])},
+             arr_decs, array_length(arr_decs), array_length(arr1),
+             [] (const void* a, const void* b) -> s32 {
+                 u32 sa = *(u32*)a;
+                 u32 sb = *(u32*)b;
+                 return sa - sb;
+             });
+
+    assert_equal_int(arr1[0], 1);
+    assert_equal_int(arr1[1], 2);
+    assert_equal_int(arr1[2], 3);
+    assert_equal_int(arr1[3], 4);
+
+    assert_equal_int(arr3[0], 2);
+    assert_equal_int(arr3[1], 4);
+    assert_equal_int(arr3[2], 3);
+    assert_equal_int(arr3[3], 1);
+
+    assert_equal_string(arr2[0].s, "Hello");
+    assert_equal_string(arr2[1].s, "World");
+    assert_equal_string(arr2[2].s, "I am");
+    assert_equal_string(arr2[3].s, "happy");
+
+
+    {
+        // random test
+        s32 arr1[1000];
+        s32 arr2[1000];
+        s32 arr3[1000];
+        s32 arr4[1000];
+        s32 arr5[1000];
+
+        for (u32 i = 0; i < 1000; ++i) {
+            arr1[i] = rand();
+            arr2[i] = arr1[i];
+            arr3[i] = arr2[i];
+            arr4[i] = arr3[i];
+            arr5[i] = arr4[i];
+        }
+
+        Array_Description arr_decs[] {
+            {.base = arr2, .width = sizeof(arr2[0])},
+            {.base = arr3, .width = sizeof(arr3[0])},
+            {.base = arr4, .width = sizeof(arr4[0])},
+            {.base = arr5, .width = sizeof(arr5[0])},
+        };
+
+        soa_sort({arr1, sizeof(arr1[0])},
+                 arr_decs, array_length(arr_decs), array_length(arr1),
+                 [] (const void* a, const void* b) -> s32 {
+                     s32 sa = *(s32*)a;
+                     s32 sb = *(u32*)b;
+                     return sa - sb;
+                 });
+
+        for (u32 i = 0; i < 999; ++i) {
+            assert_equal_int(arr1[i], arr2[i]);
+            assert_equal_int(arr2[i], arr3[i]);
+            assert_equal_int(arr3[i], arr4[i]);
+            assert_equal_int(arr4[i], arr5[i]);
+
+            assert_true(arr1[i] <= arr1[i+1])
+        }
+
     }
 
     return pass;
 }
 
 s32 main(s32, char**) {
-    defer { print_malloc_stats(); };
+    // defer { print_malloc_stats(); };
 
     testresult result;
 
+    invoke_test(test_math);
     invoke_test(test_sort);
-    // invoke_test(test_math);
-    // invoke_test(test_array_lists_adding_and_removing);
-    // invoke_test(test_array_lists_sorting);
-    // invoke_test(test_array_lists_searching);
-    // invoke_test(test_array_list_sort_many);
-    // invoke_test(test_stack_array_lists);
-    // invoke_test(test_bucket_allocator);
-    // invoke_test(test_queue);
-    // invoke_test(test_hooks);
-    // invoke_test(test_scheduler_animations);
+    invoke_test(test_array_lists_adding_and_removing);
+    invoke_test(test_array_lists_sorting);
+    invoke_test(test_array_lists_searching);
+    invoke_test(test_array_list_sort_many);
+    invoke_test(test_stack_array_lists);
+    invoke_test(test_bucket_allocator);
+    invoke_test(test_queue);
+    invoke_test(test_hooks);
+    invoke_test(test_scheduler_animations);
 
     return 0;
 }

@@ -1,5 +1,4 @@
 #pragma once
-
 /* Copyright (C) 2011 by Valentin Ochs
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -26,6 +25,17 @@
 /* Smoothsort, an adaptive variant of Heapsort.  Memory usage: O(1).
    Run time: Worst case O(n log n), close to O(n) in the mostly-sorted case. */
 
+// NOTE(Felix): Above you can see the original copyright. I adjusted the source
+//   a bit to be able to do the soa sorting. The result might not be the best an
+//   I am also not sure if the O(1) memory usage still holds, as we use alloca
+//   now in `cycle'. The resulting code is also not quite as optimized as it
+//   could be, again in `cycle' for every additional array that is processed we
+//   compute the same original indices of the main array over and over. So there
+//   is potential to speed it up, but for caching the indices, we would need
+//   another alloca?  --  02/Nov/2021
+
+
+#include <vcruntime.h>
 #define _BSD_SOURCE
 #include <stdint.h>
 #include <stdlib.h>
@@ -40,16 +50,16 @@
 typedef int (*cmpfun_r)(const void *, const void *, void *);
 typedef int (*cmpfun)(const void *, const void *);
 
-// struct Array_Description {
-//     void* base;
-//     u64   element_size;
-// };
+struct Array_Description {
+    void* base;
+    u64   width;
+};
 
-#define FTB_SOA_SORT_IMPL
 #ifndef FTB_SOA_SORT_IMPL
 
-// void soa_sort_r(Array_Description* arrays, u32 array_count, u32 array_element_count, cmpfun_r cmp, void* arg);
-// void soa_sort(Array_Description* arrays, u32 array_count, u32 array_element_count, cmpfun cmp);
+void soa_sort_r(Array_Description main, Array_Description* others, size_t other_count, size_t nel, cmpfun_r cmp, void *arg);
+void soa_sort(Array_Description main, Array_Description* others, size_t other_count, size_t nel, cmpfun cmp);
+void sort(Array_Description main, size_t nel, cmpfun cmp);
 
 #else // implementations
 
@@ -70,8 +80,12 @@ inline auto get_element_idx(void* base, void* element, u64 width) -> u32 {
     return ((byte*)element - (byte*)base) / width;
 }
 
-static void cycle(byte* ar[], int n, void *base1, size_t width1, void* base2, size_t width2) {
-    byte* tmp = (byte*)alloca(width1 > width2 ? width1 : width2); // max of all widths
+static void cycle(byte* ar[], int n, Array_Description main, Array_Description* others, size_t other_count) {
+    size_t max_width = main.width;
+    for (u32 i = 0; i < other_count; ++i) {
+        max_width = max_width > others[i].width ? max_width: others[i].width;
+    }
+
 
     int i;
 
@@ -79,34 +93,37 @@ static void cycle(byte* ar[], int n, void *base1, size_t width1, void* base2, si
         return;
     }
 
+    byte* tmp = (byte*)alloca(max_width); // max of all widths
     ar[n] = tmp;
 
-    // second array
+    // other arrays
     {
+        for (int arr_idx = 0; arr_idx < other_count; ++arr_idx) {
+            memcpy(ar[n],
+                   ((byte*)others[arr_idx].base)+(get_element_idx(main.base, ar[0], main.width) * others[arr_idx].width), others[arr_idx].width);
+            for(i = 0; i < n-1; i++) {
+                memcpy(((byte*)others[arr_idx].base)+(get_element_idx(main.base, ar[i], main.width) * others[arr_idx].width),
+                       ((byte*)others[arr_idx].base)+(get_element_idx(main.base, ar[i+1], main.width) * others[arr_idx].width), others[arr_idx].width);
+            }
+            memcpy(((byte*)others[arr_idx].base)+(get_element_idx(main.base, ar[n-1], main.width) * others[arr_idx].width),
+                   ar[n], others[arr_idx].width);
 
-        memcpy(ar[n],
-               ((byte*)base2)+(get_element_idx(base1, ar[0], width1) * width2), width2);
-        for(i = 0; i < n-1; i++) {
-            memcpy(((byte*)base2)+(get_element_idx(base1, ar[i], width1) * width2),
-                   ((byte*)base2)+(get_element_idx(base1, ar[i+1], width1) * width2), width2);
         }
-        memcpy(((byte*)base2)+(get_element_idx(base1, ar[n-1], width1) * width2),
-               ar[n], width2);
+
     }
 
     // original array
     {
-        memcpy(ar[n], ar[0], width1);
+        memcpy(ar[n], ar[0], main.width);
         for(i = 0; i < n; i++) {
-            memcpy(ar[i], ar[i + 1], width1);
-            ar[i] += width1;
+            memcpy(ar[i], ar[i + 1], main.width);
+            ar[i] += main.width;
         }
     }
 }
 
 /* shl() and shr() need n > 0 */
-static inline void shl(size_t p[2], int n)
-{
+static inline void shl(size_t p[2], int n) {
     if(n >= 8 * sizeof(size_t)) {
         n -= 8 * sizeof(size_t);
         p[1] = p[0];
@@ -117,8 +134,7 @@ static inline void shl(size_t p[2], int n)
     p[0] <<= n;
 }
 
-static inline void shr(size_t p[2], int n)
-{
+static inline void shr(size_t p[2], int n) {
     if(n >= 8 * sizeof(size_t)) {
         n -= 8 * sizeof(size_t);
         p[0] = p[1];
@@ -129,15 +145,15 @@ static inline void shr(size_t p[2], int n)
     p[1] >>= n;
 }
 
-static void sift(byte *head, size_t width, cmpfun_r cmp, void *arg, int pshift, size_t lp[], void* base1, void *base2, size_t width2) {
+static void sift(byte *head, cmpfun_r cmp, void *arg, int pshift, size_t lp[], Array_Description main, Array_Description* others, size_t other_count) {
     byte *rt, *lf;
     byte *ar[14 * sizeof(size_t) + 1];
     int i = 1;
 
     ar[0] = head;
     while(pshift > 1) {
-        rt = head - width;
-        lf = head - width - lp[pshift - 2];
+        rt = head - main.width;
+        lf = head - main.width - lp[pshift - 2];
 
         if(cmp(ar[0], lf, arg) >= 0 && cmp(ar[0], rt, arg) >= 0) {
             break;
@@ -152,10 +168,10 @@ static void sift(byte *head, size_t width, cmpfun_r cmp, void *arg, int pshift, 
             pshift -= 2;
         }
     }
-    cycle(ar, i, base1, width, base2, width2);
+    cycle(ar, i, main, others, other_count);
 }
 
-static void trinkle(byte *head, size_t width, cmpfun_r cmp, void *arg, size_t pp[2], int pshift, int trusty, size_t lp[], void* base1, void *base2, size_t width2) {
+static void trinkle(byte *head, cmpfun_r cmp, void *arg, size_t pp[2], int pshift, int trusty, size_t lp[], Array_Description main, Array_Description* others, size_t other_count) {
     byte *stepson,
         *rt, *lf;
     size_t p[2];
@@ -173,8 +189,8 @@ static void trinkle(byte *head, size_t width, cmpfun_r cmp, void *arg, size_t pp
             break;
         }
         if(!trusty && pshift > 1) {
-            rt = head - width;
-            lf = head - width - lp[pshift - 2];
+            rt = head - main.width;
+            lf = head - main.width - lp[pshift - 2];
             if(cmp(rt, stepson, arg) >= 0 || cmp(lf, stepson, arg) >= 0) {
                 break;
             }
@@ -188,14 +204,14 @@ static void trinkle(byte *head, size_t width, cmpfun_r cmp, void *arg, size_t pp
         trusty = 0;
     }
     if(!trusty) {
-        cycle(ar, i, base1, width, base2, width2);
-        sift(head, width, cmp, arg, pshift, lp, base1, base2, width2);
+        cycle(ar, i, main, others, other_count);
+        sift(head, cmp, arg, pshift, lp, main, others, other_count);
     }
 }
 
-void soa_sort_r(void *base1, size_t width1, void *base2, size_t width2, size_t nel, cmpfun_r cmp, void *arg) {
+void soa_sort_r(Array_Description main, Array_Description* others, size_t other_count, size_t nel, cmpfun_r cmp, void *arg) {
     size_t lp[12*sizeof(size_t)];
-    size_t i, size = width1 * nel;
+    size_t i, size = main.width * nel;
     byte *head, *high;
     size_t p[2] = {1, 0};
     int pshift = 1;
@@ -203,22 +219,22 @@ void soa_sort_r(void *base1, size_t width1, void *base2, size_t width2, size_t n
 
     if (!size) return;
 
-    head = (byte*)base1;
-    high = head + size - width1;
+    head = (byte*)main.base;
+    high = head + size - main.width;
 
     /* Precompute Leonardo numbers, scaled by element width */
-    for(lp[0]=lp[1]=width1, i=2; (lp[i]=lp[i-2]+lp[i-1]+width1) < size; i++);
+    for(lp[0]=lp[1]=main.width, i=2; (lp[i]=lp[i-2]+lp[i-1]+main.width) < size; i++);
 
     while(head < high) {
         if((p[0] & 3) == 3) {
-            sift(head, width1, cmp, arg, pshift, lp, base1, base2, width2);
+            sift(head, cmp, arg, pshift, lp, main, others, other_count);
             shr(p, 2);
             pshift += 2;
         } else {
             if(lp[pshift - 1] >= high - head) {
-                trinkle(head, width1, cmp, arg, p, pshift, 0, lp, base1, base2, width2);
+                trinkle(head, cmp, arg, p, pshift, 0, lp, main, others, other_count);
             } else {
-                sift(head, width1, cmp, arg, pshift, lp, base1, base2, width2);
+                sift(head, cmp, arg, pshift, lp, main, others, other_count);
             }
 
             if(pshift == 1) {
@@ -231,10 +247,10 @@ void soa_sort_r(void *base1, size_t width1, void *base2, size_t width2, size_t n
         }
 
         p[0] |= 1;
-        head += width1;
+        head += main.width;
     }
 
-    trinkle(head, width1, cmp, arg, p, pshift, 0, lp, base1, base2, width2);
+    trinkle(head, cmp, arg, p, pshift, 0, lp, main, others, other_count);
 
     while(pshift != 1 || p[0] != 1 || p[1] != 0) {
         if(pshift <= 1) {
@@ -246,12 +262,12 @@ void soa_sort_r(void *base1, size_t width1, void *base2, size_t width2, size_t n
             pshift -= 2;
             p[0] ^= 7;
             shr(p, 1);
-            trinkle(head - lp[pshift] - width1, width1, cmp, arg, p, pshift + 1, 1, lp, base1, base2, width2);
+            trinkle(head - lp[pshift] - main.width, cmp, arg, p, pshift + 1, 1, lp, main, others, other_count);
             shl(p, 1);
             p[0] |= 1;
-            trinkle(head - width1, width1, cmp, arg, p, pshift, 1, lp, base1, base2, width2);
+            trinkle(head - main.width, cmp, arg, p, pshift, 1, lp, main, others, other_count);
         }
-        head -= width1;
+        head -= main.width;
     }
 }
 
@@ -259,8 +275,13 @@ static int wrapper_cmp(const void *v1, const void *v2, void *cmp) {
     return ((cmpfun)cmp)(v1, v2);
 }
 
-void soa_sort(void *base1, size_t width1, void *base2, size_t width2, size_t nel, cmpfun cmp) {
-    soa_sort_r(base1, width1, base2, width2, nel, wrapper_cmp, cmp);
+void soa_sort(Array_Description main, Array_Description* others, size_t other_count, size_t nel, cmpfun cmp) {
+    soa_sort_r(main, others, other_count, nel, wrapper_cmp, cmp);
 }
+
+void sort(Array_Description main, size_t nel, cmpfun cmp) {
+    soa_sort(main, nullptr, 0, nel, cmp);
+}
+
 
 #endif // FTB_SOA_SORT_IMPL
