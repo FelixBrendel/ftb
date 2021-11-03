@@ -1,3 +1,4 @@
+#include <stdint.h>
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <string.h>
@@ -33,6 +34,7 @@ inline bool hm_objects_match(Key a, Key b);
 #include "../scheduler.cpp"
 #include "../math.hpp"
 #include "../soa_sort.hpp"
+#include "../kd_tree.hpp"
 
 
 u32 hm_hash(u32 u) {
@@ -1158,22 +1160,96 @@ auto test_sort() -> testresult {
     return pass;
 }
 
+auto test_kd_tree() -> testresult {
+
+    Array_List<V3> points;
+    points.init_from({
+        {0,0,0}, {1,1,1},
+        {2,2,2}, {3,3,3},
+    });
+
+    Array_List<int> payloads;
+    payloads.init_from({
+            0,1,2,3,
+    });
+
+    auto tree = Kd_Tree<int>::build_from(points.count, points.data, payloads.data);
+    Array_List<V3> query_points;
+    query_points.init();
+    Array_List<int> query_payloads;
+    query_payloads.init();
+
+
+    {
+        query_points.clear();
+        query_payloads.clear();
+
+        AxisAlignedBox aabb {
+            .min { 0.5, 0.5, 0.5 },
+            .max { 3.5, 3.5, 3.5 }
+        };
+
+        tree.query_in_aabb(aabb, &query_points, &query_payloads);
+
+        assert_equal_int(query_points.count, 3);
+        assert_equal_int(query_payloads.count, 3);
+    }
+
+    {
+        query_points.clear();
+        query_payloads.clear();
+
+        tree.query_in_sphere({0.5, 0.5, 0.5}, 1, &query_points, &query_payloads);
+
+        assert_equal_int(query_points.count, 2);
+        assert_equal_int(query_payloads.count, 2);
+
+    }
+    {
+        query_points.clear();
+        query_payloads.clear();
+
+        Kd_Tree tree;
+        tree.add({0,0,0});
+        tree.add({1,0,0});
+        tree.add({0,1,0});
+        tree.add({0,0,1});
+        tree.add({1,1,1});
+
+        tree.query_in_sphere({1, 0, 0}, 1.1, &query_points, nullptr);
+        assert_equal_int(query_points.count, 2);
+        assert_equal_int(tree.get_count_in_sphere({1,0,0}, 1.1), 2);
+
+        query_points.clear();
+        tree.query_in_sphere({0, 0, 0}, 1.1, &query_points, nullptr);
+        assert_equal_int(query_points.count, 4);
+        assert_equal_int(tree.get_count_in_sphere({0,0,0}, 1.1), 4);
+
+        query_points.clear();
+        tree.query_in_sphere({0, 0, 0}, 2, &query_points, nullptr);
+        assert_equal_int(query_points.count, 5);
+        assert_equal_int(tree.get_count_in_sphere({0,0,0}, 2), 5);
+    }
+    return pass;
+}
+
 s32 main(s32, char**) {
     // defer { print_malloc_stats(); };
 
     testresult result;
 
-    invoke_test(test_math);
-    invoke_test(test_sort);
-    invoke_test(test_array_lists_adding_and_removing);
-    invoke_test(test_array_lists_sorting);
-    invoke_test(test_array_lists_searching);
-    invoke_test(test_array_list_sort_many);
-    invoke_test(test_stack_array_lists);
-    invoke_test(test_bucket_allocator);
-    invoke_test(test_queue);
-    invoke_test(test_hooks);
-    invoke_test(test_scheduler_animations);
+    invoke_test(test_kd_tree);
+    // invoke_test(test_math);
+    // invoke_test(test_sort);
+    // invoke_test(test_array_lists_adding_and_removing);
+    // invoke_test(test_array_lists_sorting);
+    // invoke_test(test_array_lists_searching);
+    // invoke_test(test_array_list_sort_many);
+    // invoke_test(test_stack_array_lists);
+    // invoke_test(test_bucket_allocator);
+    // invoke_test(test_queue);
+    // invoke_test(test_hooks);
+    // invoke_test(test_scheduler_animations);
 
     return 0;
 }
