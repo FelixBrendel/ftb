@@ -1,5 +1,5 @@
-#include <stdint.h>
 #define _CRT_SECURE_NO_WARNINGS
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -21,9 +21,7 @@ struct Key;
 u32 hm_hash(Key u);
 inline bool hm_objects_match(Key a, Key b);
 
-#define ZoneScoped
-#define ZoneScopedN(name)
-
+#include "../math.hpp"
 #include "../print.hpp"
 #include "../testing.hpp"
 #include "../bucket_allocator.hpp"
@@ -31,8 +29,7 @@ inline bool hm_objects_match(Key a, Key b);
 #include "../hooks.hpp"
 #include "../hashmap.hpp"
 #include "../stacktrace.hpp"
-#include "../scheduler.cpp"
-#include "../math.hpp"
+#include "../scheduler.hpp"
 #include "../soa_sort.hpp"
 #include "../kd_tree.hpp"
 
@@ -250,42 +247,6 @@ auto test_stack_array_lists() -> testresult {
 
     assert_equal_int(sum, 6);
     assert_equal_int(iter, 2);
-
-    return pass;
-}
-
-auto test_queue() -> testresult {
-    Queue<int> q;
-    q.init(4);
-    defer {
-        q.deinit();
-    };
-
-    assert_true(q.is_empty());
-    assert_equal_int(q.get_count(), 0);
-
-    q.push_back(1);
-    q.push_back(2);
-    q.push_back(3);
-
-    assert_equal_int(q.get_count(), 3);
-
-    assert_equal_int(q.get_next(), 1);
-    assert_equal_int(q.get_count(), 2);
-    assert_true(!q.is_empty());
-
-    assert_equal_int(q.get_next(), 2);
-    assert_equal_int(q.get_count(), 1);
-    q.push_back(4);
-    assert_equal_int(q.get_count(), 2);
-
-    assert_equal_int(q.get_next(), 3);
-    assert_equal_int(q.get_count(), 1);
-    assert_true(!q.is_empty());
-
-    assert_equal_int(q.get_next(), 4);
-    assert_true(q.is_empty());
-    assert_equal_int(q.get_count(), 0);
 
     return pass;
 }
@@ -1184,7 +1145,7 @@ auto test_kd_tree() -> testresult {
         query_points.clear();
         query_payloads.clear();
 
-        AxisAlignedBox aabb {
+        Axis_Aligned_Box aabb {
             .min { 0.5, 0.5, 0.5 },
             .max { 3.5, 3.5, 3.5 }
         };
@@ -1233,23 +1194,134 @@ auto test_kd_tree() -> testresult {
     return pass;
 }
 
+auto test_bucket_list() -> testresult {
+    Bucket_List<int> list;
+    list.init(/*bucket size  = */ 2,
+              /*bucket count = */ 1);
+    defer { list.deinit(); };
+
+    list.append(1);
+    list.append(2);
+    list.append(3);
+
+    assert_equal_int(list.count(), 3);
+
+    u32 index = 0;
+    list.for_each([&](int* i) -> testresult {
+        ++index;
+        assert_equal_int(index, *i);
+        return pass;
+    });
+
+    assert_equal_int(list[0], 1);
+    assert_equal_int(list[1], 2);
+    assert_equal_int(list[2], 3);
+
+    list.remove_index(1);
+    assert_equal_int(list.count(), 2);
+    assert_equal_int(list[0], 1);
+    assert_equal_int(list[1], 3);
+
+    index = 0;
+    list.for_each([&](int* i) -> testresult {
+        if (index == 0) {
+            assert_equal_int(1, *i);
+        } else {
+            assert_equal_int(3, *i);
+        }
+        ++index;
+        return pass;
+    });
+
+    list[0] = 3;
+    assert_equal_int(list.count(), 2);
+    assert_equal_int(list[0], 3);
+    list.append(3);
+    list.append(3);
+    list.append(3);
+    list.append(10);
+    assert_equal_int(list.count(), 6);
+
+    return pass;
+}
+
+
+auto test_bucket_queue() -> testresult {
+    Bucket_Queue<int> q;
+    q.init(/*bucket size  = */ 2,
+           /*bucket count = */ 1);
+    defer { q.deinit(); };
+
+    assert_equal_int(q.count(), 0);
+
+    q.push_back(0);
+    q.push_back(1);
+    q.push_back(2);
+    q.push_back(3);
+
+    assert_equal_int(q.count(), 4);
+
+    assert_equal_int(q.get_next(), 0);
+    assert_equal_int(q.get_next(), 1);
+    assert_equal_int(q.get_next(), 2);
+    assert_equal_int(q.get_next(), 3);
+
+    assert_equal_int(q.count(), 0);
+
+    q.push_back(3);
+    q.push_back(2);
+    q.push_back(1);
+    q.push_back(0);
+
+    assert_equal_int(q.get_next(), 3);
+    assert_equal_int(q.get_next(), 2);
+    assert_equal_int(q.get_next(), 1);
+    assert_equal_int(q.get_next(), 0);
+
+    assert_equal_int(q.count(), 0);
+
+    q.push_back(0);
+    q.push_back(1);
+    assert_equal_int(q.get_next(), 0);
+    q.push_back(2);
+    assert_equal_int(q.get_next(), 1);
+    q.push_back(3);
+    assert_equal_int(q.get_next(), 2);
+    q.push_back(4);
+    assert_equal_int(q.get_next(), 3);
+    q.push_back(5);
+    assert_equal_int(q.get_next(), 4);
+    q.push_back(6);
+    assert_equal_int(q.get_next(), 5);
+    q.push_back(7);
+    assert_equal_int(q.get_next(), 6);
+    assert_equal_int(q.get_next(), 7);
+
+    assert_equal_int(q.bucket_list.allocator.next_index_in_latest_bucket, 0);
+    assert_equal_int(q.bucket_list.allocator.next_bucket_index,0);
+    assert_equal_int(q.start_idx,0);
+
+    return pass;
+}
+
 s32 main(s32, char**) {
-    // defer { print_malloc_stats(); };
+    defer { print_malloc_stats(); };
 
     testresult result;
 
+    invoke_test(test_bucket_queue);
+    invoke_test(test_bucket_list);
     invoke_test(test_kd_tree);
-    // invoke_test(test_math);
-    // invoke_test(test_sort);
-    // invoke_test(test_array_lists_adding_and_removing);
-    // invoke_test(test_array_lists_sorting);
-    // invoke_test(test_array_lists_searching);
-    // invoke_test(test_array_list_sort_many);
-    // invoke_test(test_stack_array_lists);
-    // invoke_test(test_bucket_allocator);
-    // invoke_test(test_queue);
-    // invoke_test(test_hooks);
-    // invoke_test(test_scheduler_animations);
+    invoke_test(test_math);
+    invoke_test(test_sort);
+    invoke_test(test_array_lists_adding_and_removing);
+    invoke_test(test_array_lists_sorting);
+    invoke_test(test_array_lists_searching);
+    invoke_test(test_array_list_sort_many);
+    invoke_test(test_stack_array_lists);
+    invoke_test(test_bucket_allocator);
+    invoke_test(test_hooks);
+    invoke_test(test_scheduler_animations);
 
     return 0;
 }

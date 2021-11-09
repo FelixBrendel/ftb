@@ -214,6 +214,11 @@ struct Array_List {
     }
 
     void remove_index(u32 index) {
+#ifdef FTB_INTERNAL_DEBUG
+        if (index >= count) {
+            fprintf(stderr, "ERROR: removing index that is not in use\n");
+        }
+#endif
         data[index] = data[--count];
     }
 
@@ -332,51 +337,51 @@ struct Auto_Array_List : public Array_List<type> {
     }
 };
 
-template <typename type>
-struct Queue {
-    Array_List<type> arr_list;
-    u32 next_index;
+// template <typename type>
+// struct Queue {
+//     Array_List<type> arr_list;
+//     u32 next_index;
 
-    void init(u32 initial_capacity = 16) {
-        next_index = 0;
-        arr_list.init(initial_capacity);
-    }
+//     void init(u32 initial_capacity = 16) {
+//         next_index = 0;
+//         arr_list.init(initial_capacity);
+//     }
 
-    void deinit() {
-        arr_list.deinit();
-    }
+//     void deinit() {
+//         arr_list.deinit();
+//     }
 
-    void push_back(type e) {
-        arr_list.append(e);
-    }
+//     void push_back(type e) {
+//         arr_list.append(e);
+//     }
 
-    type get_next() {
-#ifdef FTB_INTERNAL_DEBUG
-        if (next_index >= arr_list.length) {
-            fprintf(stderr, "ERROR: Out of bounds access in queue\n");
-        }
-#endif
-        return arr_list.data[next_index++];
-    }
+//     type get_next() {
+// #ifdef FTB_INTERNAL_DEBUG
+//         if (next_index >= arr_list.length) {
+//             fprintf(stderr, "ERROR: Out of bounds access in queue\n");
+//         }
+// #endif
+//         return arr_list.data[next_index++];
+//     }
 
-    bool is_empty() {
-        return next_index == arr_list.count;
-    }
+//     bool is_empty() {
+//         return next_index == arr_list.count;
+//     }
 
-    int get_count() {
-        return arr_list.count - next_index;
-    }
+//     int get_count() {
+//         return arr_list.count - next_index;
+//     }
 
-    bool contains(type elem) {
-        for (u32 i = next_index; i < arr_list.count; ++i) {
-            if (arr_list[i] == elem)
-                return true;
-        }
-        return false;
-    }
+//     bool contains(type elem) {
+//         for (u32 i = next_index; i < arr_list.count; ++i) {
+//             if (arr_list[i] == elem)
+//                 return true;
+//         }
+//         return false;
+//     }
 
-    void clear() {
-        next_index = 0;
-        arr_list.clear();
-    }
-};
+//     void clear() {
+//         next_index = 0;
+//         arr_list.clear();
+//     }
+// };

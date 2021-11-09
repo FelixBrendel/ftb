@@ -129,5 +129,136 @@ struct Bucket_Allocator {
     void free_object(type* obj) {
         free_list.append(obj);
     }
+};
 
+
+template <typename type>
+struct Bucket_List {
+    Bucket_Allocator<type> allocator;
+
+    void init(u32 bucket_size = 16, u32 initial_bucket_count = 8) {
+        allocator.init(bucket_size, initial_bucket_count);
+    }
+
+    void deinit() {
+        allocator.deinit();
+    }
+
+    void clear() {
+        allocator.clear();
+    }
+
+    u32 count() {
+        return
+            allocator.next_bucket_index * allocator.bucket_size +
+            allocator.next_index_in_latest_bucket;
+    }
+
+    void append(type elem) {
+        type* mem = allocator.allocate();
+        *mem = elem;
+    }
+
+    void remove_index(u32 index) {
+        u32 el_count = count();
+
+#ifdef FTB_INTERNAL_DEBUG
+        if (index >= el_count) {
+            fprintf(stderr, "ERROR: removing index that is not in use\n");
+        }
+#endif
+
+        type last = (*this)[el_count-1];
+
+        (*this)[index] = last;
+
+        if (allocator.next_index_in_latest_bucket == 0) {
+            --allocator.next_bucket_index;
+            allocator.next_index_in_latest_bucket = allocator.bucket_size-1;
+        } else {
+            --allocator.next_index_in_latest_bucket;
+        }
+    }
+
+    type& operator[] (u32 index) {
+#ifdef FTB_INTERNAL_DEBUG
+        u32 el_count = count();
+        if (index >= el_count) {
+            fprintf(stderr, "ERROR: accessing index that is not in use\n");
+        }
+#endif
+
+        u32 bucket_idx    = index / allocator.bucket_size;
+        u32 idx_in_bucket = index % allocator.bucket_size;
+        return allocator.buckets[bucket_idx][idx_in_bucket];
+    }
+
+    template <typename lambda>
+    void for_each(lambda p) {
+        allocator.for_each(p);
+    }
+};
+
+template <typename type>
+struct Bucket_Queue {
+    Bucket_List<type> bucket_list;
+    u32 start_idx;
+
+    void init(u32 bucket_size = 16, u32 initial_bucket_count = 8) {
+        bucket_list.init(bucket_size, initial_bucket_count);
+        start_idx = 0;
+    }
+
+    void deinit() {
+        bucket_list.deinit();
+    }
+
+    void push_back(type e) {
+        bucket_list.append(e);
+    }
+
+    type get_next() {
+#ifdef FTB_INTERNAL_DEBUG
+        if (start_idx == 0 &&
+            bucket_list.allocator.next_index_in_latest_bucket == 0 &&
+            bucket_list.allocator.next_bucket_index == 0)
+        {
+            fprintf(stderr, "ERROR: queue has no next element\n");
+        }
+#endif
+
+        type result = bucket_list[start_idx++];
+
+        // maybe garbage collect left bucket
+        if (start_idx >= bucket_list.allocator.bucket_size) {
+            start_idx -= bucket_list.allocator.bucket_size;
+
+            for (u32 i = 0; i < bucket_list.allocator.next_bucket_index; ++i) {
+                bucket_list.allocator.buckets[i] = bucket_list.allocator.buckets[i+1];
+            }
+            --bucket_list.allocator.next_bucket_index;
+        }
+
+
+        // maybe reset if queue now empty
+        if (start_idx == bucket_list.allocator.next_index_in_latest_bucket &&
+            bucket_list.allocator.next_bucket_index == 0)
+        {
+            bucket_list.allocator.next_index_in_latest_bucket = 0;
+            bucket_list.allocator.next_bucket_index = 0;
+            start_idx = 0;
+        }
+
+        return result;
+
+
+    }
+
+    u32 count() {
+        return bucket_list.count() - start_idx;
+    }
+
+    bool is_empty() {
+        return count() == 0;
+    }
 };

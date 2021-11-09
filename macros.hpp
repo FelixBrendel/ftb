@@ -8,13 +8,13 @@
 #  include <signal.h> // for sigtrap
 #endif
 
-#include <functional>
+// #include <functional>
 
-#define concat(x, y) x ## y
-#define label(x, y) concat(x, y)
+#define CONCAT(x, y) x ## y
+#define LABEL(x, y) CONCAT(x, y)
 
 #define MPI_LABEL(id1,id2)                              \
-    label(MPI_LABEL_ ## id1 ## _ ## id2 ## _, __LINE__)
+    LABEL(MPI_LABEL_ ## id1 ## _ ## id2 ## _, __LINE__)
 
 #define MPP_DECLARE(labid, declaration)                 \
     if (0)                                              \
@@ -83,20 +83,20 @@ expands to:
 #endif
 #define ignore_stdout                                                   \
     if (0)                                                              \
-        label(finished,__LINE__): ;                                     \
+        LABEL(finished,__LINE__): ;                                     \
     else                                                                \
-        for (FILE* label(fluid_let_, __LINE__) = ftb_stdout;;)                             \
-            for (defer{ fclose(ftb_stdout); ftb_stdout=label(fluid_let_, __LINE__) ; } ;;) \
+        for (FILE* LABEL(fluid_let_, __LINE__) = ftb_stdout;;)                             \
+            for (defer{ fclose(ftb_stdout); ftb_stdout=LABEL(fluid_let_, __LINE__) ; } ;;) \
                 if (1) {                                                \
                     ftb_stdout = fopen(NULL_HANDLE, "w");               \
-                    goto label(body,__LINE__);                          \
+                    goto LABEL(body,__LINE__);                          \
                 }                                                       \
                 else                                                    \
                     while (1)                                           \
                         if (1) {                                        \
-                            goto label(finished, __LINE__);             \
+                            goto LABEL(finished, __LINE__);             \
                         }                                               \
-                        else label(body,__LINE__):
+                        else LABEL(body,__LINE__):
 
 
 /*****************
@@ -105,13 +105,13 @@ expands to:
 
 #define fluid_let(var, val)                                             \
     if (0)                                                              \
-        label(finished,__LINE__): ;                               \
+        LABEL(finished,__LINE__): ;                               \
     else                                                                \
-        for (auto label(fluid_let_, __LINE__) = var;;)            \
-            for (defer{var = label(fluid_let_, __LINE__);};;)     \
+        for (auto LABEL(fluid_let_, __LINE__) = var;;)            \
+            for (defer{var = LABEL(fluid_let_, __LINE__);};;)     \
                 for(var = val;;)                                        \
                     if (1) {                                            \
-                        goto label(body,__LINE__);                \
+                        goto LABEL(body,__LINE__);                \
                     }                                                   \
                     else                                                \
                         while (1)                                       \

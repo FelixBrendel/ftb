@@ -24,7 +24,7 @@ rem %BINDIR_WIN%\g++_%EXE_WIN%
 
 echo.
 echo cl:
-cl %SRC% /std:c++latest /nologo /Zi /Fd: %BINDIR_WIN%\cl_%EXE_WIN%.pdb /Fo: %BINDIR_WIN%\ /Fe: %BINDIR_WIN%\cl_%EXE_WIN% /wd4090
+cl %SRC% /std:c++latest /nologo /Zi /Fd: %BINDIR_WIN%\cl_%EXE_WIN%.pdb /Fo: %BINDIR_WIN%\ /Fe: %BINDIR_WIN%\cl_%EXE_WIN% /wd4090 /DFTB_INTERNAL_DEBUG
 %BINDIR_WIN%\cl_%EXE_WIN%
 
 rem echo.

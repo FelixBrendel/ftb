@@ -1,16 +1,17 @@
 #pragma once
-#define _CRT_SECURE_NO_WARNINGS
 
+#include "platform.hpp"
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <malloc.h>
 #include <string.h>
-#include "platform.hpp"
 
 #ifdef FTB_WINDOWS
-#include <Windows.h>
+#  include <Windows.h>
 #endif
+
 #include "hashmap.hpp"
 #include "hooks.hpp"
 
@@ -49,9 +50,6 @@ enum struct Printer_Function_Type {
 #ifndef FTB_PRINT_IMPL
 
 auto register_printer_ptr(const char* spec, printer_function_ptr fun, Printer_Function_Type type) -> void;
-
-// auto maybe_special_print(FILE* file, static_string format, int* pos, va_list* arg_list) -> s32;
-// auto maybe_fprintf(FILE* file, static_string format, int* pos, va_list* arg_list) -> s32 ;
 auto print_va_args_to_file(FILE* file, static_string format, va_list* arg_list) -> s32;
 auto print_va_args_to_string(char** out, static_string format, va_list* arg_list)  -> s32;
 auto print_va_args(static_string format, va_list* arg_list) -> s32;
@@ -59,30 +57,15 @@ auto print_to_string(char** out, static_string format, ...) -> s32;
 auto print_to_file(FILE* file, static_string format, ...) -> s32;
 auto print(static_string format, ...) -> s32;
 auto println(static_string format, ...) -> s32;
-
-// auto print_bool(FILE* f, u32 val) -> s32;
-// auto print_u32(FILE* f, u32 num) -> s32;
-// auto print_spaces(FILE* f, s32 num) -> s32;
-// auto print_u64(FILE* f, u64 num) -> s32;
-// auto print_s32(FILE* f, s32 num) -> s32;
-// auto print_s64(FILE* f, s64 num) -> s32;
-// auto print_flt(FILE* f, double arg) -> s32;
-// auto print_str(FILE* f, char* str) -> s32;
-// auto print_color_start(FILE* f, char* str) -> s32;
-// auto print_color_end(FILE* f) -> s32;
-// auto print_ptr(FILE* f, void* ptr) -> s32;
-// auto print_Str(FILE* f, String* str) -> s32;
-// auto print_str_line(FILE* f, char* str) -> s32;
-
 auto init_printer() -> void;
 auto deinit_printer() -> void;
 
 #else // implementations
 FILE* ftb_stdout = stdout;
 
-Array_List<char*>                     color_stack  = {0};
-Hash_Map<char*, printer_function_ptr> printer_map  = {0};
-Hash_Map<char*, int>                  type_map     = {0};
+Array_List<char*>                     color_stack = {};
+Hash_Map<char*, printer_function_ptr> printer_map = {};
+Hash_Map<char*, int>                  type_map    = {};
 
 void register_printer_ptr(const char* spec, printer_function_ptr fun, Printer_Function_Type type) {
     printer_map.set_object((char*)spec, fun);
@@ -535,6 +518,57 @@ auto print_str_line(FILE* f, char* str) -> s32 {
     return print_to_file(f, "%.*s", length, str);
 }
 
+#ifdef FTB_USING_MATH
+auto print_v2(FILE* f, V2* v2) -> s32 {
+    return print_to_file(f, "{ %f %f }",
+                         v2->x, v2->y);
+}
+
+auto print_v3(FILE* f, V3* v3) -> s32 {
+    return print_to_file(f, "{ %f %f %f }",
+                         v3->x, v3->y, v3->z);
+}
+
+auto print_v4(FILE* f, V4* v4) -> s32 {
+    return print_to_file(f, "{ %f %f %f %f }",
+                         v4->x, v4->y, v4->z, v4->w);
+}
+
+auto print_quat(FILE* f, Quat* quat) -> s32 {
+    return print_v4(f, quat);
+}
+
+auto print_m2x2(FILE* f, M2x2* m2x2) -> s32 {
+    return print_to_file(f,
+                         "{ %f %f\n"
+                         "  %f %f }",
+                         m2x2->_00, m2x2->_01,
+                         m2x2->_10, m2x2->_11);
+}
+
+auto print_m3x3(FILE* f, M3x3* m3x3) -> s32 {
+    return print_to_file(f,
+                         "{ %f %f %f\n"
+                         "  %f %f %f\n"
+                         "  %f %f %f }",
+                         m3x3->_00, m3x3->_01, m3x3->_02,
+                         m3x3->_10, m3x3->_11, m3x3->_12,
+                         m3x3->_20, m3x3->_21, m3x3->_22);
+}
+
+auto print_m4x4(FILE* f, M4x4* m4x4) -> s32 {
+    return print_to_file(f,
+                         "{ %f %f %f %f \n"
+                         "  %f %f %f %f \n"
+                         "  %f %f %f %f \n"
+                         "  %f %f %f %f }",
+                         m4x4->_00, m4x4->_01, m4x4->_02, m4x4->_03,
+                         m4x4->_10, m4x4->_11, m4x4->_12, m4x4->_13,
+                         m4x4->_20, m4x4->_21, m4x4->_22, m4x4->_23,
+                         m4x4->_30, m4x4->_31, m4x4->_32, m4x4->_33);
+}
+#endif
+
 void init_printer() {
 #ifdef FTB_WINDOWS
     // enable colored terminal output for windows
@@ -565,6 +599,16 @@ void init_printer() {
     register_printer(">color",      print_color_end,   Printer_Function_Type::_void);
     register_printer("->Str",       print_Str,         Printer_Function_Type::_ptr);
     register_printer("->char_line", print_str_line,    Printer_Function_Type::_ptr);
+
+#ifdef FTB_USING_MATH
+    register_printer("->v2",   print_v2,   Printer_Function_Type::_ptr);
+    register_printer("->v3",   print_v3,   Printer_Function_Type::_ptr);
+    register_printer("->v4",   print_v4,   Printer_Function_Type::_ptr);
+    register_printer("->quat", print_quat, Printer_Function_Type::_ptr);
+    register_printer("->m2x2", print_m2x2, Printer_Function_Type::_ptr);
+    register_printer("->m3x3", print_m3x3, Printer_Function_Type::_ptr);
+    register_printer("->m4x4", print_m4x4, Printer_Function_Type::_ptr);
+#endif
 }
 
 void deinit_printer() {

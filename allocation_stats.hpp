@@ -7,10 +7,10 @@
 
 #ifdef FTB_TRACK_MALLOCS
 namespace Ftb_Malloc_Stats {
-    extern u32 malloc_calls  = 0;
-    extern u32 free_calls    = 0;
-    extern u32 realloc_calls = 0;
-    extern u32 calloc_calls  = 0;
+    extern u32 malloc_calls;
+    extern u32 free_calls;
+    extern u32 realloc_calls;
+    extern u32 calloc_calls;
 }
 
 #define malloc(size)       (++Ftb_Malloc_Stats::malloc_calls,  malloc(size))
@@ -44,6 +44,13 @@ namespace Ftb_Malloc_Stats {
 auto print_malloc_stats() -> void;
 
 #else
+
+namespace Ftb_Malloc_Stats {
+    u32 malloc_calls  = 0;
+    u32 free_calls    = 0;
+    u32 realloc_calls = 0;
+    u32 calloc_calls  = 0;
+}
 
 auto print_malloc_stats() -> void {
     printf("\n"

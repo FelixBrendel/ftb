@@ -276,7 +276,7 @@ static int wrapper_cmp(const void *v1, const void *v2, void *cmp) {
 }
 
 void soa_sort(Array_Description main, Array_Description* others, size_t other_count, size_t nel, cmpfun cmp) {
-    soa_sort_r(main, others, other_count, nel, wrapper_cmp, cmp);
+    soa_sort_r(main, others, other_count, nel, wrapper_cmp, (void*)cmp);
 }
 
 void sort(Array_Description main, size_t nel, cmpfun cmp) {
