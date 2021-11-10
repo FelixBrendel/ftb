@@ -1,3 +1,31 @@
+/*
+ * BSD 2-Clause License
+ *
+ * Copyright (c) 2021, Christoph Neuhauser, Felix Brendel
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * * Redistributions of source code must retain the above copyright notice, this
+ *   list of conditions and the following disclaimer.
+ *
+ * * Redistributions in binary form must reproduce the above copyright notice,
+ *   this list of conditions and the following disclaimer in the documentation
+ *   and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #pragma once
 
 #include "arraylist.hpp"
@@ -60,8 +88,8 @@ struct Kd_Tree {
         return tree;
     }
 
-    auto reserve(size_t maxNumNodes) -> void {
-        if (allocated_node_count - node_count < maxNumNodes) {
+    auto reserve(u32 to_reserve) -> void {
+        if (allocated_node_count - node_count < to_reserve) {
             // at least allocate 16
             allocated_node_count = 2*allocated_node_count < 16 ? 16 : 2*allocated_node_count;
             nodes = (Kd_Node*)realloc(nodes, allocated_node_count * sizeof(Kd_Node));
@@ -177,7 +205,7 @@ struct Kd_Tree {
     }
 
     auto build_rec(V3* input_points, PayloadT* input_payloads, int depth,
-                   size_t start_idx, size_t edx_idx)
+                   u32 start_idx, u32 edx_idx)
         -> Kd_Node_Idx
     {
         const int k = 3; // Number of dimensions
@@ -216,7 +244,7 @@ struct Kd_Tree {
                 return (s32)((*a)[axis] > (*b)[axis]);
             }, &axis);
 
-        size_t median_idx = start_idx + (edx_idx - start_idx) / 2;
+        u32 median_idx = start_idx + (edx_idx - start_idx) / 2;
 
         if (payloads) {
             *payload = input_payloads[median_idx];
@@ -241,7 +269,7 @@ struct Kd_Tree {
         Kd_Node* node = &nodes[node_idx];
         if (box.contains(node->point)) {
             out_points->append(node->point);
-            if (payloads) {
+            if (payloads && out_payloads) {
                 out_payloads->append(payloads[node_idx]);
             }
         }
@@ -279,10 +307,8 @@ struct Kd_Tree {
         if (new_dist < *out_dist_to_neighbor) {
             *out_dist_to_neighbor = new_dist;
             *out_neighbor_pos     = node->point;
-            if (payloads) {
-                if (out_neighbor_payload) {
-                    *out_neighbor_payload = payloads[node_idx];
-                }
+            if (payloads && out_neighbor_payload) {
+                *out_neighbor_payload = payloads[node_idx];
             }
         }
 
