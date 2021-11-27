@@ -43,7 +43,7 @@ auto read_entire_file(const char* filename) -> String  {
     ret.data = nullptr;
     FILE *fp = fopen(filename, "rb");
     if (fp) {
-        defer { fclose(fp); }
+        defer { fclose(fp); };
         /* Go to the end of the file. */
         if (fseek(fp, 0L, SEEK_END) == 0) {
             /* Get the size of the file. */

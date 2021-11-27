@@ -252,7 +252,14 @@ struct Array_List {
 
     void append(type element) {
         if (count == length) {
+#ifdef FTB_INTERNAL_DEBUG
+            if (length == 0) {
+                length = 8;
+            }
+            fprintf(stderr, "ERROR: Array_List was not initialized.\n");
+#endif
             length *= 2;
+
             data = (type*)realloc(data, length * sizeof(type));
         }
         data[count] = element;

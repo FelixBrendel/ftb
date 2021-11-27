@@ -154,8 +154,8 @@ union M4x4 {
 // ---------------------
 //     f32 functions
 // ---------------------
-auto rad_to_dec(f32 rad) -> f32;
-auto dec_to_rad(f32 dec) -> f32;
+auto rad_to_deg(f32 rad) -> f32;
+auto deg_to_rad(f32 dec) -> f32;
 
 auto round_to_precision(f32 num, u32 decimals) ->  f32;
 
@@ -170,6 +170,8 @@ auto clamped_lerp(f32 from, f32 t, f32 to) -> f32;
 // ---------------------
 //   vector functions
 // ---------------------
+auto v4(V3 xyz, f32 w) -> V4;
+
 auto cross(V3 a, V3 b) -> V3;
 
 auto dot(V2 a, V2 b) -> f32;
@@ -239,6 +241,11 @@ auto operator*(f32 s, M2x2 a)  -> M2x2;
 auto operator*(f32 s, M3x3 a)  -> M3x3;
 auto operator*(f32 s, M4x4 a)  -> M4x4;
 
+auto m4x4_identity() -> M4x4;
+auto m4x4_from_axis_angle(V3 axis, f32 angle) -> M4x4;
+auto m4x4_look_at(V3 eye, V3 target, V3 up) -> M4x4;
+auto m4x4_perspective(f32 fov_y, f32 aspect, f32 clip_near, f32 clip_far) -> M4x4;
+
 // ---------------------
 //     quat functions
 // ---------------------
@@ -254,41 +261,41 @@ f32 two_pi = 6.283185307179586476925286766559;
 // ---------------------
 //     f32 functions
 // ---------------------
-inline auto rad_to_deg(f32 rad) -> f32 {
+auto rad_to_deg(f32 rad) -> f32 {
     return rad / pi * 180;
 }
 
-inline auto deg_to_rad(f32 deg) -> f32 {
+auto deg_to_rad(f32 deg) -> f32 {
     return deg / 180 * pi;
 }
 
-inline auto round_to_precision(f32 num, u32 decimals) ->  f32 {
+auto round_to_precision(f32 num, u32 decimals) ->  f32 {
     f32 factor = powf(10.0f, (f32)decimals);
     return roundf(num * factor) / factor;
 }
 
-inline auto lerp(f32 from, f32 t, f32 to) -> f32 {
+auto lerp(f32 from, f32 t, f32 to) -> f32 {
     return from + (to - from) * t;
 }
 
-inline auto unlerp(f32 from, f32 val, f32 to) -> f32 {
+auto unlerp(f32 from, f32 val, f32 to) -> f32 {
     return (val - from) / (to - from);
 }
 
-inline auto remap(f32 from_a, f32 val, f32 to_a, f32 from_b, f32 to_b) -> f32 {
+auto remap(f32 from_a, f32 val, f32 to_a, f32 from_b, f32 to_b) -> f32 {
     return lerp(from_b, unlerp(from_a, val, from_b), to_b);
 }
 
-inline auto clamp(f32 from, f32 x, f32 to) -> f32 {
+auto clamp(f32 from, f32 x, f32 to) -> f32 {
     f32 t = x < from ? from : x;
     return t > to ? to : t;
 }
 
-inline auto clamp01(f32 x) -> f32 {
+auto clamp01(f32 x) -> f32 {
     return clamp(0, x, 1);
 }
 
-inline auto clamped_lerp(f32 from, f32 t, f32 to) -> f32 {
+auto clamped_lerp(f32 from, f32 t, f32 to) -> f32 {
     t = clamp01(t);
     return from + (to - from) * t;
 }
@@ -296,33 +303,42 @@ inline auto clamped_lerp(f32 from, f32 t, f32 to) -> f32 {
 // ---------------------
 //   vector functions
 // ---------------------
-inline auto dot(V2 a, V2 b) -> f32 {
+auto v4(V3 xyz, f32 w = 0) -> V4 {
+    return {
+        xyz.x,
+        xyz.y,
+        xyz.z,
+        w
+    };
+}
+
+auto dot(V2 a, V2 b) -> f32 {
     return a.x * b.x + a.y * b.y;
 }
 
-inline auto dot(V3 a, V3 b) -> f32 {
+auto dot(V3 a, V3 b) -> f32 {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
-inline auto dot(V4 a, V4 b) -> f32 {
+auto dot(V4 a, V4 b) -> f32 {
     return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 }
 
-inline auto cross(V3 a, V3 b) -> V3 {
+auto cross(V3 a, V3 b) -> V3 {
     return {
         a.y*b.z - a.z*b.y,
         a.z*b.x - a.x*b.z,
         a.x*b.y - a.y*b.x};
 }
 
-inline auto hadamard(V2 a, V2 b) -> V2 {
+auto hadamard(V2 a, V2 b) -> V2 {
     return {
         a.x * b.x,
         a.y * b.y,
     };
 }
 
-inline auto hadamard(V3 a, V3 b) -> V3 {
+auto hadamard(V3 a, V3 b) -> V3 {
     return {
         a.x * b.x,
         a.y * b.y,
@@ -330,7 +346,7 @@ inline auto hadamard(V3 a, V3 b) -> V3 {
     };
 }
 
-inline auto hadamard(V4 a, V4 b) -> V4 {
+auto hadamard(V4 a, V4 b) -> V4 {
     return {
         a.x * b.x,
         a.y * b.y,
@@ -339,14 +355,14 @@ inline auto hadamard(V4 a, V4 b) -> V4 {
     };
 }
 
-inline auto operator+(V2 a, V2 b) -> V2 {
+auto operator+(V2 a, V2 b) -> V2 {
     return {
         a.x + b.x,
         a.y + b.y
     };
 }
 
-inline auto operator+(V3 a, V3 b) -> V3 {
+auto operator+(V3 a, V3 b) -> V3 {
     return {
         a.x + b.x,
         a.y + b.y,
@@ -354,7 +370,7 @@ inline auto operator+(V3 a, V3 b) -> V3 {
     };
 }
 
-inline auto operator+(V4 a, V4 b) -> V4 {
+auto operator+(V4 a, V4 b) -> V4 {
     return {
         a.x + b.x,
         a.y + b.y,
@@ -363,14 +379,14 @@ inline auto operator+(V4 a, V4 b) -> V4 {
     };
 }
 
-inline auto operator-(V2 a) -> V2 {
+auto operator-(V2 a) -> V2 {
     return {
         -a.x,
         -a.y
     };
 }
 
-inline auto operator-(V3 a) -> V3 {
+auto operator-(V3 a) -> V3 {
     return {
         -a.x,
         -a.y,
@@ -378,7 +394,7 @@ inline auto operator-(V3 a) -> V3 {
     };
 }
 
-inline auto operator-(V4 a) -> V4 {
+auto operator-(V4 a) -> V4 {
     return {
         -a.x,
         -a.y,
@@ -387,14 +403,14 @@ inline auto operator-(V4 a) -> V4 {
     };
 }
 
-inline auto operator-(V2 a, V2 b) -> V2 {
+auto operator-(V2 a, V2 b) -> V2 {
     return {
         a.x - b.x,
         a.y - b.y,
     };
 }
 
-inline auto operator-(V3 a, V3 b) -> V3 {
+auto operator-(V3 a, V3 b) -> V3 {
     return {
         a.x - b.x,
         a.y - b.y,
@@ -402,7 +418,7 @@ inline auto operator-(V3 a, V3 b) -> V3 {
     };
 }
 
-inline auto operator-(V4 a, V4 b) -> V4 {
+auto operator-(V4 a, V4 b) -> V4 {
     return {
         a.x - b.x,
         a.y - b.y,
@@ -412,14 +428,14 @@ inline auto operator-(V4 a, V4 b) -> V4 {
 }
 
 
-inline auto operator*(V2 v, f32 s) -> V2 {
+auto operator*(V2 v, f32 s) -> V2 {
     return {
         v.x * s,
         v.y * s,
     };
 }
 
-inline auto operator*(V3 v, f32 s) -> V3 {
+auto operator*(V3 v, f32 s) -> V3 {
     return {
         v.x * s,
         v.y * s,
@@ -427,7 +443,7 @@ inline auto operator*(V3 v, f32 s) -> V3 {
     };
 }
 
-inline auto operator*(V4 v, f32 s) -> V4 {
+auto operator*(V4 v, f32 s) -> V4 {
     return {
         v.x * s,
         v.y * s,
@@ -436,26 +452,26 @@ inline auto operator*(V4 v, f32 s) -> V4 {
     };
 }
 
-inline auto operator*(f32 s, V2 v) -> V2 {
+auto operator*(f32 s, V2 v) -> V2 {
     return v * s;
 }
 
-inline auto operator*(f32 s, V3 v) -> V3 {
+auto operator*(f32 s, V3 v) -> V3 {
     return v * s;
 }
 
-inline auto operator*(f32 s, V4 v) -> V4 {
+auto operator*(f32 s, V4 v) -> V4 {
     return v * s;
 }
 
-inline auto operator*(M2x2 m, V2 v) -> V2 {
+auto operator*(M2x2 m, V2 v) -> V2 {
     return {
         dot(m.rows[0], v),
         dot(m.rows[1], v),
     };
 }
 
-inline auto operator*(M3x3 m, V3 v) -> V3 {
+auto operator*(M3x3 m, V3 v) -> V3 {
     return {
         dot(m.rows[0], v),
         dot(m.rows[1], v),
@@ -463,7 +479,7 @@ inline auto operator*(M3x3 m, V3 v) -> V3 {
     };
 }
 
-inline auto operator*(M4x4 m, V4 v) -> V4 {
+auto operator*(M4x4 m, V4 v) -> V4 {
     return {
         dot(m.rows[0], v),
         dot(m.rows[1], v),
@@ -472,26 +488,26 @@ inline auto operator*(M4x4 m, V4 v) -> V4 {
     };
 }
 
-inline auto reflect(V2 vector, V2 normal) -> V2 {
+auto reflect(V2 vector, V2 normal) -> V2 {
     return 2 * dot(-vector, normal) * normal + vector;
 }
 
-inline auto reflect(V3 vector, V3 normal) -> V3 {
+auto reflect(V3 vector, V3 normal) -> V3 {
     return 2 * dot(-vector, normal) * normal + vector;
 }
 
-inline auto reflect(V4 vector, V4 normal) -> V4 {
+auto reflect(V4 vector, V4 normal) -> V4 {
     return 2 * dot(-vector, normal) * normal + vector;
 }
 
-inline auto length(V2 vector) -> f32 {
+auto length(V2 vector) -> f32 {
     f32 length =
         vector.x * vector.x +
         vector.y * vector.y;
     return sqrt(length);
 }
 
-inline auto length(V3 vector) -> f32 {
+auto length(V3 vector) -> f32 {
     f32 length =
         vector.x * vector.x +
         vector.y * vector.y +
@@ -499,7 +515,7 @@ inline auto length(V3 vector) -> f32 {
     return sqrt(length);
 }
 
-inline auto length(V4 vector) -> f32 {
+auto length(V4 vector) -> f32 {
     f32 length =
         vector.x * vector.x +
         vector.y * vector.y +
@@ -508,36 +524,36 @@ inline auto length(V4 vector) -> f32 {
     return sqrt(length);
 }
 
-inline auto noz(V2 vector) -> V2 {
+auto noz(V2 vector) -> V2 {
     f32 len = length(vector);
     if (len == 0)
         return vector;
     return 1.0f / len * vector;
 }
 
-inline auto noz(V3 vector) -> V3 {
+auto noz(V3 vector) -> V3 {
     f32 len = length(vector);
     if (len == 0)
         return vector;
     return 1.0f / len * vector;
 }
 
-inline auto noz(V4 vector) -> V4 {
+auto noz(V4 vector) -> V4 {
     f32 len = length(vector);
     if (len == 0)
         return vector;
     return 1.0f / len * vector;
 }
 
-inline auto lerp(V2 from, f32 t, V2 to) -> V2 {
+auto lerp(V2 from, f32 t, V2 to) -> V2 {
     return from + (to - from) * t;
 }
 
-inline auto lerp(V3 from, f32 t, V3 to) -> V3 {
+auto lerp(V3 from, f32 t, V3 to) -> V3 {
     return from + (to - from) * t;
 }
 
-inline auto lerp(V4 from, f32 t, V4 to) -> V4 {
+auto lerp(V4 from, f32 t, V4 to) -> V4 {
     return from + (to - from) * t;
 }
 
@@ -642,6 +658,79 @@ auto operator*(f32 s, M3x3 a)  -> M3x3 {
 auto operator*(f32 s, M4x4 a)  -> M4x4 {
     return a * s;
 }
+
+M4x4 m4x4_identity() {
+    M4x4 mat {};
+
+    mat._00 = 1;
+    mat._11 = 1;
+    mat._22 = 1;
+    mat._33 = 1;
+
+    return mat;
+}
+
+auto m4x4_from_axis_angle(V3 axis, f32 angle) -> M4x4 {
+    f32 a = angle;
+    f32 c = cos(a);
+    f32 s = sin(a);
+    axis = noz(axis);
+    V3 temp = (1 - c) * axis;
+
+    M4x4 r {};
+    r._00 = c + temp[0] * axis[0];
+    r._01 = temp[1] * axis[0] - s * axis[2];
+    r._02 = temp[2] * axis[0] + s * axis[1];
+
+    r._10 = temp[0] * axis[1] + s * axis[2];
+    r._11 = c + temp[1] * axis[1];
+    r._12 = temp[2] * axis[1] - s * axis[0];
+
+    r._20 = temp[0] * axis[2] - s * axis[1];
+    r._21 = temp[1] * axis[2] + s * axis[0];
+    r._22 = c + temp[2] * axis[2];
+
+    r._33 = 1;
+
+    return r;
+}
+
+auto m4x4_look_at(V3 eye, V3 target, V3 up) -> M4x4 {
+    V3 f = noz(target - eye);
+    V3 s = noz(cross(f, up));
+    V3 u = cross(s, f);
+
+    M4x4 result = m4x4_identity();
+    result._00 = s.x;
+    result._10 = s.y;
+    result._20 = s.z;
+    result._01 = u.x;
+    result._11 = u.y;
+    result._21 = u.z;
+    result._02 =-f.x;
+    result._12 =-f.y;
+    result._22 =-f.z;
+    result._30 =-dot(s, eye);
+    result._31 =-dot(u, eye);
+    result._32 = dot(f, eye);
+
+    return result;
+}
+
+auto m4x4_perspective(f32 fov_y, f32 aspect, f32 clip_near, f32 clip_far) -> M4x4 {
+    f32 const tan_half_fov_y = tan(fov_y / 2.0f);
+
+    M4x4 result {};
+
+    result._00 = 1.0 / (aspect * tan_half_fov_y);
+    result._11 = 1.0 / (tan_half_fov_y);
+    result._22 = clip_far / (clip_near - clip_far);
+    result._23 = -1.0;
+    result._32 = -(clip_far * clip_near) / (clip_far - clip_near);
+
+    return result;
+}
+
 
 // ---------------------
 //     quat functions
