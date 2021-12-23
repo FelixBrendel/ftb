@@ -278,6 +278,15 @@ struct Array_List {
     }
 
 
+    type& last_element() {
+#ifdef FTB_INTERNAL_DEBUG
+        if (count == 0) {
+            fprintf(stderr, "ERROR: Array_List was empty but last_element was called.\n");
+        }
+#endif
+        return data[count-1];
+    }
+
     void _merge(u32 start, u32 mid, u32 end) {
         u32 start2 = mid + 1;
 
@@ -370,4 +379,49 @@ struct Auto_Array_List : public Array_List<type> {
         free(this->data);
         this->data = nullptr;
     }
+};
+
+
+template <typename type>
+struct Stack {
+    Array_List<type> array_list;
+
+    void init(u32 initial_capacity = 16) {
+        array_list.init(initial_capacity);
+    }
+
+    void deinit() {
+        array_list.deinit();
+    }
+
+    void push(type elem) {
+        array_list.append(elem);
+    }
+
+    type pop() {
+#ifdef FTB_INTERNAL_DEBUG
+        if (array_list.count == 0) {
+            fprintf(stderr, "ERROR: Stack was empty but pop was called.\n");
+        }
+#endif
+        return array_list[--array_list.count];
+    }
+
+    type peek() {
+#ifdef FTB_INTERNAL_DEBUG
+        if (array_list.count == 0) {
+            fprintf(stderr, "ERROR: Stack was empty but peek was called.\n");
+        }
+#endif
+        return array_list[array_list.count-1];
+    }
+
+    void clear() {
+        array_list.clear();
+    }
+
+    bool is_empty() {
+        return array_list.count == 0;
+    }
+
 };
