@@ -255,8 +255,8 @@ auto quat_to_m3x3(Quat q) -> M3x3;
 
 #else // implementations
 
-f32 pi     = 3.1415926535897932384626433832795;
-f32 two_pi = 6.283185307179586476925286766559;
+f32 pi     = 3.1415926535897932384626433832795f;
+f32 two_pi = 6.283185307179586476925286766559f;
 
 // ---------------------
 //     f32 functions
@@ -504,7 +504,7 @@ auto length(V2 vector) -> f32 {
     f32 length =
         vector.x * vector.x +
         vector.y * vector.y;
-    return sqrt(length);
+    return sqrtf(length);
 }
 
 auto length(V3 vector) -> f32 {
@@ -512,7 +512,7 @@ auto length(V3 vector) -> f32 {
         vector.x * vector.x +
         vector.y * vector.y +
         vector.z * vector.z;
-    return sqrt(length);
+    return sqrtf(length);
 }
 
 auto length(V4 vector) -> f32 {
@@ -521,7 +521,7 @@ auto length(V4 vector) -> f32 {
         vector.y * vector.y +
         vector.z * vector.z +
         vector.w * vector.w;
-    return sqrt(length);
+    return sqrtf(length);
 }
 
 auto noz(V2 vector) -> V2 {
@@ -672,8 +672,8 @@ M4x4 m4x4_identity() {
 
 auto m4x4_from_axis_angle(V3 axis, f32 angle) -> M4x4 {
     f32 a = angle;
-    f32 c = cos(a);
-    f32 s = sin(a);
+    f32 c = cosf(a);
+    f32 s = sinf(a);
     axis = noz(axis);
     V3 temp = (1 - c) * axis;
 
@@ -718,14 +718,14 @@ auto m4x4_look_at(V3 eye, V3 target, V3 up) -> M4x4 {
 }
 
 auto m4x4_perspective(f32 fov_y, f32 aspect, f32 clip_near, f32 clip_far) -> M4x4 {
-    f32 const tan_half_fov_y = tan(fov_y / 2.0f);
+    f32 const tan_half_fov_y = tanf(fov_y / 2.0f);
 
     M4x4 result {};
 
-    result._00 = 1.0 / (aspect * tan_half_fov_y);
-    result._11 = 1.0 / (tan_half_fov_y);
+    result._00 = 1.0f / (aspect * tan_half_fov_y);
+    result._11 = 1.0f / (tan_half_fov_y);
     result._22 = clip_far / (clip_near - clip_far);
-    result._23 = -1.0;
+    result._23 = -1.0f;
     result._32 = -(clip_far * clip_near) / (clip_far - clip_near);
 
     return result;
@@ -745,12 +745,12 @@ auto quat_from_axis_angle(V3 axis, f32 angle) -> Quat {
 }
 
 auto quat_from_XYZ(f32 x, f32 y, f32 z) -> Quat {
-    f32 sx = sin(deg_to_rad(x) / 2);
-    f32 sy = sin(deg_to_rad(y) / 2);
-    f32 sz = sin(deg_to_rad(z) / 2);
-    f32 cx = cos(deg_to_rad(x) / 2);
-    f32 cy = cos(deg_to_rad(y) / 2);
-    f32 cz = cos(deg_to_rad(z) / 2);
+    f32 sx = sinf(deg_to_rad(x) / 2);
+    f32 sy = sinf(deg_to_rad(y) / 2);
+    f32 sz = sinf(deg_to_rad(z) / 2);
+    f32 cx = cosf(deg_to_rad(x) / 2);
+    f32 cy = cosf(deg_to_rad(y) / 2);
+    f32 cz = cosf(deg_to_rad(z) / 2);
 
     return Quat {
         cx*cy*cz + sx*sy*sz,
