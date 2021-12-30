@@ -254,9 +254,9 @@ struct Array_List {
         if (count == length) {
 #ifdef FTB_INTERNAL_DEBUG
             if (length == 0) {
+                fprintf(stderr, "ERROR: Array_List was not initialized.\n");
                 length = 8;
             }
-            fprintf(stderr, "ERROR: Array_List was not initialized.\n");
 #endif
             length *= 2;
 

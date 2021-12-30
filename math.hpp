@@ -106,12 +106,16 @@ union V4 {
 
 typedef V4 Quat;
 
+// NOTE(Felix): All matrics are column-major, since glsl shaders expect it that
+//   way, so we can just memcpy the matrices. This also includes the _00, _01
+//   selectors where the first number also represents the column and the second
+//   the row.
 union M2x2 {
     struct {
         f32 _00; f32 _01;
         f32 _10; f32 _11;
     };
-    V2 rows[2];
+    V2 columns[2];
     f32 elements[4];
 
     inline f32 &operator[](const int &index) {
@@ -125,7 +129,7 @@ union M3x3 {
         f32 _10; f32 _11; f32 _12;
         f32 _20; f32 _21; f32 _22;
     };
-    V3 rows[3];
+    V3 columns[3];
     f32 elements[9];
 
     inline f32 &operator[](const int &index) {
@@ -140,7 +144,7 @@ union M4x4 {
         f32 _20; f32 _21; f32 _22; f32 _23;
         f32 _30; f32 _31; f32 _32; f32 _33;
     };
-    V4 rows[4];
+    V4 columns[4];
     f32 elements[16];
 
     inline f32 &operator[](const int &index) {
@@ -170,6 +174,7 @@ auto clamped_lerp(f32 from, f32 t, f32 to) -> f32;
 // ---------------------
 //   vector functions
 // ---------------------
+auto v3(V2 xy, f32 z);
 auto v4(V3 xyz, f32 w) -> V4;
 
 auto cross(V3 a, V3 b) -> V3;
@@ -198,6 +203,10 @@ auto lerp(V2 from, f32 t, V2 to) -> V2;
 auto lerp(V3 from, f32 t, V3 to) -> V3;
 auto lerp(V4 from, f32 t, V4 to) -> V4;
 
+auto operator==(V2 a, V2 b) -> bool;
+auto operator==(V3 a, V3 b) -> bool;
+auto operator==(V4 a, V4 b) -> bool;
+
 auto operator+(V2 a, V2 b) -> V2;
 auto operator+(V3 a, V3 b) -> V3;
 auto operator+(V4 a, V4 b) -> V4;
@@ -225,6 +234,10 @@ auto operator*(M4x4 m, V4 v) -> V4;
 // ---------------------
 //    matrix functions
 // ---------------------
+auto operator==(M2x2 a, M2x2 b) -> bool;
+auto operator==(M3x3 a, M3x3 b) -> bool;
+auto operator==(M4x4 a, M4x4 b) -> bool;
+
 auto operator*(M2x2 a, M2x2 b) -> M2x2;
 auto operator*(M3x3 a, M3x3 b) -> M3x3;
 auto operator*(M4x4 a, M4x4 b) -> M4x4;
@@ -245,6 +258,8 @@ auto m4x4_identity() -> M4x4;
 auto m4x4_from_axis_angle(V3 axis, f32 angle) -> M4x4;
 auto m4x4_look_at(V3 eye, V3 target, V3 up) -> M4x4;
 auto m4x4_perspective(f32 fov_y, f32 aspect, f32 clip_near, f32 clip_far) -> M4x4;
+auto m4x4_ortho(f32 left, f32 right, f32 bottom, f32 top) -> M4x4;
+auto m4x4_ortho(f32 x_extend, f32 aspect) -> M4x4;
 
 // ---------------------
 //     quat functions
@@ -283,7 +298,7 @@ auto unlerp(f32 from, f32 val, f32 to) -> f32 {
 }
 
 auto remap(f32 from_a, f32 val, f32 to_a, f32 from_b, f32 to_b) -> f32 {
-    return lerp(from_b, unlerp(from_a, val, from_b), to_b);
+    return lerp(from_b, unlerp(from_a, val, to_a), to_b);
 }
 
 auto clamp(f32 from, f32 x, f32 to) -> f32 {
@@ -303,6 +318,15 @@ auto clamped_lerp(f32 from, f32 t, f32 to) -> f32 {
 // ---------------------
 //   vector functions
 // ---------------------
+auto v3(V2 xy, f32 z = 0) -> V3 {
+    return {
+        xy.x,
+        xy.y,
+        z
+    };
+}
+
+
 auto v4(V3 xyz, f32 w = 0) -> V4 {
     return {
         xyz.x,
@@ -466,25 +490,25 @@ auto operator*(f32 s, V4 v) -> V4 {
 
 auto operator*(M2x2 m, V2 v) -> V2 {
     return {
-        dot(m.rows[0], v),
-        dot(m.rows[1], v),
+        dot({m.columns[0][0], m.columns[1][0]}, v),
+        dot({m.columns[0][1], m.columns[1][1]}, v),
     };
 }
 
 auto operator*(M3x3 m, V3 v) -> V3 {
     return {
-        dot(m.rows[0], v),
-        dot(m.rows[1], v),
-        dot(m.rows[2], v),
+        dot({m.columns[0][0], m.columns[1][0], m.columns[2][0]}, v),
+        dot({m.columns[0][1], m.columns[1][1], m.columns[2][1]}, v),
+        dot({m.columns[0][2], m.columns[1][2], m.columns[2][2]}, v),
     };
 }
 
 auto operator*(M4x4 m, V4 v) -> V4 {
     return {
-        dot(m.rows[0], v),
-        dot(m.rows[1], v),
-        dot(m.rows[2], v),
-        dot(m.rows[3], v),
+        dot({m.columns[0][0], m.columns[1][0], m.columns[2][0], m.columns[3][0]}, v),
+        dot({m.columns[0][1], m.columns[1][1], m.columns[2][1], m.columns[3][1]}, v),
+        dot({m.columns[0][2], m.columns[1][2], m.columns[2][2], m.columns[3][2]}, v),
+        dot({m.columns[0][3], m.columns[1][3], m.columns[2][3], m.columns[3][3]}, v),
     };
 }
 
@@ -557,14 +581,57 @@ auto lerp(V4 from, f32 t, V4 to) -> V4 {
     return from + (to - from) * t;
 }
 
+inline auto operator==(V2 a, V2 b) -> bool {
+    return
+        a.x == b.x &&
+        a.y == b.y;
+}
+
+inline auto operator==(V3 a, V3 b) -> bool {
+    return
+        a.x == b.x &&
+        a.y == b.y &&
+        a.z == b.z;
+}
+
+inline auto operator==(V4 a, V4 b) -> bool {
+    return
+        a.x == b.x &&
+        a.y == b.y &&
+        a.z == b.z &&
+        a.w == b.w;
+}
+
 // ---------------------
 //    matrix functions
 // ---------------------
 
+auto operator==(M2x2 a, M2x2 b) -> bool {
+    return
+        a.columns[0] == b.columns[0] &&
+        a.columns[1] == b.columns[1];
+}
+
+auto operator==(M3x3 a, M3x3 b) -> bool {
+    return
+        a.columns[0] == b.columns[0] &&
+        a.columns[1] == b.columns[1] &&
+        a.columns[2] == b.columns[2];
+}
+
+auto operator==(M4x4 a, M4x4 b) -> bool {
+    return
+        a.columns[0] == b.columns[0] &&
+        a.columns[1] == b.columns[1] &&
+        a.columns[2] == b.columns[2] &&
+        a.columns[3] == b.columns[3];
+}
+
+
 inline auto operator*(M2x2 a, M2x2 b) -> M2x2 {
     M2x2 result {
-        dot(a.rows[0], V2{b._00, b._10}), dot(a.rows[0], V2{b._01, b._11}),
-        dot(a.rows[1], V2{b._00, b._10}), dot(a.rows[1], V2{b._01, b._11}),
+        dot(V2{a._00, a._10}, b.columns[0]), dot(V2{a._01, a._11}, b.columns[0]),
+        dot(V2{a._00, a._10}, b.columns[1]), dot(V2{a._01, a._11}, b.columns[1]),
     };
 
     return result;
@@ -573,9 +640,10 @@ inline auto operator*(M2x2 a, M2x2 b) -> M2x2 {
 
 inline auto operator*(M3x3 a, M3x3 b) -> M3x3 {
     M3x3 result {
-        dot(a.rows[0], V3{b._00, b._10, b._20}), dot(a.rows[0], V3{b._01, b._11, b._21}), dot(a.rows[0], V3{b._02, b._12, b._22}),
-        dot(a.rows[1], V3{b._00, b._10, b._20}), dot(a.rows[1], V3{b._01, b._11, b._21}), dot(a.rows[1], V3{b._02, b._12, b._22}),
-        dot(a.rows[2], V3{b._00, b._10, b._20}), dot(a.rows[2], V3{b._01, b._11, b._21}), dot(a.rows[2], V3{b._02, b._12, b._22}),
+        dot({a._00, a._10, a._20}, b.columns[0]), dot({a._01, a._11, a._21}, b.columns[0]), dot({a._02, a._12, a._22}, b.columns[0]),
+        dot({a._00, a._10, a._20}, b.columns[1]), dot({a._01, a._11, a._21}, b.columns[1]), dot({a._02, a._12, a._22}, b.columns[1]),
+        dot({a._00, a._10, a._20}, b.columns[2]), dot({a._01, a._11, a._21}, b.columns[2]), dot({a._02, a._12, a._22}, b.columns[2]),
+
     };
 
     return result;
@@ -583,17 +651,17 @@ inline auto operator*(M3x3 a, M3x3 b) -> M3x3 {
 
 inline auto operator*(M4x4 a, M4x4 b) -> M4x4 {
     M4x4 result {
-        dot(a.rows[0], V4{b._00, b._10, b._20, b._30}), dot(a.rows[0], V4{b._01, b._11, b._21, b._31}),
-        dot(a.rows[0], V4{b._02, b._12, b._22, b._32}), dot(a.rows[0], V4{b._03, b._13, b._23, b._33}),
+        dot({a._00, a._10, a._20, a._30}, b.columns[0]), dot({a._01, a._11, a._21, a._31}, b.columns[0]),
+        dot({a._02, a._12, a._22, a._32}, b.columns[0]), dot({a._03, a._13, a._23, a._33}, b.columns[0]),
 
-        dot(a.rows[1], V4{b._00, b._10, b._20, b._30}), dot(a.rows[1], V4{b._01, b._11, b._21, b._31}),
-        dot(a.rows[1], V4{b._02, b._12, b._22, b._32}), dot(a.rows[1], V4{b._03, b._13, b._23, b._33}),
+        dot({a._00, a._10, a._20, a._30}, b.columns[1]), dot({a._01, a._11, a._21, a._31}, b.columns[1]),
+        dot({a._02, a._12, a._22, a._32}, b.columns[1]), dot({a._03, a._13, a._23, a._33}, b.columns[1]),
 
-        dot(a.rows[2], V4{b._00, b._10, b._20, b._30}), dot(a.rows[2], V4{b._01, b._11, b._21, b._31}),
-        dot(a.rows[2], V4{b._02, b._12, b._22, b._32}), dot(a.rows[2], V4{b._03, b._13, b._23, b._33}),
+        dot({a._00, a._10, a._20, a._30}, b.columns[2]), dot({a._01, a._11, a._21, a._31}, b.columns[2]),
+        dot({a._02, a._12, a._22, a._32}, b.columns[2]), dot({a._03, a._13, a._23, a._33}, b.columns[2]),
 
-        dot(a.rows[3], V4{b._00, b._10, b._20, b._30}), dot(a.rows[3], V4{b._01, b._11, b._21, b._31}),
-        dot(a.rows[3], V4{b._02, b._12, b._22, b._32}), dot(a.rows[3], V4{b._03, b._13, b._23, b._33}),
+        dot({a._00, a._10, a._20, a._30}, b.columns[3]), dot({a._01, a._11, a._21, a._31}, b.columns[3]),
+        dot({a._02, a._12, a._22, a._32}, b.columns[3]), dot({a._03, a._13, a._23, a._33}, b.columns[3]),
     };
 
     return result;
@@ -601,49 +669,49 @@ inline auto operator*(M4x4 a, M4x4 b) -> M4x4 {
 
 inline auto operator+(M2x2 a, M2x2 b) -> M2x2 {
     M2x2 result;
-    result.rows[0] = a.rows[0] + b.rows[0];
-    result.rows[1] = a.rows[1] + b.rows[1];
+    result.columns[0] = a.columns[0] + b.columns[0];
+    result.columns[1] = a.columns[1] + b.columns[1];
     return result;
 }
 
 inline auto operator+(M3x3 a, M3x3 b) -> M3x3 {
     M3x3 result;
-    result.rows[0] = a.rows[0] + b.rows[0];
-    result.rows[1] = a.rows[1] + b.rows[1];
-    result.rows[2] = a.rows[2] + b.rows[2];
+    result.columns[0] = a.columns[0] + b.columns[0];
+    result.columns[1] = a.columns[1] + b.columns[1];
+    result.columns[2] = a.columns[2] + b.columns[2];
     return result;
 }
 
 inline auto operator+(M4x4 a, M4x4 b) -> M4x4 {
     M4x4 result;
-    result.rows[0] = a.rows[0] + b.rows[0];
-    result.rows[1] = a.rows[1] + b.rows[1];
-    result.rows[2] = a.rows[2] + b.rows[2];
-    result.rows[3] = a.rows[3] + b.rows[3];
+    result.columns[0] = a.columns[0] + b.columns[0];
+    result.columns[1] = a.columns[1] + b.columns[1];
+    result.columns[2] = a.columns[2] + b.columns[2];
+    result.columns[3] = a.columns[3] + b.columns[3];
     return result;
 }
 
 auto operator*(M2x2 a, f32 s) -> M2x2 {
     M2x2 result;
-    result.rows[0] = a.rows[0] * s;
-    result.rows[1] = a.rows[1] * s;
+    result.columns[0] = a.columns[0] * s;
+    result.columns[1] = a.columns[1] * s;
     return result;
 }
 
 auto operator*(M3x3 a, f32 s) -> M3x3 {
     M3x3 result;
-    result.rows[0] = a.rows[0] * s;
-    result.rows[1] = a.rows[1] * s;
-    result.rows[2] = a.rows[2] * s;
+    result.columns[0] = a.columns[0] * s;
+    result.columns[1] = a.columns[1] * s;
+    result.columns[2] = a.columns[2] * s;
     return result;
 }
 
 auto operator*(M4x4 a, f32 s)  -> M4x4 {
     M4x4 result;
-    result.rows[0] = a.rows[0] * s;
-    result.rows[1] = a.rows[1] * s;
-    result.rows[2] = a.rows[2] * s;
-    result.rows[3] = a.rows[3] * s;
+    result.columns[0] = a.columns[0] * s;
+    result.columns[1] = a.columns[1] * s;
+    result.columns[2] = a.columns[2] * s;
+    result.columns[3] = a.columns[3] * s;
     return result;
 }
 
@@ -731,6 +799,24 @@ auto m4x4_perspective(f32 fov_y, f32 aspect, f32 clip_near, f32 clip_far) -> M4x
     return result;
 }
 
+auto m4x4_ortho(f32 left, f32 right, f32 bottom, f32 top) -> M4x4 {
+    M4x4 result {};
+    result._33 = 1;
+
+    result._00 = 2.0f / (right - left);
+    result._11 = 2.0f / (top - bottom);
+    result._22 = -1.0f;
+    result._30 = -(right + left) / (right - left);
+    result._31 = -(top + bottom) / (top - bottom);
+
+    return result;
+}
+
+auto m4x4_ortho(f32 x_extend, f32 aspect) -> M4x4 {
+    f32 half = x_extend / 2.0f;
+    return m4x4_ortho(-half, half,
+                      -half/aspect, half/aspect);
+}
 
 // ---------------------
 //     quat functions

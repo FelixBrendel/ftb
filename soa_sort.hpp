@@ -92,7 +92,17 @@ void sort(Array_Description main, size_t nel, cmpfun cmp);
 #else // implementations
 
 auto ntz(u64 num) -> u64 {
-    return _tzcnt_u64(num);
+    // return _tzcnt_u64(num);
+
+    // TODO(Felix): Use the intrinsic above
+    u64 tmp = 1;
+    u64 dst = 0;
+
+    while (dst < 64 && ((num & tmp) == 0)) {
+        tmp = tmp << 1;
+        dst = dst + 1;
+    }
+    return dst;
 }
 
 

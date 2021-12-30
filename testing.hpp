@@ -110,6 +110,7 @@ typedef s32 testresult;
 
 #define invoke_test(name)                                       \
     fputs("" #name ":", stdout);                                \
+    fflush(stdout);                                             \
     if (name() == pass) {                                       \
         for(size_t i = strlen(#name); i < 70; ++i)              \
             fputs((i%3==1)? "." : " ", stdout);                 \

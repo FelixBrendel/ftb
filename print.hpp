@@ -566,12 +566,14 @@ auto print_quat(FILE* f, Quat* quat) -> s32 {
     return print_v4(f, quat);
 }
 
+// NOTE(Felix): Matrices are in column major, but we print them in row major to
+//   look more normal
 auto print_m2x2(FILE* f, M2x2* m2x2) -> s32 {
     return print_to_file(f,
                          "{ %f %f\n"
                          "  %f %f }",
-                         m2x2->_00, m2x2->_01,
-                         m2x2->_10, m2x2->_11);
+                         m2x2->_00, m2x2->_10,
+                         m2x2->_01, m2x2->_11);
 }
 
 auto print_m3x3(FILE* f, M3x3* m3x3) -> s32 {
@@ -579,9 +581,9 @@ auto print_m3x3(FILE* f, M3x3* m3x3) -> s32 {
                          "{ %f %f %f\n"
                          "  %f %f %f\n"
                          "  %f %f %f }",
-                         m3x3->_00, m3x3->_01, m3x3->_02,
-                         m3x3->_10, m3x3->_11, m3x3->_12,
-                         m3x3->_20, m3x3->_21, m3x3->_22);
+                         m3x3->_00, m3x3->_10, m3x3->_20,
+                         m3x3->_01, m3x3->_11, m3x3->_21,
+                         m3x3->_02, m3x3->_12, m3x3->_22);
 }
 
 auto print_m4x4(FILE* f, M4x4* m4x4) -> s32 {
@@ -590,10 +592,10 @@ auto print_m4x4(FILE* f, M4x4* m4x4) -> s32 {
                          "  %f %f %f %f \n"
                          "  %f %f %f %f \n"
                          "  %f %f %f %f }",
-                         m4x4->_00, m4x4->_01, m4x4->_02, m4x4->_03,
-                         m4x4->_10, m4x4->_11, m4x4->_12, m4x4->_13,
-                         m4x4->_20, m4x4->_21, m4x4->_22, m4x4->_23,
-                         m4x4->_30, m4x4->_31, m4x4->_32, m4x4->_33);
+                         m4x4->_00, m4x4->_10, m4x4->_20, m4x4->_30,
+                         m4x4->_01, m4x4->_11, m4x4->_21, m4x4->_31,
+                         m4x4->_02, m4x4->_12, m4x4->_22, m4x4->_32,
+                         m4x4->_03, m4x4->_13, m4x4->_23, m4x4->_33);
 }
 #endif
 

@@ -538,7 +538,6 @@ auto test_array_list_sort_many() -> testresult {
         assert_not_equal_int(list.sorted_find(list.data[i]), -1);
     }
 
-
     return pass;
 }
 
@@ -783,6 +782,7 @@ auto test_math() -> testresult {
     // operator* with mat
     {
         V3   v1 { 1, 2, 3 };
+        // column major
         M3x3 identity {
             {1, 0, 0,
              0, 1, 0,
@@ -794,6 +794,7 @@ auto test_math() -> testresult {
         assert_equal_f32(r.y, 2);
         assert_equal_f32(r.z, 3);
 
+        // column major
         M3x3 permute_scale {
             {0, 2, 0,
              0, 0, 2,
@@ -801,12 +802,13 @@ auto test_math() -> testresult {
         };
 
         r = permute_scale * v1;
-        assert_equal_f32(r.x, 4);
-        assert_equal_f32(r.y, 6);
-        assert_equal_f32(r.z, 2);
+        assert_equal_f32(r.x, 6);
+        assert_equal_f32(r.y, 2);
+        assert_equal_f32(r.z, 4);
     }
     {
         V2   v1 { 1, 2 };
+        // column major
         M2x2 identity {
             {1, 0,
              0, 1},
