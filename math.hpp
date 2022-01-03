@@ -174,7 +174,7 @@ auto clamped_lerp(f32 from, f32 t, f32 to) -> f32;
 // ---------------------
 //   vector functions
 // ---------------------
-auto v3(V2 xy, f32 z);
+auto v3(V2 xy, f32 z) -> V3;
 auto v4(V3 xyz, f32 w) -> V4;
 
 auto cross(V3 a, V3 b) -> V3;
