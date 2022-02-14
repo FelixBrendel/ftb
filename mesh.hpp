@@ -27,6 +27,11 @@
  */
 
 #pragma once
+
+#include <immintrin.h>
+
+#include <random>
+
 #include "types.hpp"
 #include "arraylist.hpp"
 #include "math.hpp"
@@ -68,7 +73,8 @@ struct Vertex_Fingerprint {
 
 auto hm_hash(Vertex_Fingerprint v) -> u64;
 auto hm_objects_match(Vertex_Fingerprint a, Vertex_Fingerprint b) -> bool;
-auto load_obj(const char* path) -> Mesh_Data*;
+auto load_obj(const char* path) -> Mesh_Data;
+auto resample_mesh(Mesh_Data m, u32 num_samples, Array_List<V3>* out_points) -> void;
 
 #else // implementations
 
@@ -103,7 +109,6 @@ inline auto hm_objects_match(Vertex_Fingerprint a, Vertex_Fingerprint b) -> bool
 }
 
 auto load_obj(const char* path) -> Mesh_Data {
-
     String obj_str = read_entire_file(path);
     defer_free(obj_str.data);
 
@@ -142,33 +147,8 @@ auto load_obj(const char* path) -> Mesh_Data {
             if (*cursor == 'u') eat_line(); // ???
             if (*cursor == 's') eat_line(); // smooth shading
             if (*cursor == 'm') eat_line(); // material
+            if (*cursor == 'g') eat_line(); // obj group
         } while(cursor != old_read_pos);
-    };
-
-
-    auto read_float = [&]() -> f32 {
-        eat_whitespace();
-        u64 res = 0;
-        f32 negation = 1.0f;
-        if (*cursor == '-') {
-            negation = -1.0f;
-            ++cursor;
-        }
-        while (*cursor >= '0' && *cursor <= '9') {
-            res = res*10 + (*cursor - '0');
-            ++cursor;
-        }
-        if (*cursor == '.') {
-            int div = 1;
-            ++cursor;
-            while (*cursor >= '0' && *cursor <= '9') {
-                res = res*10 + (*cursor - '0');
-                div *= 10;
-                ++cursor;
-            }
-            return res / (negation * div);
-        }
-        return negation*res;
     };
 
     auto read_int = [&]() -> u32 {
@@ -185,6 +165,41 @@ auto load_obj(const char* path) -> Mesh_Data {
         }
         return negation*(u32)res;
     };
+
+    auto read_float = [&]() -> f32 {
+        eat_whitespace();
+        u64 res = 0;
+        f32 fres;
+        f32 negation = 1.0f;
+        if (*cursor == '-') {
+            negation = -1.0f;
+            ++cursor;
+        }
+        while (*cursor >= '0' && *cursor <= '9') {
+            res = res*10 + (*cursor - '0');
+            ++cursor;
+        }
+
+        fres = res;
+
+        if (*cursor == '.') {
+            int div = 1;
+            ++cursor;
+            char* cursor_pos = cursor;
+            int decimals = read_int();
+            u32 read_chars = cursor - cursor_pos;
+
+            fres += ((f32)decimals/powf(10,read_chars));
+        }
+        if (*cursor == 'e') {
+            ++cursor;
+            int exp = read_int();
+            fres *= powf(10,exp);
+        }
+
+        return fres * negation;
+    };
+
     {
         char* eof = obj_str.data+obj_str.length;
         while (true) {
@@ -308,6 +323,145 @@ auto load_obj(const char* path) -> Mesh_Data {
         }
     }
     return result;
+}
+
+
+
+std::random_device rd;
+std::mt19937 e2(rd());
+std::uniform_real_distribution<> dist_0_1(0.0f, 1.0f);
+
+static inline auto rand_0_1() -> f32 {
+    return dist_0_1(e2);
+}
+
+static auto binary_search_prob(f32* acc_probs, f32 needle, u32 count) -> u32 {
+    f32* base = acc_probs;
+
+    while (count > 1) {
+        u32 middle = count / 2;
+        base += (needle < base[middle]) ? 0 : middle;
+        count -= middle;
+    }
+
+    return base-acc_probs;
+}
+
+auto resample_mesh(Mesh_Data m, u32 num_samples, Array_List<V3>* out_points) -> void {
+    out_points->reserve(num_samples);
+
+    // sample probability for each face
+    Array_List<f32>     probs_store;
+    // accumulated face probabilities (sum of all previous ones);
+    // -> first entry is 0
+    Array_List<f32> acc_probs_store;
+
+    probs_store.init(m.faces.count);
+    acc_probs_store.init(m.faces.count);
+
+    defer {
+        probs_store.deinit();
+        acc_probs_store.deinit();
+    };
+
+    f32* probs     = probs_store.data;
+    f32* acc_probs = acc_probs_store.data;
+
+
+    // calcualte (squared) sizes for all faces
+    for (u32 f_idx = 0; f_idx < m.faces.count; ++f_idx) {
+        V3 v1 = m.vertices[m.faces[f_idx].v1].position;
+        V3 v2 = m.vertices[m.faces[f_idx].v2].position;
+        V3 v3 = m.vertices[m.faces[f_idx].v3].position;
+
+        V3 s1 = v2 - v1;
+        V3 s2 = v3 - v1;
+
+        V3 crss = cross(s1, s2);
+        probs[f_idx] = dot(crss, crss);
+    }
+
+    // NOTE(Felix): probs now contain the squared sizes of the faces, we
+    //   have to sqrt all of them, and use simd for that for speed
+    const u8 simd_size = 8;
+    u32 i;
+    f32 area_sum = 0.0f;
+    { // sqrt block and accumulate the sizes
+        __m256 simd_area_sum = _mm256_set1_ps(0.0f);
+
+        for (i = 0; i + simd_size <= m.faces.count; i += simd_size) {
+            __m256 squares = _mm256_loadu_ps(probs+i);
+            __m256 areas   = _mm256_sqrt_ps(squares);
+            simd_area_sum  = _mm256_add_ps(simd_area_sum, areas);
+            _mm256_storeu_ps(probs+i, areas);
+        }
+
+        // reminder loop
+        for (; i < m.faces.count; ++i) {
+            probs[i] = sqrtf(probs[i]);
+            area_sum += probs[i];
+        }
+
+        // NOTE(Felix): calculate total surface area (actually 2* surface area,
+        //   since with the cross product we always calculate the double of the
+        //   side of the triangle but it is okay since we normalize the faces
+        //   such that the sum of all of them is 1; so linear factors don't
+        //   matter)
+        for (int j = 0; j < simd_size; ++j) {
+            area_sum += ((f32*)(&simd_area_sum))[j];
+        }
+    }
+
+
+    // NOTE(Felix): normalization block -> divide all areas by the sum of all
+    //   sizes such that the sum is 1
+    {
+        f32 prob_factor = 1.0f / area_sum;
+        __m256 simd_prob_factor = _mm256_set1_ps(prob_factor);
+
+        for (i = 0; i + simd_size <= m.faces.count; i += simd_size) {
+            __m256 simd_areas = _mm256_loadu_ps(probs+i);
+            __m256 simd_probs = _mm256_mul_ps(simd_areas, simd_prob_factor);
+            _mm256_storeu_ps(probs+i, simd_probs);
+        }
+
+        // remainder loop
+        for (; i < m.faces.count; ++i) {
+            probs[i] *= prob_factor;
+        }
+    }
+
+    // Calculate the accumulated probabilities to land in a face
+    {
+        acc_probs[0] = 0;
+        for (u32 i = 1; i < m.faces.count; ++i) {
+            acc_probs[i] = acc_probs[i-1] + probs[i-1];
+        }
+    }
+
+    // Actually sample the thing
+    for (u32 s = 0; s < num_samples; ++s) {
+        f32 face_idx_rng = rand_0_1();
+        f32 r1 = rand_0_1();
+        f32 r2 = rand_0_1();
+
+        u32 prob_idx = binary_search_prob(acc_probs, face_idx_rng, m.faces.count);
+        u32 face_idx = prob_idx;
+
+        V3 v1 = m.vertices[m.faces[face_idx].v1].position;
+        V3 v2 = m.vertices[m.faces[face_idx].v2].position;
+        V3 v3 = m.vertices[m.faces[face_idx].v3].position;
+
+        f32 sqrt_r1 = sqrtf(r1);
+
+        f32 u = 1-sqrt_r1;
+        f32 v = sqrt_r1*(1-r2);
+        f32 w = sqrt_r1*r2;
+
+        V3 new_point = u*v1 + v*v2 + w*v3;
+
+        out_points->append(new_point);
+    }
 }
 
 #endif // FTB_MESH_IMPL

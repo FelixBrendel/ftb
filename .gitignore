@@ -3,3 +3,5 @@
 /ftb
 vgcore.*
 tests/ftb
+*.exe
+samples.obj
