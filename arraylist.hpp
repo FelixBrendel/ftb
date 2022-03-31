@@ -425,3 +425,69 @@ struct Stack {
     }
 
 };
+
+struct String_Builder {
+    Array_List<const char*> list;
+
+    void init(u32 initial_capacity = 16) {
+        list.init(initial_capacity);
+    }
+
+    void init_from(std::initializer_list<const char*> l) {
+        list.length = l.size() > 1 ? l.size() : 1; // alloc at least one
+
+        list.data = (const char**)malloc(list.length * sizeof(char*));
+        list.count = 0;
+        // TODO(Felix): Use memcpy here
+        for (const char* t : l) {
+            list.data[list.count++] = t;
+        }
+    }
+
+    static String_Builder create_from(std::initializer_list<const char*> l) {
+        String_Builder sb;
+        sb.init_from(l);
+        return sb;
+    }
+
+    void clear() {
+        list.clear();
+    }
+
+    void deinit() {
+        list.deinit();
+    }
+
+    void append(const char* string) {
+        list.append(string);
+    }
+
+    char* build() {
+        u64 total_length = 0;
+
+        u32* lengths = (u32*)alloca(sizeof(*lengths) * list.length);
+
+        for (u32 i = 0; i < list.count; ++i) {
+            u64 length = strlen(list[i]);
+            lengths[i] = length;
+            total_length += length;
+        }
+
+        char* concat = (char*)malloc(total_length+1);
+
+        u64 cursor = 0;
+
+        for (u32 i = 0; i < list.count; ++i) {
+            strcpy(concat+cursor, list[i]);
+            cursor += lengths[i];
+        }
+
+#  ifdef FTB_INTERNAL_DEBUG
+        panic_if(cursor != total_length);
+#  endif
+
+        concat[cursor] = 0;
+
+        return concat;
+    };
+};
