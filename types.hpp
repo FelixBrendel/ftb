@@ -31,6 +31,7 @@
 #include "platform.hpp"
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
 
 typedef int8_t   s8;
 typedef int16_t s16;
@@ -53,27 +54,8 @@ typedef wchar_t path_char;
 typedef char    path_char;
 #endif
 
-struct String_Slice {
-    const char* data;
-    u64 length;
-};
-
-struct String {
-    char* data;
-    u64 length;
-};
-
-#ifndef FTB_TYPES_IMPL
-
-inline auto heap_copy_c_string(const char* str) -> char*;
-inline auto make_heap_string(const char* str) -> String;
-inline auto make_static_string(const char* str) -> const String_Slice;
-inline auto string_equal(const char* input, const char* check) -> bool;
-inline auto string_equal(String_Slice str, const char* check) -> bool;
-inline auto string_equal(const char* check, String_Slice str) -> bool;
-inline auto string_equal(String_Slice str1, String_Slice str2) -> bool;
-
-#else // implementations
+struct String_Slice;
+struct String;
 
 inline auto heap_copy_c_string(const char* str) -> char* {
 #ifdef FTB_WINDOWS
@@ -83,41 +65,41 @@ inline auto heap_copy_c_string(const char* str) -> char* {
 #endif
 }
 
-inline auto make_heap_string(const char* str) -> String {
-    String ret;
-    ret.length = strlen(str);
-    ret.data = heap_copy_c_string(str);
-    return ret;
-}
-
-inline auto make_static_string(const char* str) -> const String_Slice {
-    String_Slice ret;
-    ret.length = strlen(str);
-    ret.data = str;
-    return ret;
-}
-
 auto inline string_equal(const char* input, const char* check) -> bool {
     return strcmp(input, check) == 0;
 }
 
-auto inline string_equal(String_Slice str, const char* check) -> bool {
-    if (str.length != strlen(check))
-        return false;
-    return strncmp(str.data, check, str.length) == 0;
-}
+struct String {
+    char* data;
+    u64 length;
 
-auto inline string_equal(const char* check, String_Slice str) -> bool {
-    if (str.length != strlen(check))
-        return false;
-    return strncmp(str.data, check, str.length) == 0;
-}
+    operator bool() {
+        return data != nullptr;
+    }
 
-auto inline string_equal(String_Slice str1, String_Slice str2) -> bool {
-    if (str1.length != str2.length)
-        return false;
+    bool operator==(String other) {
+        return
+            length == other.length &&
+            string_equal(data, other.data);
+    }
 
-    return strncmp(str1.data, str2.data, str2.length) == 0;
-}
+    static String from(const char* str) {
+        String r;
 
-#endif // FTB_TYPES_IMPL
+        r.length = strlen(str);
+        r.data  = (char*)malloc(r.length*sizeof(char)+1);
+        strcpy(r.data, str);
+
+        return r;
+    }
+
+    void free() {
+        if (data) {
+            ::free(data);
+        }
+#ifdef FTB_INTERNAL_DEBUG
+        length = 0;
+        data = nullptr;
+#endif
+    }
+};

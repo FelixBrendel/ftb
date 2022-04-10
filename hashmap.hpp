@@ -40,9 +40,9 @@ u32 hm_hash(const char* str);
 u32 hm_hash(char* str);
 u32 hm_hash(void* ptr);
 
-inline bool hm_objects_match(const char* a, const char* b);
-inline bool hm_objects_match(char* a, char* b);
-inline bool hm_objects_match(void* a, void* b);
+bool hm_objects_match(const char* a, const char* b);
+bool hm_objects_match(char* a, char* b);
+bool hm_objects_match(void* a, void* b);
 
 #else // implementations
 

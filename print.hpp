@@ -85,12 +85,19 @@ auto print_to_string(char** out, static_string format, ...) -> s32;
 auto print_to_file(FILE* file, static_string format, ...) -> s32;
 auto print(static_string format, ...) -> s32;
 auto println(static_string format, ...) -> s32;
+auto increase_indentation(s32 indentation) -> void;
+auto decrease_indentation(s32 indentation) -> void;
 auto init_printer() -> void;
 auto deinit_printer() -> void;
+
+#define with_indentation(amount)                    \
+    MPP_BEFORE(1, increase_indentation(amount);)    \
+    MPP_DEFER(2, decrease_indentation(amount);)
 
 #else // implementations
 FILE* ftb_stdout = stdout;
 
+s32 indentation = 0;
 Array_List<char*>                     color_stack = {};
 Hash_Map<char*, printer_function_ptr> printer_map = {};
 Hash_Map<char*, int>                  type_map    = {};
@@ -448,28 +455,6 @@ int print(static_string format, ...) {
     return num_printed_chars;
 }
 
-int println(static_string format, ...) {
-    va_list arg_list;
-    va_start(arg_list, format);
-
-    int num_printed_chars = print_va_args_to_file(ftb_stdout, format, &arg_list);
-    num_printed_chars += print("\n");
-    fflush(stdout);
-
-    va_end(arg_list);
-
-    return num_printed_chars;
-}
-
-
-int print_bool(FILE* f, u32 val) {
-    return print_to_file(f, val ? "true" : "false");
-}
-
-int print_u32(FILE* f, u32 num) {
-    return print_to_file(f, "%u", num);
-}
-
 int print_spaces(FILE* f, s32 num) {
     int sum = 0;
 
@@ -483,12 +468,56 @@ int print_spaces(FILE* f, s32 num) {
         sum += print_to_file(f, "    ");
         num -= 4;
     }
-    while (num --> 0) {
-        // println("%d", 1);
+    while (num >= 1) {
+        // println("%d", 1);
         sum += print_to_file(f, " ");
         num--;
     }
     return sum;
+}
+
+int println(static_string format, ...) {
+    va_list arg_list;
+    va_start(arg_list, format);
+
+    int num_printed_chars = 0;
+    num_printed_chars += print_spaces(stdout, indentation);
+    num_printed_chars += print_va_args_to_file(ftb_stdout, format, &arg_list);
+    num_printed_chars += print("\n");
+    fflush(stdout);
+
+    va_end(arg_list);
+
+    return num_printed_chars;
+}
+
+
+void increase_indentation(s32 i) {
+    indentation += i;
+}
+
+void decrease_indentation(s32 i) {
+    indentation -= i;
+}
+
+int print_indented(u32 indentation, static_string format, ...) {
+    int s = print_spaces(stdout, (s32)indentation);
+    va_list list;
+    va_start(list, format);
+    s += print_va_args_to_file(stdout, format, &list);
+    va_end(list);
+
+    s += print("\n");
+
+    return s;
+}
+
+int print_bool(FILE* f, u32 val) {
+    return print_to_file(f, val ? "true" : "false");
+}
+
+int print_u32(FILE* f, u32 num) {
+    return print_to_file(f, "%u", num);
 }
 
 

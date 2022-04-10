@@ -104,6 +104,8 @@
             } else                              \
                 MPI_LABEL(labid, body):
 
+#define MPP_DEFER(labid, defer_code)            \
+    MPP_DECLARE(labid, defer { defer_code })
 
 /**
  *   Defer   *
