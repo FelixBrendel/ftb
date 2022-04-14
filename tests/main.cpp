@@ -33,7 +33,6 @@ inline bool hm_objects_match(Key a, Key b);
 #include "../soa_sort.hpp"
 #include "../kd_tree.hpp"
 
-
 u32 hm_hash(u32 u) {
     return ((u64)u * 2654435761) % 4294967296;
 }
@@ -63,23 +62,6 @@ inline bool hm_objects_match(Key a, Key b) {
 auto print_dots(FILE* f) -> u32 {
     return print_to_file(f, "...");
 }
-
-auto is_sorted = [](Array_List<s32> list) -> bool {
-    for (u32 i = 0; i < list.count - 1; ++i) {
-        if (list.data[i] > list.data[i+1])
-            return false;
-    }
-    return true;
- };
-
-auto is_sorted_vp = [](Array_List<void*> list) -> bool {
-    for (u32 i = 0; i < list.count - 1; ++i) {
-        if (list.data[i] > list.data[i+1])
-            return false;
-    }
-    return true;
- };
-
 
 auto test_printer() -> void {
     u32 arr[]   = {1,2,3,4,1,1,3};
@@ -165,7 +147,7 @@ auto test_stack_array_lists() -> testresult {
 
     assert_equal_int(list.count, 0);
     assert_equal_int(list.length, 20);
-    assert_true(list.data != NULL);
+    assert_true(list.data != nullptr);
 
     // test sum of empty list
     int sum = 0;
@@ -301,25 +283,25 @@ auto test_array_lists_sorting() -> testresult {
     list.append(3);
     list.append(4);
 
-    list.sort();
-    assert_equal_int(is_sorted(list), true);
+    list.sort(int_cmp);
+    assert_equal_int(list.is_sorted(int_cmp), true);
 
     list.append(4);
     list.append(2);
     list.append(1);
 
-    assert_equal_int(is_sorted(list), false);
-    list.sort();
-    assert_equal_int(is_sorted(list), true);
+    assert_equal_int(list.is_sorted(int_cmp), false);
+    list.sort(int_cmp);
+    assert_equal_int(list.is_sorted(int_cmp), true);
 
     list.clear();
     list.extend({
             8023, 7529, 2392, 7110,
             3259, 2484, 9695, 2199,
             6729, 9009, 8429, 7208});
-    assert_equal_int(is_sorted(list), false);
-    list.sort();
-    assert_equal_int(is_sorted(list), true);
+    assert_equal_int(list.is_sorted(int_cmp), false);
+    list.sort(int_cmp);
+    assert_equal_int(list.is_sorted(int_cmp), true);
 
 
     //
@@ -338,7 +320,7 @@ auto test_array_lists_sorting() -> testresult {
     list1.append(3);
     list1.append(4);
 
-    list1.sort();
+    list1.sort(int_cmp);
 
     assert_equal_int(list1.count, 4);
 
@@ -346,14 +328,14 @@ auto test_array_lists_sorting() -> testresult {
     assert_equal_int(list1[1], 2);
     assert_equal_int(list1[2], 3);
     assert_equal_int(list1[3], 4);
-    assert_equal_int(is_sorted(list1), true);
+    assert_equal_int(list1.is_sorted(int_cmp), true);
 
     list1.append(0);
     list1.append(5);
 
     assert_equal_int(list1.count, 6);
 
-    list1.sort();
+    list1.sort(int_cmp);
 
     assert_equal_int(list1[0], 0);
     assert_equal_int(list1[1], 1);
@@ -361,7 +343,7 @@ auto test_array_lists_sorting() -> testresult {
     assert_equal_int(list1[3], 3);
     assert_equal_int(list1[4], 4);
     assert_equal_int(list1[5], 5);
-    assert_equal_int(is_sorted(list1), true);
+    assert_equal_int(list1.is_sorted(int_cmp), true);
 
     //
     //
@@ -380,16 +362,16 @@ auto test_array_lists_sorting() -> testresult {
     al.append((void*)0x1703102F190);
     al.append((void*)0x1703102F1D8);
 
-    assert_equal_int(is_sorted_vp(al), false);
-    al.sort();
-    assert_equal_int(is_sorted_vp(al), true);
+    assert_equal_int(al.is_sorted(voidp_cmp), false);
+    al.sort(voidp_cmp);
+    assert_equal_int(al.is_sorted(voidp_cmp), true);
 
-    assert_not_equal_int(al.sorted_find((void*)0x1703102F100), -1);
-    assert_not_equal_int(al.sorted_find((void*)0x1703102F1D8), -1);
-    assert_not_equal_int(al.sorted_find((void*)0x1703102F148), -1);
-    assert_not_equal_int(al.sorted_find((void*)0x1703102F190), -1);
-    assert_not_equal_int(al.sorted_find((void*)0x1703102F190), -1);
-    assert_not_equal_int(al.sorted_find((void*)0x1703102F1D8), -1);
+    assert_not_equal_int(al.sorted_find((void*)0x1703102F100, voidp_cmp), -1);
+    assert_not_equal_int(al.sorted_find((void*)0x1703102F1D8, voidp_cmp), -1);
+    assert_not_equal_int(al.sorted_find((void*)0x1703102F148, voidp_cmp), -1);
+    assert_not_equal_int(al.sorted_find((void*)0x1703102F190, voidp_cmp), -1);
+    assert_not_equal_int(al.sorted_find((void*)0x1703102F190, voidp_cmp), -1);
+    assert_not_equal_int(al.sorted_find((void*)0x1703102F1D8, voidp_cmp), -1);
 
     return pass;
 }
@@ -406,13 +388,14 @@ auto test_array_lists_searching() -> testresult {
     list1.append(3);
     list1.append(4);
 
-    s32 index = list1.sorted_find(3);
+
+    s32 index = list1.sorted_find(3, int_cmp);
     assert_equal_int(index, 2);
 
-    index = list1.sorted_find(1);
+    index = list1.sorted_find(1, int_cmp);
     assert_equal_int(index, 0);
 
-    index = list1.sorted_find(5);
+    index = list1.sorted_find(5, int_cmp);
     assert_equal_int(index, -1);
     return pass;
 }
@@ -503,12 +486,12 @@ auto test_array_list_sort_many() -> testresult {
         list.append(rand());
     }
 
-    assert_equal_int(is_sorted(list), false);
-    list.sort();
-    assert_equal_int(is_sorted(list), true);
+    assert_equal_int(list.is_sorted(int_cmp), false);
+    list.sort(int_cmp);
+    assert_equal_int(list.is_sorted(int_cmp), true);
 
     for (int i = 0; i < 10000; ++i) {
-        assert_not_equal_int(list.sorted_find(list.data[i]), -1);
+        assert_not_equal_int(list.sorted_find(list.data[i], int_cmp), -1);
     }
 
     list.clear();
@@ -516,12 +499,12 @@ auto test_array_list_sort_many() -> testresult {
         list.append(rand());
     }
 
-    assert_equal_int(is_sorted(list), false);
-    list.sort();
-    assert_equal_int(is_sorted(list), true);
+    assert_equal_int(list.is_sorted(int_cmp), false);
+    list.sort(int_cmp);
+    assert_equal_int(list.is_sorted(int_cmp), true);
 
     for (int i = 0; i < 1111; ++i) {
-        assert_not_equal_int(list.sorted_find(list.data[i]), -1);
+        assert_not_equal_int(list.sorted_find(list.data[i], int_cmp), -1);
     }
 
 
@@ -530,12 +513,12 @@ auto test_array_list_sort_many() -> testresult {
         list.append(rand());
     }
 
-    assert_equal_int(is_sorted(list), false);
-    list.sort();
-    assert_equal_int(is_sorted(list), true);
+    assert_equal_int(list.is_sorted(int_cmp), false);
+    list.sort(int_cmp);
+    assert_equal_int(list.is_sorted(int_cmp), true);
 
     for (int i = 0; i < 3331; ++i) {
-        assert_not_equal_int(list.sorted_find(list.data[i]), -1);
+        assert_not_equal_int(list.sorted_find(list.data[i], int_cmp), -1);
     }
 
     return pass;

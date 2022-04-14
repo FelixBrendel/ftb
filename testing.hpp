@@ -100,13 +100,13 @@ typedef s32 testresult;
     }
 
 #define assert_null(variable)                   \
-    assert_equal_int(variable, nullptr)
+    assert_equal_int((variable), nullptr)
 
 #define assert_not_null(variable)               \
-    assert_not_equal_int(variable, nullptr)
+    assert_not_equal_int((variable), nullptr)
 
 #define assert_true(value)                      \
-    assert_equal_int(value, true)
+    assert_equal_int((value), true)
 
 #define invoke_test(name)                                       \
     fputs("" #name ":", stdout);                                \

@@ -63,13 +63,12 @@
 
 #pragma once
 
-#include <vcruntime.h>
 #define _BSD_SOURCE
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include <intrin.h>
+//#include <intrin.h>
 #include <ammintrin.h>
 #include <immintrin.h>
 

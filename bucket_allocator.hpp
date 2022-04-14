@@ -107,19 +107,19 @@ struct Bucket_Allocator {
 
     template <typename lambda>
     void for_each(lambda p) {
-        free_list.sort();
+        free_list.sort(voidp_cmp);
 
         type* val;
         for (u32 i = 0; i < next_bucket_index; ++i) {
             for (u32 j = 0; j < bucket_size; ++j) {
                 val = buckets[i]+j;
-                if (free_list.sorted_find(val) == -1)
+                if (free_list.sorted_find(val, voidp_cmp) == -1)
                     p(val);
             }
         }
         for (u32 j = 0; j < next_index_in_latest_bucket; ++j) {
             val = buckets[next_bucket_index]+j;
-            if (free_list.sorted_find(val) == -1)
+            if (free_list.sorted_find(val, voidp_cmp) == -1)
                 p(val);
         }
     }

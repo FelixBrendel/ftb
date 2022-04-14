@@ -1,3 +1,5 @@
+#!/bin/bash
+#
 TIMEFORMAT=%3lR
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 pushd $SCRIPTPATH > /dev/null

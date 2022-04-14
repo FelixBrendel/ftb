@@ -27,6 +27,7 @@
  */
 
 #pragma once
+#include <cstdlib>
 #include <stdlib.h>
 #include <initializer_list>
 
@@ -44,6 +45,16 @@
 //   stack-frame
 #define create_stack_array_list(type, length)     \
     Stack_Array_List<type> { (type*)alloca(length * sizeof(type)), length, 0 }
+
+
+static s32 int_cmp (const s32* a, const s32* b) {
+    return *a - *b;
+}
+
+static s32 voidp_cmp (const void** a, const void** b) {
+    return (s32)((byte*)*a - (byte*)*b);
+}
+
 
 template <typename type>
 struct Stack_Array_List {
@@ -287,61 +298,27 @@ struct Array_List {
         return data[count-1];
     }
 
-    void _merge(u32 start, u32 mid, u32 end) {
-        u32 start2 = mid + 1;
-
-        /* If the direct merge is already sorted */
-        if ((size_t)data[mid] <= (size_t)data[start2]) {
-            return;
-        }
-
-        /* Two pointers to maintain start of both arrays to merge */
-        while (start <= mid && start2 <= end) {
-            if ((size_t)data[start] <= (size_t)data[start2]) {
-                start++;
-            }
-            else {
-                type value = data[start2];
-                u32 index = start2;
-
-                /* Shift all the elements between element 1; element 2, right by 1. */
-                while (index != start) {
-                    data[index] = data[index - 1];
-                    index--;
-                }
-                data[start] = value;
-
-                /* Update all the pointers */
-                start++;
-                mid++;
-                start2++;
-            }
-        }
+    typedef s32 (*compare_function_t)(const type*, const type*);
+    typedef s32 (*void_compare_function_t)(const void*, const void*);
+    typedef s32 (*pointer_compare_function_t)(const void**, const void**);
+    void sort(compare_function_t comparer) {
+        qsort(data, count, sizeof(type),
+              (void_compare_function_t)comparer);
+    }
+    void sort(pointer_compare_function_t comparer) {
+        qsort(data, count, sizeof(type),
+              (void_compare_function_t)comparer);
     }
 
-    void sort(s32 left=-1, s32 right=-1) {
+    s32 sorted_find(type elem,
+                    compare_function_t compare_fun,
+                    s32 left=-1, s32 right=-1)
+    {
         if (left == -1) {
-            if (count == 0)
-                return;
-            sort(0, count - 1);
-            return;
+            return sorted_find(elem, compare_fun,
+                               0, count - 1);
         } else if (left == right) {
-            return;
-        }
-
-        u32 middle = left + (right-left) / 2;
-
-        sort(left, middle);
-        sort(middle+1, right);
-
-        _merge(left, middle, right);
-    }
-
-    s32 sorted_find(type elem, s32 left=-1, s32 right=-1) {
-        if (left == -1) {
-            return sorted_find(elem, 0, count - 1);
-        } else if (left == right) {
-            if ((size_t)data[left] == (size_t)elem)
+            if (compare_fun(&elem, &data[left]) == 0)
                 return left;
             return -1;
         } else if (right < left)
@@ -349,11 +326,33 @@ struct Array_List {
 
         u32 middle = left + (right-left) / 2;
 
-        if ((size_t)data[middle] < (size_t)elem)
-            return sorted_find(elem, middle+1, right);
-        if ((size_t)data[middle] > (size_t)elem)
-            return sorted_find(elem, left, middle-1);
+        s32 compare = compare_fun(&elem, &data[middle]);
+
+        if (compare > 0)
+            return sorted_find(elem, compare_fun, middle+1, right);
+        if (compare < 0)
+            return sorted_find(elem, compare_fun, left, middle-1);
         return middle;
+    }
+
+    s32 sorted_find(type elem,
+                    pointer_compare_function_t compare_fun,
+                    s32 left=-1, s32 right=-1)
+    {
+        return sorted_find(elem, (compare_function_t)compare_fun,
+                           left, right);
+    }
+
+    bool is_sorted(compare_function_t compare_fun) {
+        for (s32 i = 1; i < count; ++i) {
+            if (compare_fun(&data[i-1], &data[i]) > 0)
+                return false;
+        }
+        return true;
+    }
+
+    bool is_sorted(pointer_compare_function_t compare_fun) {
+        return is_sorted((compare_function_t)compare_fun);
     }
 };
 
