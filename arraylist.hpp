@@ -284,6 +284,10 @@ struct Array_List {
         }
     }
 
+    operator bool() const {
+        return count != 0;
+    }
+
     type& operator[](u32 index) {
         return data[index];
     }
@@ -318,8 +322,10 @@ struct Array_List {
             return sorted_find(elem, compare_fun,
                                0, count - 1);
         } else if (left == right) {
-            if (compare_fun(&elem, &data[left]) == 0)
-                return left;
+            if (left < count) {
+                if (compare_fun(&elem, &data[left]) == 0)
+                    return left;
+            }
             return -1;
         } else if (right < left)
             return -1;

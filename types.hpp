@@ -73,7 +73,7 @@ struct String {
     char* data;
     u64 length;
 
-    operator bool() {
+    operator bool() const {
         return data != nullptr;
     }
 

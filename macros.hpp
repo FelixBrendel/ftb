@@ -244,3 +244,6 @@ else
 #else
 #  define debug_break() raise(SIGTRAP);
 #endif
+
+
+#define zero_out(thing) memset(&(thing), 0, sizeof((thing)));
