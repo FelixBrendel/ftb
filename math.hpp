@@ -27,7 +27,7 @@
  */
 
 #pragma once
-#include <math.h>
+#include <cmath>
 #include <float.h>
 #include "types.hpp"
 #include "macros.hpp"
