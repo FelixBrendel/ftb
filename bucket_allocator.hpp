@@ -187,6 +187,12 @@ struct Bucket_List {
         *mem = elem;
     }
 
+    void extend(std::initializer_list<type> l) {
+        for (type e : l) {
+            append(e);
+        }
+    }
+
     void remove_index(u32 index) {
         u32 el_count = count();
 
