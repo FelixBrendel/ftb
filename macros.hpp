@@ -227,6 +227,15 @@ else
     if(!(cond));                                \
     else panic(__VA_ARGS__)
 
+#ifdef FTB_DEBUG
+#  define dbg_panic(...)    panic(__VA_ARGS__)
+#  define dbg_panic_if(...) panic_if(__VA_ARGS__)
+#else
+#  define dbg_panic(...)
+#  define dbg_panic_if(...)
+#endif
+
+
 #ifdef FTB_DEBUG_LOG
 #  define debug_log(...)                                        \
     do {                                                        \

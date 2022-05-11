@@ -60,6 +60,11 @@ union Face {
 struct Mesh_Data {
     Array_List<Vertex> vertices;
     Array_List<Face>   faces;
+
+    void init(u32 initial_vertex_count, u32 initial_face_count) {
+        vertices.init(initial_vertex_count);
+        faces.init(initial_face_count);
+    }
 };
 
 struct Vertex_Fingerprint {
