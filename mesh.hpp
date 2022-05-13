@@ -185,21 +185,21 @@ auto load_obj(const char* path) -> Mesh_Data {
             ++cursor;
         }
 
-        fres = res;
+        fres = (f32)res;
 
         if (*cursor == '.') {
             int div = 1;
             ++cursor;
             char* cursor_pos = cursor;
             int decimals = read_int();
-            u32 read_chars = cursor - cursor_pos;
+            u32 read_chars = (u32)(cursor - cursor_pos);
 
-            fres += ((f32)decimals/powf(10,read_chars));
+            fres += ((f32)decimals/powf(10, (f32)read_chars));
         }
         if (*cursor == 'e') {
             ++cursor;
             int exp = read_int();
-            fres *= powf(10,exp);
+            fres *= powf(10, (f32)exp);
         }
 
         return fres * negation;
@@ -337,7 +337,7 @@ std::mt19937 e2(rd());
 std::uniform_real_distribution<> dist_0_1(0.0f, 1.0f);
 
 static inline auto rand_0_1() -> f32 {
-    return dist_0_1(e2);
+    return (f32)dist_0_1(e2);
 }
 
 static auto binary_search_prob(f32* acc_probs, f32 needle, u32 count) -> u32 {
@@ -349,7 +349,7 @@ static auto binary_search_prob(f32* acc_probs, f32 needle, u32 count) -> u32 {
         count -= middle;
     }
 
-    return base-acc_probs;
+    return (u32)(base-acc_probs);
 }
 
 auto resample_mesh(Mesh_Data m, u32 num_samples, Array_List<V3>* out_points) -> void {

@@ -229,7 +229,7 @@ else
 
 #ifdef FTB_DEBUG
 #  define dbg_panic(...)    panic(__VA_ARGS__)
-#  define dbg_panic_if(...) panic_if(__VA_ARGS__)
+#  define dbg_panic_if(cond, ...) panic_if(cond, __VA_ARGS__)
 #else
 #  define dbg_panic(...)
 #  define dbg_panic_if(...)

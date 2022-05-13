@@ -29,6 +29,7 @@
 #pragma once
 #include <cstdlib>
 #include <stdlib.h>
+#include <malloc.h>
 #include <initializer_list>
 
 #ifdef FTB_INTERNAL_DEBUG
@@ -322,7 +323,7 @@ struct Array_List {
             return sorted_find(elem, compare_fun,
                                0, count - 1);
         } else if (left == right) {
-            if (left < count) {
+            if (left < (s32)count) {
                 if (compare_fun(&elem, &data[left]) == 0)
                     return left;
             }
@@ -439,7 +440,7 @@ struct String_Builder {
     }
 
     void init_from(std::initializer_list<const char*> l) {
-        list.length = l.size() > 1 ? l.size() : 1; // alloc at least one
+        list.length = l.size() > 1 ? (u32)l.size() : 1; // alloc at least one
 
         list.data = (const char**)malloc(list.length * sizeof(char*));
         list.count = 0;
@@ -473,7 +474,7 @@ struct String_Builder {
         u32* lengths = (u32*)alloca(sizeof(*lengths) * list.length);
 
         for (u32 i = 0; i < list.count; ++i) {
-            u64 length = strlen(list[i]);
+            u32 length = (u32)strlen(list[i]);
             lengths[i] = length;
             total_length += length;
         }

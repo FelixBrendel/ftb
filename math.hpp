@@ -34,6 +34,7 @@
 
 #define FTB_USING_MATH
 
+
 extern f32 pi;
 extern f32 two_pi;
 
@@ -261,12 +262,18 @@ auto m4x4_perspective(f32 fov_y, f32 aspect, f32 clip_near, f32 clip_far) -> M4x
 auto m4x4_ortho(f32 left, f32 right, f32 bottom, f32 top) -> M4x4;
 auto m4x4_ortho(f32 x_extend, f32 aspect) -> M4x4;
 
+
+auto m4x4_orientation(Quat orientation) -> M4x4;
+auto m4x4_translate(V3 tanslation) -> M4x4;
+auto m4x4_scale(V3 scale) -> M4x4;
+auto m4x4_model(V3 tanslation, Quat orientation, V3 scale) -> M4x4;
+
+auto m3x3_orientation(Quat orientation) -> M3x3;
 // ---------------------
 //     quat functions
 // ---------------------
 auto quat_from_axis_angle(V3 axis, f32 angle) -> Quat;
 auto quat_from_XYZ(f32 x, f32 y, f32 z) -> Quat;
-auto quat_to_m3x3(Quat q) -> M3x3;
 
 #else // implementations
 
@@ -818,6 +825,94 @@ auto m4x4_ortho(f32 x_extend, f32 aspect) -> M4x4 {
                       -half/aspect, half/aspect);
 }
 
+auto m4x4_scale(V3 scale) -> M4x4 {
+    M4x4 result = {};
+
+    result._00 = scale.x;
+    result._11 = scale.y;
+    result._22 = scale.z;
+    result._33 = 1;
+
+    return result;
+}
+
+auto m4x4_translate(V3 tanslation) -> M4x4 {
+    M4x4 result = {};
+
+    result._00 = 1;
+    result._11 = 1;
+    result._22 = 1;
+
+    result.columns[3].xyz = tanslation;
+    result.columns[3].w = 1;
+
+    return result;
+}
+
+auto m4x4_orientation(Quat q) -> M4x4 {
+    M4x4 result = {};
+    result._33 = 1;
+
+    f32 qxx = q.x * q.x;
+    f32 qyy = q.y * q.y;
+    f32 qzz = q.z * q.z;
+    f32 qxz = q.x * q.z;
+    f32 qxy = q.x * q.y;
+    f32 qyz = q.y * q.z;
+    f32 qwx = q.w * q.x;
+    f32 qwy = q.w * q.y;
+    f32 qwz = q.w * q.z;
+
+    result._00 = 1 - 2 * (qyy +  qzz);
+    result._01 = 2 * (qxy + qwz);
+    result._02 = 2 * (qxz - qwy);
+
+    result._10 = 2 * (qxy - qwz);
+    result._11 = 1 - 2 * (qxx +  qzz);
+    result._12 = 2 * (qyz + qwx);
+
+    result._20 = 2 * (qxz + qwy);
+    result._21 = 2 * (qyz - qwx);
+    result._22 = 1 - 2 * (qxx +  qyy);
+
+    return result;
+}
+
+auto m4x4_model(V3 tanslation, Quat orientation, V3 scale) -> M4x4 {
+    M4x4 t = m4x4_translate(tanslation);
+    M4x4 o = m4x4_orientation(orientation);
+    M4x4 s = m4x4_scale(scale);
+    return t * o * s;
+}
+
+auto m3x3_orientation(Quat q) -> M3x3 {
+    M3x3 result;
+
+    f32 qxx = q.x * q.x;
+    f32 qyy = q.y * q.y;
+    f32 qzz = q.z * q.z;
+    f32 qxz = q.x * q.z;
+    f32 qxy = q.x * q.y;
+    f32 qyz = q.y * q.z;
+    f32 qwx = q.w * q.x;
+    f32 qwy = q.w * q.y;
+    f32 qwz = q.w * q.z;
+
+    result._00 = 1 - 2 * (qyy +  qzz);
+    result._01 = 2 * (qxy + qwz);
+    result._02 = 2 * (qxz - qwy);
+
+    result._10 = 2 * (qxy - qwz);
+    result._11 = 1 - 2 * (qxx +  qzz);
+    result._12 = 2 * (qyz + qwx);
+
+    result._20 = 2 * (qxz + qwy);
+    result._21 = 2 * (qyz - qwx);
+    result._22 = 1 - 2 * (qxx +  qyy);
+
+    return result;
+}
+
 // ---------------------
 //     quat functions
 // ---------------------
@@ -844,34 +939,6 @@ auto quat_from_XYZ(f32 x, f32 y, f32 z) -> Quat {
         cx*sy*cz + sx*cy*sz,
         cx*cy*sz - sx*sy*cz
     };
-}
-
-auto quat_to_m3x3(Quat q) -> M3x3 {
-    M3x3 result;
-
-    f32 qxx = q.x * q.x;
-    f32 qyy = q.y * q.y;
-    f32 qzz = q.z * q.z;
-    f32 qxz = q.x * q.z;
-    f32 qxy = q.x * q.y;
-    f32 qyz = q.y * q.z;
-    f32 qwx = q.w * q.x;
-    f32 qwy = q.w * q.y;
-    f32 qwz = q.w * q.z;
-
-    result._00 = 1 - 2 * (qyy +  qzz);
-    result._01 = 2 * (qxy + qwz);
-    result._02 = 2 * (qxz - qwy);
-
-    result._10 = 2 * (qxy - qwz);
-    result._11 = 1 - 2 * (qxx +  qzz);
-    result._12 = 2 * (qyz + qwx);
-
-    result._20 = 2 * (qxz + qwy);
-    result._21 = 2 * (qyz - qwx);
-    result._22 = 1 - 2 * (qxx +  qyy);
-
-    return result;
 }
 
 #endif // FTB_MATH_IMPL
