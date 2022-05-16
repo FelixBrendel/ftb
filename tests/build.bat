@@ -12,21 +12,24 @@ set EXE_LINUX=%EXE_RAW%
 set BINDIR_WIN=.\%BINDIR_RAW%
 set BINDIR_LINUX=./%BINDIR_RAW%
 
-rem echo.
-rem echo clang:
-rem clang -g -std=c++17 %SRC% -o %BINDIR_WIN%\clang_%EXE_WIN%
-rem %BINDIR_WIN%\clang_%EXE_WIN%
+echo.
+echo clang:
+clang++ -g -std=c++17 printer_colors.cpp -o %BINDIR_WIN%\clang_printer_colors.exe
+clang -g -std=c++17 %SRC% -o %BINDIR_WIN%\clang_%EXE_WIN%
+%BINDIR_WIN%\clang_printer_colors
+echo.
+%BINDIR_WIN%\clang_%EXE_WIN%
 
 rem echo.
 rem echo g++:
 rem g++ -std=c++17 %SRC% -o %BINDIR_WIN%\g++_%EXE_WIN%
 rem %BINDIR_WIN%\g++_%EXE_WIN%
 
-echo.
-echo cl:
-cl %SRC% /std:c++latest /nologo /Zi /Fd: %BINDIR_WIN%\cl_%EXE_WIN%.pdb /Fo: %BINDIR_WIN%\ /Fe: %BINDIR_WIN%\cl_%EXE_WIN% /wd4090 /DFTB_INTERNAL_DEBUG
-echo running:
-%BINDIR_WIN%\cl_%EXE_WIN%
+rem echo.
+rem echo cl:
+rem cl %SRC% /std:c++latest /nologo /Zi /Fd: %BINDIR_WIN%\cl_%EXE_WIN%.pdb /Fo: %BINDIR_WIN%\ /Fe: %BINDIR_WIN%\cl_%EXE_WIN% /wd4090 /DFTB_INTERNAL_DEBUG
+rem echo running:
+rem %BINDIR_WIN%\cl_%EXE_WIN%
 
 rem echo.
 rem echo bash_clang:

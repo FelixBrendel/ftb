@@ -47,14 +47,72 @@ extern FILE* ftb_stdout;
 
 // NOTE(Felix): These are defines, so that the preprocessor can concat string
 //   literals as in: `console_red "hello" console_normal'
-#define console_red     "\x1B[31m"
-#define console_green   "\x1B[32m"
-#define console_yellow  "\x1B[33m"
-#define console_blue    "\x1B[34m"
-#define console_magenta "\x1B[35m"
-#define console_cyan    "\x1B[36m"
-#define console_white   "\x1B[37m"
+// normal
+#define console_black        "\x1B[0;30m"
+#define console_red          "\x1B[0;31m"
+#define console_green        "\x1B[0;32m"
+#define console_yellow       "\x1B[0;33m"
+#define console_blue         "\x1B[0;34m"
+#define console_magenta      "\x1B[0;35m"
+#define console_cyan         "\x1B[0;36m"
+#define console_white        "\x1B[0;37m"
+// bold
+#define console_black_bold   "\x1B[1;30m"
+#define console_red_bold     "\x1B[1;31m"
+#define console_green_bold   "\x1B[1;32m"
+#define console_yellow_bold  "\x1B[1;33m"
+#define console_blue_bold    "\x1B[1;34m"
+#define console_magenta_bold "\x1B[1;35m"
+#define console_cyan_bold    "\x1B[1;36m"
+#define console_white_bold   "\x1B[1;37m"
+// dim
+#define console_black_dim   "\x1B[2;30m"
+#define console_red_dim     "\x1B[2;31m"
+#define console_green_dim   "\x1B[2;32m"
+#define console_yellow_dim  "\x1B[2;33m"
+#define console_blue_dim    "\x1B[2;34m"
+#define console_magenta_dim "\x1B[2;35m"
+#define console_cyan_dim    "\x1B[2;36m"
+#define console_white_dim   "\x1B[2;37m"
+// blink
+#define console_black_blinking   "\x1B[5;30m"
+#define console_red_blinking     "\x1B[5;31m"
+#define console_green_blinking   "\x1B[5;32m"
+#define console_yellow_blinking  "\x1B[5;33m"
+#define console_blue_blinking    "\x1B[5;34m"
+#define console_magenta_blinking "\x1B[5;35m"
+#define console_cyan_blinking    "\x1B[5;36m"
+#define console_white_blinking   "\x1B[5;37m"
+// underline
+#define console_black_underline   "\x1B[4;30m"
+#define console_red_underline     "\x1B[4;31m"
+#define console_green_underline   "\x1B[4;32m"
+#define console_yellow_underline  "\x1B[4;33m"
+#define console_blue_underline    "\x1B[4;34m"
+#define console_magenta_underline "\x1B[4;35m"
+#define console_cyan_underline    "\x1B[4;36m"
+#define console_white_underline   "\x1B[4;37m"
+// high intensity
+#define console_black_high_intensity   "\x1B[0;90m"
+#define console_red_high_intensity     "\x1B[0;91m"
+#define console_green_high_intensity   "\x1B[0;92m"
+#define console_yellow_high_intensity  "\x1B[0;93m"
+#define console_blue_high_intensity    "\x1B[0;94m"
+#define console_magenta_high_intensity "\x1B[0;95m"
+#define console_cyan_high_intensity    "\x1B[0;96m"
+#define console_white_high_intensity   "\x1B[0;97m"
+// bold+high intensity
+#define console_black_bold_high_intensity   "\x1B[1;90m"
+#define console_red_bold_high_intensity     "\x1B[1;91m"
+#define console_green_bold_high_intensity   "\x1B[1;92m"
+#define console_yellow_bold_high_intensity  "\x1B[1;93m"
+#define console_blue_bold_high_intensity    "\x1B[1;94m"
+#define console_magenta_bold_high_intensity "\x1B[1;95m"
+#define console_cyan_bold_high_intensity    "\x1B[1;96m"
+#define console_white_bold_high_intensity   "\x1B[1;97m"
+// reset
 #define console_normal  "\x1B[0m"
+
 
 typedef const char* static_string;
 typedef int (*printer_function_32b)(FILE*, u32);
