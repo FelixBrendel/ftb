@@ -967,10 +967,10 @@ auto quat_from_XYZ(f32 x, f32 y, f32 z) -> Quat {
     f32 cz = cosf(deg_to_rad(z) / 2);
 
     return Quat {
-        cx*cy*cz + sx*sy*sz,
-        sx*cy*cz - cx*sy*sz,
-        cx*sy*cz + sx*cy*sz,
-        cx*cy*sz - sx*sy*cz
+        .x = sx*cy*cz - cx*sy*sz,
+        .y = cx*sy*cz + sx*cy*sz,
+        .z = cx*cy*sz - sx*sy*cz,
+        .w = cx*cy*cz + sx*sy*sz,
     };
 }
 
