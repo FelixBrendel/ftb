@@ -95,7 +95,11 @@ union V4 {
         f32 _padding_3;
     };
     struct {
+        V3 rgb;
         f32 _padding_4;
+    };
+    struct {
+        f32 _padding_5;
         V3 yzw;
     };
     f32 elements[4];
@@ -175,6 +179,11 @@ auto clamped_lerp(f32 from, f32 t, f32 to) -> f32;
 // ---------------------
 //   vector functions
 // ---------------------
+
+auto remap(V2 from_a, V2 val, V2 to_a, V2 from_b, V2 to_b) -> V2;
+auto remap(V3 from_a, V3 val, V3 to_a, V3 from_b, V3 to_b) -> V3;
+auto remap(V4 from_a, V4 val, V4 to_a, V4 from_b, V4 to_b) -> V4;
+
 auto v3(V2 xy, f32 z) -> V3;
 auto v4(V3 xyz, f32 w) -> V4;
 
@@ -325,6 +334,30 @@ auto clamped_lerp(f32 from, f32 t, f32 to) -> f32 {
 // ---------------------
 //   vector functions
 // ---------------------
+auto remap(V2 from_a, V2 val, V2 to_a, V2 from_b, V2 to_b) -> V2 {
+    return {
+        remap(from_a.x, val.x, to_a.x, from_b.x, to_b.x),
+        remap(from_a.y, val.y, to_a.y, from_b.y, to_b.y),
+    };
+}
+
+auto remap(V3 from_a, V3 val, V3 to_a, V3 from_b, V3 to_b) -> V3 {
+    return {
+        remap(from_a.x, val.x, to_a.x, from_b.x, to_b.x),
+        remap(from_a.y, val.y, to_a.y, from_b.y, to_b.y),
+        remap(from_a.z, val.z, to_a.z, from_b.z, to_b.z),
+    };
+}
+
+auto remap(V4 from_a, V4 val, V4 to_a, V4 from_b, V4 to_b) -> V4 {
+    return {
+        remap(from_a.x, val.x, to_a.x, from_b.x, to_b.x),
+        remap(from_a.y, val.y, to_a.y, from_b.y, to_b.y),
+        remap(from_a.z, val.z, to_a.z, from_b.z, to_b.z),
+        remap(from_a.w, val.w, to_a.w, from_b.w, to_b.w),
+    };
+}
+
 auto v3(V2 xy, f32 z = 0) -> V3 {
     return {
         xy.x,
