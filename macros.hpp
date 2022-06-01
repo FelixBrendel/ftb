@@ -59,6 +59,7 @@
 #include "platform.hpp"
 
 #define array_length(arr) (sizeof(arr) / sizeof(arr[0]))
+#define zero_out(thing) memset(&(thing), 0, sizeof((thing)));
 
 #ifdef FTB_WINDOWS
 #else
@@ -114,101 +115,77 @@
 struct defer_dummy {};
 template <class F> struct deferrer { F f; ~deferrer() { f(); } operator bool() const { return false; } };
 template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
-#define DEFER_(LINE) zz_defer##LINE
-#define DEFER(LINE) DEFER_(LINE)
-#define defer auto DEFER(__LINE__) = defer_dummy{} *[&]()
+#  define DEFER_(LINE) zz_defer##LINE
+#  define DEFER(LINE) DEFER_(LINE)
+#  define defer auto DEFER(__LINE__) = defer_dummy{} *[&]()
 #endif // defer
+
 
 #define defer_free(var) defer { free(var); }
 
-/*
-   defer {
-       call();
-    };
+#define create_guarded_block(before_code, after_code)   \
+    if ([&](){before_code; return false;}());           \
+    else if (defer {after_code}); else
 
-expands to:
-
-    auto zz_defer74 = defer_dummy{} * [&] {
-       call();
-    };
-*/
 
 #if defined(unix) || defined(__unix__) || defined(__unix)
-#define NULL_HANDLE "/dev/null"
+#  define NULL_HANDLE "/dev/null"
 #else
-#define NULL_HANDLE "nul"
+#  define NULL_HANDLE "nul"
 #endif
-#define ignore_stdout                                                   \
-    if (0)                                                              \
-        LABEL(finished,__LINE__): ;                                     \
-    else                                                                \
-        for (FILE* LABEL(fluid_let_, __LINE__) = ftb_stdout;;)                             \
-            for (defer{ fclose(ftb_stdout); ftb_stdout=LABEL(fluid_let_, __LINE__) ; } ;;) \
-                if (1) {                                                \
-                    ftb_stdout = fopen(NULL_HANDLE, "w");               \
-                    goto LABEL(body,__LINE__);                          \
-                }                                                       \
-                else                                                    \
-                    while (1)                                           \
-                        if (1) {                                        \
-                            goto LABEL(finished, __LINE__);             \
-                        }                                               \
-                        else LABEL(body,__LINE__):
 
-
-/*****************
- *   fluid-let   *
- *****************/
+#define ignore_stdout                                               \
+    MPP_DECLARE(1, FILE* LABEL(ignore_stdout_old_handle, __LINE__) = ftb_stdout) \
+    MPP_BEFORE(2, ftb_stdout = fopen(NULL_HANDLE, "w");)            \
+    MPP_DEFER(3, {                                                  \
+            fclose(ftb_stdout);                                     \
+            ftb_stdout=LABEL(ignore_stdout_old_handle, __LINE__);   \
+        })
 
 #define fluid_let(var, val)                                             \
-    if (0)                                                              \
-        LABEL(finished,__LINE__): ;                               \
-    else                                                                \
-        for (auto LABEL(fluid_let_, __LINE__) = var;;)            \
-            for (defer{var = LABEL(fluid_let_, __LINE__);};;)     \
-                for(var = val;;)                                        \
-                    if (1) {                                            \
-                        goto LABEL(body,__LINE__);                \
-                    }                                                   \
-                    else                                                \
-                        while (1)                                       \
-                            if (1) {                                    \
-                                goto TOKENPASTE2(finished, __LINE__);   \
-                            }                                           \
-                            else TOKENPASTE2(body,__LINE__):
-                                     ;
+    MPP_DECLARE(1, auto LABEL(fluid_let_, __LINE__) = var)              \
+    MPP_BEFORE(2, var = val;)                                           \
+    MPP_DEFER(3, var = LABEL(fluid_let_, __LINE__);)
 
 
-/**
-fluid_let(var, val) {
-    call1(var);
-    call2(var);
-}
+/*
+ * NOTE(Felix): About logs, asserts and panics
+ *
+ * 1. All macros that take a message, use the ftb printer with all its printing
+ *    functionality.
+ *
+ * 2. All macros which contain the word 'debug' are only active in debug builds
+ *    (FTB_DEBUG defined). They compile away in other builds.
+ *
+ * 3. debug_break() triggers a debug breakpoint.
+ *
+ * 4. log macros just print things out.
+ *   - log_debug [only active in debug builds]
+ *   - log_info
+ *   - log_warning
+ *   - log_error
+ *   - log_trace: prints the current function with file and line
+ *
+ * 5. panic macros let the program crash with a given error message and print
+ *    the stack trace (if available).
+ *    - panic(format, ...)
+ *    - debug_panic(format, ...) [only active in debug builds]
+ *
+ * 6. 'panic_if' macros are a shorthand to panic if a condition is met. An error
+ *    description has to be supplied. It will call panic internally.
+ *    - panic_if(cond, format, ...)
+ *    - debug_panic_if(cond, format, ...) [only active in debug builds]
+ *
+ * 7. Similar to panic_if there are more traditional 'assert' macros. The also
+ *    call panic internally, but no error message has to be provided.
+ *    - assert(cond)
+ *    - debug_assert(cond)
+ */
 
-expands to
-
-if (0)
-    finished98:;
-else
-    for (auto fluid_let_98 = var;;)
-        for (auto __deferred_lambda_call0 = deferrer << [&] { var = fluid_let_98; };;)
-            for (var = val;;)
-                if (1) {
-                    goto body98;
-                } else
-                    while (1)
-                        if (1) {
-                            goto finished98;
-                        } else
-                          body98 : {
-                              call1(var);
-                              call2(var);
-                          }
-*/
 
 #define panic(...)                                                          \
     do {                                                                    \
-        print("%{color<}[Panic]%{>color} in "                               \
+        print("%{color<}[ PANIC ]%{>color} in "                             \
               "file %{color<}%{->char}%{>color} "                           \
               "line %{color<}%{u32}%{>color}: "                             \
               "(%{color<}%{->char}%{>color})\n",                            \
@@ -228,31 +205,43 @@ else
     else panic(__VA_ARGS__)
 
 #ifdef FTB_DEBUG
-#  define dbg_panic(...)    panic(__VA_ARGS__)
-#  define dbg_panic_if(cond, ...) panic_if(cond, __VA_ARGS__)
+#  define debug_panic(...)    panic(__VA_ARGS__)
+#  define debug_panic_if(cond, ...) panic_if(cond, __VA_ARGS__)
 #else
-#  define dbg_panic(...)
-#  define dbg_panic_if(...)
+#  define debug_panic(...)
+#  define debug_panic_if(...)
 #endif
 
+#define one_statement(statements) do {statements} while(0)
 
-#ifdef FTB_DEBUG_LOG
-#  define debug_log(...)                                        \
-    do {                                                        \
-        print("%{color<}[INFO " __FILE__ ":%{color<}%{->char}"  \
-              "%{>color}]%{>color} ",                           \
-              console_green, console_cyan, __func__);           \
-        println(__VA_ARGS__);                                   \
-    } while (0)
+#ifdef FTB_DEBUG
+#  define log_debug(...)   one_statement(print("%{color<}[ DEBUG ] ", console_cyan_dim); print(__VA_ARGS__); println("%{>color}");)
 #else
-#  define debug_log(...)
+#  define log_debug(...)
+#endif
+#define log_info(...)    one_statement(print("%{color<}[  INFO ] ", console_green);    print(__VA_ARGS__); println("%{>color}");)
+#define log_warning(...) one_statement(print("%{color<}[WARNING] ", console_yellow);   print(__VA_ARGS__); println("%{>color}");)
+#define log_error(...)   one_statement(print("%{color<}[ ERROR ] ", console_red_bold); print(__VA_ARGS__); println("%{>color}");)
+#define log_trace()     println("%{color<}[ TRACE ] %s (%s:%d)%{>color}", \
+                                console_cyan_dim ,__func__, __FILE__, __LINE__)
+
+#ifdef assert
+#  undef assert
+#endif
+#define assert(cond)         if(cond);else panic("Assertion error")
+
+#ifdef FTB_DEBUG
+#  define debug_assert(cond) if(cond);else panic("Debug assertion error")
+#else
+#  define debug_assert(...)
 #endif
 
-#ifdef FTB_WINDOWS
-#  define debug_break() __debugbreak()
+#ifdef FTB_DEBUG
+#  ifdef FTB_WINDOWS
+#    define debug_break() __debugbreak()
+#  else
+#    define debug_break() raise(SIGTRAP)
+#  endif
 #else
-#  define debug_break() raise(SIGTRAP);
+#  define debug_break()
 #endif
-
-
-#define zero_out(thing) memset(&(thing), 0, sizeof((thing)));
