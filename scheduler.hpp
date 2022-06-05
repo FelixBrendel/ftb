@@ -411,12 +411,12 @@ auto Scheduler::schedule_action(Scheduled_Action_Create_Info aci) -> Scheduled_A
 
     scheduled_action->seconds_to_run = aci.seconds_to_run;
     _init_action(&scheduled_action->action, aci.action);
-    debug_log("scheduling action %s %d", aci.action.name, scheduled_action->action.creation_stamp);
+    log_debug("scheduling action %s %d", aci.action.name, scheduled_action->action.creation_stamp);
     return scheduled_action;
 }
 
 auto Scheduler::_actually_reset() -> void {
-    debug_log("HARD RESET SCHEDULER");
+    log_debug("HARD RESET SCHEDULER");
     _should_reset = false;
     active_animations->clear();
     scheduled_actions->clear();
@@ -440,7 +440,7 @@ auto Scheduler::_actually_reset() -> void {
 
 auto Scheduler::reset() -> void {
     if (_is_iterating) {
-        debug_log("SOFT RESET Scheduler");
+        log_debug("SOFT RESET Scheduler");
         _should_reset = true;
         future_active_animations->clear();
         future_scheduled_actions->clear();
@@ -501,7 +501,7 @@ inline auto Scheduler::chain_action(Action_Or_Animation aoa, Action_Create_Info 
 }
 
 inline auto Scheduler::execute_action(Action* action) -> void {
-    debug_log("running action %s %d", action->name, action->creation_stamp);
+    log_debug("running action %s %d", action->name, action->creation_stamp);
 
     action->already_ran = true;
     if (action->type == Function_Type::Closure) {
@@ -510,28 +510,28 @@ inline auto Scheduler::execute_action(Action* action) -> void {
         action->lambda();
     }
 
-    debug_log("finished running action %s %d", action->name, action->creation_stamp);
+    log_debug("finished running action %s %d", action->name, action->creation_stamp);
 }
 
 auto Scheduler::handle_chained_action(Action* action) -> void {
-    debug_log("Handling chained actions");
+    log_debug("Handling chained actions");
     while (action) {
-        debug_log("RUNNING CHAINED %s %d", action->name, action->creation_stamp);
+        log_debug("RUNNING CHAINED %s %d", action->name, action->creation_stamp);
         execute_action(action);
 
-        debug_log("DELETING action %s %d", action->name, action->creation_stamp);
+        log_debug("DELETING action %s %d", action->name, action->creation_stamp);
         chained_actions->free_object(action);
         action = action->next;
 
         if (_should_stop_iterating) break;
     }
-    debug_log("Chained actions done");
+    log_debug("Chained actions done");
 }
 
 auto Scheduler::run_pending_actions_and_reset() -> void {
     Auto_Array_List<Action*> pending_actions(16);
 
-    debug_log("%{color<}Running pending actions:", console_cyan);
+    log_debug("%{color<}Running pending actions:", console_cyan);
     scheduled_actions->for_each([&](Scheduled_Action* s_action) {
         if (!s_action->action.already_ran) {
             pending_actions.append(&s_action->action);
@@ -556,7 +556,7 @@ auto Scheduler::run_pending_actions_and_reset() -> void {
         execute_action(action);
     }
 
-    debug_log("pending_actions done%{>color}");
+    log_debug("pending_actions done%{>color}");
     _should_stop_iterating = true;
     reset();
 }

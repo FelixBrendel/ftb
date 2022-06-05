@@ -89,7 +89,12 @@ auto print_stacktrace() -> void {
     int child_pid = fork();
     if (!child_pid) {
         dup2(2,1); // redirect output to stderr - edit: unnecessary?
-        execl("/usr/bin/gdb", "gdb", "--batch", "-n", "-ex", "thread", "-ex", "bt", name_buf, pid_buf, NULL);
+
+        // NOTE(Felix): the "-n" flag will prevent loading the ~/.gdbinit file
+        //   which users might have created to disable some additional
+        //   information or warnings on screen. So we probably let them load it,
+        //   by not passing "-n" to gdb
+        execl("/usr/bin/gdb", "gdb", "--batch", /*"-n",*/ "-ex", "thread", "-ex", "bt", name_buf, pid_buf, NULL);
         abort(); /* If gdb failed to start */
     } else {
         waitpid(child_pid,NULL,0);

@@ -186,7 +186,6 @@ int maybe_special_print(FILE* file, static_string format, int* pos, va_list* arg
     u64 spec_hash = hm_hash(spec);
     Printer_Function_Type type = (Printer_Function_Type)type_map.get_object(spec, spec_hash);
 
-
     union {
         printer_function_32b printer_32b;
         printer_function_64b printer_64b;
@@ -320,7 +319,12 @@ int maybe_fprintf(FILE* file, static_string format, int* pos, va_list* arg_list)
     // specifier ::= [c d i e E f g G o s u x X p n %]
     int end_pos = *pos;
     int written_len = 0;
-    int used_arg_values = 1;
+
+    // NOTE(Felix): Somehow we have to pass a copy of the list to vfprintf later
+    //   because otherwise it destroys it on some platforms :(
+    va_list arg_list_copy;
+    va_copy(arg_list_copy, *arg_list);
+    defer { va_end(arg_list_copy); };
 
     // overstep flags:
     while(format[end_pos] == '+' ||
@@ -332,7 +336,7 @@ int maybe_fprintf(FILE* file, static_string format, int* pos, va_list* arg_list)
 
     // overstep width
     if (format[end_pos] == '*') {
-        ++used_arg_values;
+        va_arg(*arg_list, u32);
         ++end_pos;
     }
     else {
@@ -344,7 +348,7 @@ int maybe_fprintf(FILE* file, static_string format, int* pos, va_list* arg_list)
     if (format[end_pos] == '.') {
         ++end_pos;
         if (format[end_pos] == '*') {
-            ++used_arg_values;
+            va_arg(*arg_list, u32);
             ++end_pos;
         }
         else {
@@ -384,28 +388,14 @@ int maybe_fprintf(FILE* file, static_string format, int* pos, va_list* arg_list)
         strncpy(temp+1, format+*pos, written_len);
         temp[written_len] = 0;
 
-        // printf("\ntest:: len(%s) = %d\n", temp, written_len+1);
 
-        /// NOTE(Felix): Somehow we have to pass a copy of the list to vfprintf
-        // because otherwise it destroys it on some platforms :(
-        va_list arg_list_copy;
-        va_copy(arg_list_copy, *arg_list);
         written_len = vfprintf(file, temp, arg_list_copy);
-        va_end(arg_list_copy);
 
-        // NOTE(Felix): manually overstep the args that vfprintf will have used
-        //   all except the last used_arg will be integers (I hope) like for the
-        //   padding and width and stuff, so we can overstep them with asking
-        //   for a void*, but for the last one we need to check if it is a float
-        //   so we can overstep it as a float.
-
-        for (int i = 0; i < used_arg_values-1;  ++i) {
-            va_arg(*arg_list, void*);
-        }
+        // TODO(Felix): todo overstep the correct ones by type
         if (format[end_pos] == 'f' || format[end_pos] == 'g' || format[end_pos] == 'G' ||
             format[end_pos] == 'e' || format[end_pos] == 'E')
         {
-            va_arg(*arg_list, f64);
+            va_arg(*arg_list, double);
         } else {
             va_arg(*arg_list, void*);
         }

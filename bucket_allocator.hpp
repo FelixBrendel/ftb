@@ -131,8 +131,8 @@ struct Bucket_Allocator {
             if (free_list.count != 0) {
                 return free_list.data[--free_list.count];
             }
-             ret = buckets[next_bucket_index]+next_index_in_latest_bucket;
-             increment_pointers(1);
+            ret = buckets[next_bucket_index]+next_index_in_latest_bucket;
+            increment_pointers(1);
             return ret;
         }
         if (amount > bucket_size)
