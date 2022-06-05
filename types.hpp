@@ -46,7 +46,7 @@ typedef uint64_t u64;
 typedef uint8_t byte;
 
 typedef float       f32;
-typedef long double f64;
+typedef double      f64;
 
 #ifdef UNICODE
 typedef wchar_t path_char;
