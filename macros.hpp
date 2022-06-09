@@ -228,7 +228,7 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
 #ifdef assert
 #  undef assert
 #endif
-#define assert(cond)         if(cond);else panic("Assertion error")
+#define assert(cond)         if(cond);else panic("Assertion error: (%s)", #cond)
 
 #ifdef FTB_DEBUG
 #  define debug_assert(cond) if(cond);else panic("Debug assertion error")
