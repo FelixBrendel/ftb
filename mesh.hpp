@@ -80,6 +80,7 @@ auto hm_hash(Vertex_Fingerprint v) -> u64;
 auto hm_objects_match(Vertex_Fingerprint a, Vertex_Fingerprint b) -> bool;
 auto load_obj(const char* path) -> Mesh_Data;
 auto resample_mesh(Mesh_Data m, u32 num_samples, Array_List<V3>* out_points) -> void;
+auto generate_fibonacci_sphere(u32 num_points, Array_List<V3>* out_points) -> void;
 
 #else // implementations
 
@@ -468,6 +469,24 @@ auto resample_mesh(Mesh_Data m, u32 num_samples, Array_List<V3>* out_points) -> 
         V3 new_point = u*v1 + v*v2 + w*v3;
 
         out_points->append(new_point);
+    }
+}
+
+auto generate_fibonacci_sphere(u32 num_points, Array_List<V3>* out_points) -> void {
+    const f32 golden_ratio_inv = 1.0f / 1.618033988749f;
+    const f32 two_pi = 2.0f * 3.14159265358979323846f;
+    const f32 num_points_inv = 1.0f / num_points;
+
+    out_points->reserve(num_points);
+
+    for (u32 i = 0; i < num_points; ++i) {
+        f32 theta = two_pi * i * golden_ratio_inv;
+        f32 phi   = acosf(1 - 2*(i+0.5) * num_points_inv);
+        out_points->append({
+                cosf(theta) * sinf(phi),
+                sinf(theta) * sinf(phi),
+                cosf(phi)
+        });
     }
 }
 
