@@ -222,8 +222,7 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
 #define log_info(...)    one_statement(print("%{color<}[  INFO ] ", console_green);    print(__VA_ARGS__); println("%{>color}");)
 #define log_warning(...) one_statement(print("%{color<}[WARNING] ", console_yellow);   print(__VA_ARGS__); println("%{>color}");)
 #define log_error(...)   one_statement(print("%{color<}[ ERROR ] ", console_red_bold); print(__VA_ARGS__); println("%{>color}");)
-#define log_trace()     println("%{color<}[ TRACE ] %s (%s:%d)%{>color}", \
-                                console_cyan_dim ,__func__, __FILE__, __LINE__)
+#define log_trace()      println("%{color<}[ TRACE ] %s (%s:%d)%{>color}", console_cyan_dim ,__func__, __FILE__, __LINE__)
 
 #ifdef assert
 #  undef assert
