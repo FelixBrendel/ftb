@@ -53,7 +53,7 @@ struct Timer {
 
 
 
-#ifdef FTB_TIMER_IMPL
+#ifdef FTB_PROFILER_IMPL
 #  ifdef FTB_WINDOWS
 
 Time_Stamp start_timer() {}

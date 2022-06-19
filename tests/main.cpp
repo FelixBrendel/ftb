@@ -524,6 +524,62 @@ auto test_array_list_sort_many() -> testresult {
     return pass;
 }
 
+auto test_string_split() -> testresult {
+    {
+        String s = {
+            .data   = (char*)"aa|bb|cc",
+            .length = 8
+        };
+
+        String_Split ss;
+        ss.init(s, '|');
+
+        String expected0 = (String){.data = (char*)"aa", .length=2};
+        String expected1 = (String){.data = (char*)"bb", .length=2};
+        String expected2 = (String){.data = (char*)"cc", .length=2};
+
+        assert_equal_int(ss.num_splits(), 3);
+
+        assert_equal_string(ss[0], expected0);
+        assert_equal_string(ss[1], expected1);
+        assert_equal_string(ss[2], expected2);
+
+    }
+
+    {
+        String s = {
+            .data   = (char*)"|aa||bb|||cc|",
+            .length = 13
+        };
+
+        String_Split ss;
+        ss.init(s, '|');
+
+        String expected0 = (String){.data = (char*)"",   .length=0};
+        String expected1 = (String){.data = (char*)"aa", .length=2};
+        String expected2 = (String){.data = (char*)"",   .length=0};
+        String expected3 = (String){.data = (char*)"bb", .length=2};
+        String expected4 = (String){.data = (char*)"",   .length=0};
+        String expected5 = (String){.data = (char*)"",   .length=0};
+        String expected6 = (String){.data = (char*)"cc", .length=2};
+        String expected7 = (String){.data = (char*)"",   .length=0};
+
+        assert_equal_int(ss.num_splits(), 8);
+
+        assert_equal_string(ss[0], expected0);
+        assert_equal_string(ss[1], expected1);
+        assert_equal_string(ss[2], expected2);
+        assert_equal_string(ss[3], expected3);
+        assert_equal_string(ss[4], expected4);
+        assert_equal_string(ss[5], expected5);
+        assert_equal_string(ss[6], expected6);
+        assert_equal_string(ss[7], expected7);
+
+    }
+
+    return pass;
+}
+
 auto test_hooks() -> testresult {
     s32 a = 0;
     s32 b = 0;
@@ -1303,6 +1359,7 @@ s32 main(s32, char**) {
     invoke_test(test_array_lists_sorting);
     invoke_test(test_array_lists_searching);
     invoke_test(test_array_list_sort_many);
+    invoke_test(test_string_split);
     invoke_test(test_stack_array_lists);
     invoke_test(test_bucket_allocator);
     invoke_test(test_hooks);
