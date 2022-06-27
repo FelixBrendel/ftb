@@ -514,6 +514,10 @@ struct String_Split {
         }
     }
 
+    void deinit() {
+        splits.deinit();
+    }
+
     u32 num_splits() {
         return splits.count + 1;
     }
