@@ -81,6 +81,7 @@ auto hm_objects_match(Vertex_Fingerprint a, Vertex_Fingerprint b) -> bool;
 auto load_obj(const char* path) -> Mesh_Data;
 auto resample_mesh(Mesh_Data m, u32 num_samples, Array_List<V3>* out_points) -> void;
 auto generate_fibonacci_sphere(u32 num_points, Array_List<V3>* out_points) -> void;
+auto get_random_barycentric_coordinates(f32* out_u, f32* out_v, f32* out_w) -> void;
 
 #else // implementations
 
@@ -343,6 +344,16 @@ static inline auto rand_0_1() -> f32 {
     return (f32)dist_0_1(e2);
 }
 
+auto get_random_barycentric_coordinates(f32* out_u, f32* out_v, f32* out_w) -> void {
+    f32 r1 = rand_0_1();
+    f32 r2 = rand_0_1();
+    f32 sqrt_r1 = sqrtf(r1);
+
+    *out_u = 1-sqrt_r1;
+    *out_v = sqrt_r1*(1-r2);
+    *out_w = sqrt_r1*r2;
+}
+
 static auto binary_search_prob(f32* acc_probs, f32 needle, u32 count) -> u32 {
     f32* base = acc_probs;
 
@@ -450,9 +461,6 @@ auto resample_mesh(Mesh_Data m, u32 num_samples, Array_List<V3>* out_points) -> 
     // Actually sample the thing
     for (u32 s = 0; s < num_samples; ++s) {
         f32 face_idx_rng = rand_0_1();
-        f32 r1 = rand_0_1();
-        f32 r2 = rand_0_1();
-
         u32 prob_idx = binary_search_prob(acc_probs, face_idx_rng, m.faces.count);
         u32 face_idx = prob_idx;
 
@@ -460,11 +468,8 @@ auto resample_mesh(Mesh_Data m, u32 num_samples, Array_List<V3>* out_points) -> 
         V3 v2 = m.vertices[m.faces[face_idx].v2].position;
         V3 v3 = m.vertices[m.faces[face_idx].v3].position;
 
-        f32 sqrt_r1 = sqrtf(r1);
-
-        f32 u = 1-sqrt_r1;
-        f32 v = sqrt_r1*(1-r2);
-        f32 w = sqrt_r1*r2;
+        f32 u, v, w;
+        get_random_barycentric_coordinates(&u, &v, &w);
 
         V3 new_point = u*v1 + v*v2 + w*v3;
 
