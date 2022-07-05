@@ -183,20 +183,20 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
  */
 
 
-#define panic(...)                                                          \
-    do {                                                                    \
-        print("%{color<}[ PANIC ]%{>color} in "                             \
-              "file %{color<}%{->char}%{>color} "                           \
-              "line %{color<}%{u32}%{>color}: "                             \
-              "(%{color<}%{->char}%{>color})\n",                            \
-              console_red, console_cyan, __FILE__, console_cyan, __LINE__,  \
-              console_cyan, __func__);                                      \
-        print("%{color<}", console_red);                                    \
-        print(__VA_ARGS__);                                                 \
-        print("%{>color}\n");                                               \
-        fflush(stdout);                                                     \
-        print_stacktrace();                                                 \
-        debug_break();                                                      \
+#define panic(...)                                                      \
+    do {                                                                \
+        ::print("%{color<}[ PANIC ]%{>color} in "                       \
+                "file %{color<}%{->char}%{>color} "                     \
+                "line %{color<}%{u32}%{>color}: "                       \
+                "(%{color<}%{->char}%{>color})\n",                      \
+                console_red, console_cyan, __FILE__, console_cyan, __LINE__, \
+                console_cyan, __func__);                                \
+        ::print("%{color<}", console_red);                              \
+        ::print(__VA_ARGS__);                                           \
+        ::print("%{>color}\n");                                         \
+        fflush(stdout);                                                 \
+        print_stacktrace();                                             \
+        debug_break();                                                  \
     } while(0)
 
 
@@ -219,11 +219,10 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
 #else
 #  define log_debug(...)
 #endif
-#define log_info(...)    one_statement(print("%{color<}[  INFO ] ", console_green);    print(__VA_ARGS__); println("%{>color}");)
-#define log_warning(...) one_statement(print("%{color<}[WARNING] ", console_yellow);   print(__VA_ARGS__); println("%{>color}");)
-#define log_error(...)   one_statement(print("%{color<}[ ERROR ] ", console_red_bold); print(__VA_ARGS__); println("%{>color}");)
-#define log_trace()     println("%{color<}[ TRACE ] %s (%s:%d)%{>color}", \
-                                console_cyan_dim ,__func__, __FILE__, __LINE__)
+#define log_info(...)    one_statement(::print("%{color<}[  INFO ] ", console_green);    ::print(__VA_ARGS__); ::println("%{>color}");)
+#define log_warning(...) one_statement(::print("%{color<}[WARNING] ", console_yellow);   ::print(__VA_ARGS__); ::println("%{>color}");)
+#define log_error(...)   one_statement(::print("%{color<}[ ERROR ] ", console_red_bold); ::print(__VA_ARGS__); ::println("%{>color}");)
+#define log_trace()      ::println("%{color<}[ TRACE ] %s (%s:%d)%{>color}", console_cyan_dim ,__func__, __FILE__, __LINE__)
 
 #ifdef assert
 #  undef assert

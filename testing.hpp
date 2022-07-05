@@ -55,7 +55,7 @@ typedef s32 testresult;
     do {                                                                  \
         auto v1{variable};                                                \
         auto v2{value};                                                   \
-        if (!string_equal(v1, v2)) {                                      \
+        if (!(v1 == v2)) {                                                       \
             print_assert_equal_fail(&(v1), &(v2), String*, "%{->Str}");   \
             return fail;                                                  \
         }                                                                 \

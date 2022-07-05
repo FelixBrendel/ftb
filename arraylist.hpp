@@ -497,3 +497,58 @@ struct String_Builder {
         return concat;
     };
 };
+
+
+struct String_Split {
+    String          string;
+    Array_List<u32> splits;
+
+    void init(String p_string, char split_char) {
+        string = p_string;
+        splits.init();
+
+        for (u32 i = 0; i < string.length; ++i) {
+            if (string.data[i] == split_char) {
+                splits.append(i);
+            }
+        }
+    }
+
+    void deinit() {
+        splits.deinit();
+    }
+
+    u32 num_splits() {
+        return splits.count + 1;
+    }
+
+    operator bool() const {
+        return string.data != nullptr;
+    }
+
+    String operator[](u32 index) {
+        String result;
+
+        // a|g|d -> splits: 1 3
+
+        // index = 1 -> g
+        u32 start_idx;
+        if (index == 0)
+            start_idx = 0;
+        else
+            start_idx = splits[index-1] + 1;
+
+        u32 length;
+        if (index >= splits.count)
+            length = string.length - start_idx;
+        else
+            length = splits[index] - start_idx;
+
+
+        result.data = string.data+start_idx;
+        result.length = length;
+
+        return result;
+    }
+
+};

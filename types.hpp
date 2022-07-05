@@ -80,7 +80,7 @@ struct String {
     bool operator==(String other) {
         return
             length == other.length &&
-            string_equal(data, other.data);
+            strncmp(data, other.data, other.length) == 0;
     }
 
     static String from(const char* str) {
