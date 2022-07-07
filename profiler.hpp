@@ -1,6 +1,7 @@
 #pragma once
 #include "platform.hpp"
 #include "types.hpp"
+#include "print.hpp"
 
 #ifdef FTB_LINUX
 #  include <time.h>
