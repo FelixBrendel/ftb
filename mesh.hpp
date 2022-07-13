@@ -367,7 +367,7 @@ static auto binary_search_prob(f32* acc_probs, f32 needle, u32 count) -> u32 {
 }
 
 auto resample_mesh(Mesh_Data m, u32 num_samples, Array_List<V3>* out_points) -> void {
-    out_points->reserve(num_samples);
+    out_points->assure_available(num_samples);
 
     // sample probability for each face
     Array_List<f32>     probs_store;
@@ -482,7 +482,7 @@ auto generate_fibonacci_sphere(u32 num_points, Array_List<V3>* out_points) -> vo
     const f32 two_pi = 2.0f * 3.14159265358979323846f;
     const f32 num_points_inv = 1.0f / num_points;
 
-    out_points->reserve(num_points);
+    out_points->assure_available(num_points);
 
     for (u32 i = 0; i < num_points; ++i) {
         f32 theta = two_pi * i * golden_ratio_inv;

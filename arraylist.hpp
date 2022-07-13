@@ -193,7 +193,7 @@ struct Array_List {
     }
 
     void extend(std::initializer_list<type> l) {
-        reserve((u32)l.size());
+        // reserve((u32)l.size());
         // TODO(Felix): Use memcpy here
         for (type e : l) {
             append(e);
@@ -239,7 +239,7 @@ struct Array_List {
         // clear the array
         count = 0;
         // make sure we have allocated enough
-        reserve(other.count);
+        assure_allocated(other.count);
         // copy stuff
         count = other.count;
         memcpy(data, other.data, sizeof(type) * other.count);
@@ -278,11 +278,27 @@ struct Array_List {
         count++;
     }
 
-    void reserve(u32 amount) {
-        if (count+amount >= (u32)length) {
-            length *= 2;
+    void assure_allocated(u32 allocated_elements) {
+        if (length < allocated_elements) {
+            if (allocated_elements > 1024) {
+                length = allocated_elements;
+            } else {
+                // NOTE(Felix): find smallest power of two that is larger than
+                // 'allocated_elements'
+                for (u32 i = 9; i >= 1; --i) {
+                    if  (allocated_elements > 1 << i) {
+                        length = 1 << (i+1);
+                        break;
+                    }
+                }
+            }
             data = (type*)realloc(data, length * sizeof(type));
         }
+    }
+
+
+    void assure_available(u32 available_elements) {
+        assure_allocated(available_elements+count);
     }
 
     operator bool() const {

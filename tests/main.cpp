@@ -236,7 +236,13 @@ auto test_stack_array_lists() -> testresult {
 auto test_array_lists_adding_and_removing() -> testresult {
     // test adding and removing
     Array_List<s32> list;
-    list.init();
+    list.init(16);
+
+    assert_equal_int(list.length, 16);
+    list.assure_allocated(20);
+    assert_equal_int(list.length, 32);
+    list.assure_allocated(2000);
+    assert_equal_int(list.length, 2000);
 
     defer {
         list.deinit();
