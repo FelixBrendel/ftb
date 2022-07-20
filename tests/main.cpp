@@ -1169,53 +1169,71 @@ auto test_sort() -> testresult {
 }
 
 auto test_kd_tree() -> testresult {
-
     Array_List<V3> points;
     points.init_from({
         {0,0,0}, {1,1,1},
         {2,2,2}, {3,3,3},
     });
 
-    Array_List<int> payloads;
-    payloads.init_from({
+    Array_List<int> payloads1;
+    payloads1.init_from({
             0,1,2,3,
     });
 
-    auto tree = Kd_Tree<int>::build_from(points.count, points.data, payloads.data);
+    struct PL {
+        int a[1000];
+    };
+    Array_List<PL> payloads2;
+    payloads2.init_from({
+        {},{},{},{},
+    });
+
+    auto tree1 = Kd_Tree<int>::build_from(points.count, points.data, payloads1.data);
+    auto tree2 = Kd_Tree<PL>::build_from(points.count, points.data, payloads2.data);
+
     Array_List<V3> query_points;
     query_points.init();
-    Array_List<int> query_payloads;
-    query_payloads.init();
+    Array_List<int> query_payloads1;
+    Array_List<PL> query_payloads2;
+    query_payloads1.init();
+    query_payloads2.init();
 
 
     {
         query_points.clear();
-        query_payloads.clear();
+        query_payloads1.clear();
+        query_payloads2.clear();
 
         Axis_Aligned_Box aabb {
             .min { 0.5, 0.5, 0.5 },
             .max { 3.5, 3.5, 3.5 }
         };
 
-        tree.query_in_aabb(aabb, &query_points, &query_payloads);
+        tree1.query_in_aabb(aabb, &query_points, &query_payloads1);
+        assert_equal_int(query_points.count, 3);
+        assert_equal_int(query_payloads1.count, 3);
+
+
+        query_points.clear();
+        tree2.query_in_aabb(aabb, &query_points, &query_payloads2);
 
         assert_equal_int(query_points.count, 3);
-        assert_equal_int(query_payloads.count, 3);
+        assert_equal_int(query_payloads2.count, 3);
     }
 
     {
         query_points.clear();
-        query_payloads.clear();
+        query_payloads1.clear();
 
-        tree.query_in_sphere({0.5, 0.5, 0.5}, 1, &query_points, &query_payloads);
+        tree1.query_in_sphere({0.5, 0.5, 0.5}, 1, &query_points, &query_payloads1);
 
         assert_equal_int(query_points.count, 2);
-        assert_equal_int(query_payloads.count, 2);
+        assert_equal_int(query_payloads1.count, 2);
 
     }
     {
         query_points.clear();
-        query_payloads.clear();
+        query_payloads1.clear();
 
         Kd_Tree tree;
         tree.add({0,0,0});

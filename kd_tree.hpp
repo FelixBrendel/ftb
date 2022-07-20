@@ -76,7 +76,7 @@ struct Kd_Tree {
 
         tree.nodes = (Kd_Node*)malloc(sizeof(Kd_Node) * point_count);
         if (payloads) {
-            tree.payloads = (PayloadT*)malloc(sizeof(payloads) * point_count);
+            tree.payloads = (PayloadT*)malloc(sizeof(*payloads) * point_count);
         } else {
             payloads = nullptr;
         }
