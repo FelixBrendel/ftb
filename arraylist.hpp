@@ -109,6 +109,12 @@ struct Stack_Array_List {
     }
 
     type& operator[](u32 index) {
+#ifdef FTB_DEBUG
+        if (index >= length) {
+            fprintf(stderr, "ERROR: Stack_Array_List access out of bounds (not even allocated).\n");
+            debug_break();
+        }
+#endif
         return data[index];
     }
 
@@ -306,6 +312,12 @@ struct Array_List {
     }
 
     type& operator[](u32 index) {
+#ifdef FTB_DEBUG
+        if (index >= length) {
+            fprintf(stderr, "ERROR: Array_List access out of bounds (not even allocated).\n");
+            debug_break();
+        }
+#endif
         return data[index];
     }
 
@@ -543,6 +555,12 @@ struct String_Split {
     }
 
     String operator[](u32 index) {
+#ifdef FTB_DEBUG
+        if (index >= splits.length) {
+            fprintf(stderr, "ERROR: String_Split access out of bounds (not even allocated).\n");
+            debug_break();
+        }
+#endif
         String result;
 
         // a|g|d -> splits: 1 3
