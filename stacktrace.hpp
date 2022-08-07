@@ -40,7 +40,7 @@ auto print_stacktrace() -> void;
 #  ifndef FTB_STACKTRACE_INFO
 
 auto print_stacktrace() -> void {
-    printf("No stacktrace info available (recompile with FTB_STACKTRACE_INFO defined)\n");
+    fprintf(stderr, "No stacktrace info available (recompile with FTB_STACKTRACE_INFO defined)\n");
 }
 
 #  else // stacktace should be present
@@ -66,9 +66,8 @@ auto print_stacktrace() -> void {
 
     for( i = 0; i < frames; i++ ) {
         SymFromAddr( process, ( DWORD64 )( stack[ i ] ), 0, symbol );
-        printf( "  %3i: %s\n", frames - i - 1, symbol->Name);
+        fprintf(stderr, "  %3i: %s\n", frames - i - 1, symbol->Name);
     }
-    fflush(stdout);
 }
 
 #    else // not windows
@@ -80,7 +79,7 @@ auto print_stacktrace() -> void {
 #        include <sys/prctl.h>
 
 auto print_stacktrace() -> void {
-    printf("Stacktrace: \n");
+    fprintf(stderr, "Stacktrace: \n");
     char pid_buf[30];
     sprintf(pid_buf, "%d", getpid());
     char name_buf[512];
@@ -105,8 +104,9 @@ auto print_stacktrace() -> void {
 #        include <execinfo.h>
 
 auto print_stacktrace() -> void {
-    printf("Stacktrace (this is unmagled -- sorry\n"
-           "  (you can recompile with FTB_STACKTRACE_USE_GDB defined and -rdynamic to get one) \n");
+    fprintf(stderr,
+            "Stacktrace (this is unmagled -- sorry\n"
+            "  (you can recompile with FTB_STACKTRACE_USE_GDB defined and -rdynamic to get one) \n");
     char **strings;
     size_t i, size;
     enum Constexpr { MAX_SIZE = 1024 };
@@ -114,8 +114,8 @@ auto print_stacktrace() -> void {
     size = backtrace(array, MAX_SIZE);
     strings = backtrace_symbols(array, size);
     for (i = 0; i < size; i++)
-        printf("  %3lu: %s\n", size - i - 1, strings[i]);
-    puts("");
+        fprintf(stderr, "  %3lu: %s\n", size - i - 1, strings[i]);
+    fputs("", stderr);
     free(strings);
 }
 
