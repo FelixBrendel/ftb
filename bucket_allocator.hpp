@@ -217,9 +217,9 @@ struct Bucket_List {
     type& operator[] (u32 index) {
 #ifdef FTB_INTERNAL_DEBUG
         u32 el_count = count();
-        if (index >= el_count) {
-            fprintf(stderr, "ERROR: accessing index that is not in use\n");
-        }
+        panic_if(index >= el_count,
+                 "ERROR: accessing index (%u) that is not in use (num elements: %u)\n",
+                 index, el_count);
 #endif
 
         u32 bucket_idx    = index / allocator.bucket_size;

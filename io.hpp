@@ -27,16 +27,15 @@
  */
 
 #pragma once
-#include <stdio.h>
-#include "print.hpp"
-#include "macros.hpp"
-#include "stacktrace.hpp"
-
-#ifndef FTB_IO_IMPL
+#include "types.hpp"
 
 auto read_entire_file(const char* filename) -> String;
 
-#else // implementations
+#ifdef FTB_IO_IMPL
+#  include <stdio.h>
+#  include "print.hpp"
+#  include "macros.hpp"
+#  include "stacktrace.hpp"
 
 auto read_entire_file(const char* filename) -> String  {
     String ret;

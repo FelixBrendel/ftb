@@ -517,7 +517,7 @@ struct String_Builder {
         }
 
 #  ifdef FTB_INTERNAL_DEBUG
-        panic_if(cursor != total_length);
+        panic_if(cursor != total_length, "internal ftb error");
 #  endif
 
         concat[cursor] = 0;

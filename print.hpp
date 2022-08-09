@@ -29,6 +29,8 @@
 #pragma once
 
 #include "platform.hpp"
+#include "macros.hpp"
+#include "types.hpp"
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -39,9 +41,6 @@
 #ifdef FTB_WINDOWS
 #  include <Windows.h>
 #endif
-
-#include "hashmap.hpp"
-#include "hooks.hpp"
 
 extern FILE* ftb_stdout;
 
@@ -133,8 +132,6 @@ enum struct Printer_Function_Type {
 #define register_printer(spec, fun, type)                       \
     register_printer_ptr(spec, (printer_function_ptr)fun, type)
 
-#ifndef FTB_PRINT_IMPL
-
 auto register_printer_ptr(const char* spec, printer_function_ptr fun, Printer_Function_Type type) -> void;
 auto print_va_args_to_file(FILE* file, static_string format, va_list* arg_list) -> s32;
 auto print_va_args_to_string(char** out, static_string format, va_list* arg_list)  -> s32;
@@ -152,17 +149,58 @@ auto deinit_printer() -> void;
     MPP_BEFORE(1, increase_indentation(amount);)    \
     MPP_DEFER(2, decrease_indentation(amount);)
 
-#else // implementations
-FILE* ftb_stdout = stdout;
 
+
+
+#ifdef FTB_PRINT_IMPL
+
+
+
+
+FILE* ftb_stdout = stdout;
 s32 indentation = 0;
-Array_List<char*>                     color_stack = {};
-Hash_Map<char*, printer_function_ptr> printer_map = {};
-Hash_Map<char*, int>                  type_map    = {};
+
+
+struct Custom_Printer {
+    const char*           invocation;
+    printer_function_ptr  fun;
+    Printer_Function_Type type;
+};
+
+const char** color_stack;
+u32          color_stack_count;
+u32          color_stack_allocated;
+
+Custom_Printer* custom_printers;
+u32             custom_printers_count;
+u32             custom_printers_allocated;
+
+// Hash_Map<char*, printer_function_ptr> printer_map = {};
+// Hash_Map<char*, int>                  type_map    = {};
+
+Custom_Printer* find_custom_printer(const char *spec) {
+    for (u32 i = 0; i < custom_printers_count; ++i) {
+        if (strcmp(custom_printers[i].invocation, spec) == 0) {
+            return &custom_printers[i];
+        }
+    }
+    return nullptr;
+}
 
 void register_printer_ptr(const char* spec, printer_function_ptr fun, Printer_Function_Type type) {
-    printer_map.set_object((char*)spec, fun);
-    type_map.set_object((char*)spec, (int)type);
+    if (custom_printers_count == custom_printers_allocated) {
+        custom_printers_allocated *= 2;
+        custom_printers =
+            (Custom_Printer*)realloc(custom_printers,
+                                     sizeof(custom_printers[0]) * custom_printers_allocated);
+    }
+    custom_printers[custom_printers_count] = {
+        .invocation = spec,
+        .fun        = fun,
+        .type       = type
+    };
+
+    ++custom_printers_count;
 }
 
 int maybe_special_print(FILE* file, static_string format, int* pos, va_list* arg_list) {
@@ -183,25 +221,34 @@ int maybe_special_print(FILE* file, static_string format, int* pos, va_list* arg
     strncpy(spec, format+(*pos)+1, end_pos - (*pos));
     spec[end_pos - (*pos)-1] = '\0';
 
-    u64 spec_hash = hm_hash(spec);
-    Printer_Function_Type type = (Printer_Function_Type)type_map.get_object(spec, spec_hash);
+    // u64 spec_hash = hm_hash(spec);
+    // Printer_Function_Type type = (Printer_Function_Type)type_map.get_object(spec, spec_hash);
+
+    Custom_Printer* custom_printer = find_custom_printer(spec);
+    if (!custom_printer) {
+        fprintf(stderr, "ERROR: %s printer not found\n", spec);
+        return 0;
+    }
+
+    Printer_Function_Type type = custom_printer->type;
 
     union {
-        printer_function_32b printer_32b;
-        printer_function_64b printer_64b;
-        printer_function_ptr printer_ptr;
-        printer_function_flt printer_flt;
+        printer_function_32b  printer_32b;
+        printer_function_64b  printer_64b;
+        printer_function_ptr  printer_ptr;
+        printer_function_flt  printer_flt;
         printer_function_void printer_void;
     } printer;
 
     // just grab it, it will have the correct type
-    printer.printer_ptr = printer_map.get_object(spec, spec_hash);
+    printer.printer_ptr = custom_printer->fun;
+    // printer_map.get_object(spec, spec_hash);
 
-    if (type == Printer_Function_Type::unknown) {
-        printf("ERROR: %s printer not found\n", spec);
-        fflush(stdout);
-        return 0;
-    }
+    // if (type == Printer_Function_Type::unknown) {
+    //     printf("ERROR: %s printer not found\n", spec);
+    //     fflush(stdout);
+    //     return 0;
+    // }
 
     if (format[end_pos] == ',') {
         int element_count;
@@ -590,16 +637,23 @@ int print_str(FILE* f, char* str) {
 }
 
 int print_color_start(FILE* f, char* str) {
-    color_stack.append(str);
+    if (color_stack_count == color_stack_allocated) {
+        color_stack_allocated *= 2;
+        color_stack =
+            (const char**)realloc(color_stack, sizeof(color_stack[0])*color_stack_allocated);
+    }
+    color_stack[color_stack_count] = str;
+    ++color_stack_count;
+
     return print_to_file(f, "%s", str);
 }
 
 int print_color_end(FILE* f) {
-    --color_stack.count;
-    if (color_stack.count == 0) {
+    --color_stack_count;
+    if (color_stack_count == 0) {
         return print_to_file(f, "%s", console_normal);
     } else {
-        return print_to_file(f, "%s", color_stack[color_stack.count-1]);
+        return print_to_file(f, "%s", color_stack[color_stack_count-1]);
     }
 }
 
@@ -688,9 +742,15 @@ void init_printer() {
     dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
     SetConsoleMode(hOut, dwMode);
 #endif
-    color_stack.init();
-    printer_map.init();
-    type_map.init();
+    custom_printers_count     = 0;
+    custom_printers_allocated = 32;
+    custom_printers           =
+        (Custom_Printer*)malloc(sizeof(Custom_Printer)*custom_printers_allocated);
+
+    color_stack_count    = 0;
+    color_stack_allocated = 16;
+    color_stack          =
+        (const char**)malloc(sizeof(char*)*color_stack_allocated);
 
     register_printer("spaces",      print_spaces,      Printer_Function_Type::_32b);
     register_printer("u32",         print_u32,         Printer_Function_Type::_32b);
@@ -719,9 +779,8 @@ void init_printer() {
 }
 
 void deinit_printer() {
-    color_stack.deinit();
-    printer_map.deinit();
-    type_map.deinit();
+    free(color_stack);
+    free(custom_printers);
 }
 
 #ifndef FTB_NO_INIT_PRINTER

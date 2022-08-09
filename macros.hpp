@@ -57,6 +57,7 @@
 
 #pragma once
 #include "platform.hpp"
+#include "stacktrace.hpp"
 
 #define array_length(arr) (sizeof(arr) / sizeof(arr[0]))
 #define zero_out(thing) memset(&(thing), 0, sizeof((thing)));
