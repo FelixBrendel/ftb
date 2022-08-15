@@ -292,7 +292,7 @@ struct Array_List {
                 // NOTE(Felix): find smallest power of two that is larger than
                 // 'allocated_elements'
                 for (u32 i = 9; i >= 1; --i) {
-                    if  (allocated_elements > 1 << i) {
+                    if  (allocated_elements > 1U << i) {
                         length = 1 << (i+1);
                         break;
                     }
@@ -572,7 +572,7 @@ struct String_Split {
         else
             start_idx = splits[index-1] + 1;
 
-        u32 length;
+        u64 length;
         if (index >= splits.count)
             length = string.length - start_idx;
         else

@@ -486,7 +486,7 @@ auto generate_fibonacci_sphere(u32 num_points, Array_List<V3>* out_points) -> vo
 
     for (u32 i = 0; i < num_points; ++i) {
         f32 theta = two_pi * i * golden_ratio_inv;
-        f32 phi   = acosf(1 - 2*(i+0.5) * num_points_inv);
+        f32 phi   = acosf(1 - 2*(i+0.5f) * num_points_inv);
         out_points->append({
                 cosf(theta) * sinf(phi),
                 sinf(theta) * sinf(phi),
