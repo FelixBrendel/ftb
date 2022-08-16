@@ -184,13 +184,13 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
  */
 
 #define print_source_code_location(file)                                \
-    ::print_to_file(file, "in "                                         \
-                    "file %{color<}%{->char}%{>color} "                 \
-                    "line %{color<}%{u32}%{>color}: "                   \
-                    "(%{color<}%{->char}%{>color})\n",                  \
+    ::print_to_file(file,                                               \
+                    "  in func: %{color<}%{->char}%{>color}\n"          \
+                    "  in file: %{color<}%{->char}%{>color}\n"          \
+                    "  on line: %{color<}%{u32}%{>color}\n",            \
+                    console_cyan, __func__,                             \
                     console_cyan, __FILE__,                             \
-                    console_cyan, __LINE__,                             \
-                    console_cyan, __func__);                            \
+                    console_cyan, __LINE__);
 
 #define panic(...)                                              \
     do {                                                        \
@@ -200,8 +200,9 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
         ::print_to_file(stderr, "%{color<}", console_red);      \
         ::print_to_file(stderr, __VA_ARGS__);                   \
         ::print_to_file(stderr, "%{>color}\n");                 \
-        print_stacktrace();                                     \
+        print_stacktrace(stderr);                               \
         debug_break();                                          \
+        exit(1);                                                \
     } while(0)
 
 
@@ -231,10 +232,11 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
 
 #define log_error_and_stacktrace(...)                                   \
     one_statement(::print_to_file(stderr, "%{color<}[ ERROR ] ", console_red_bold); \
-                  print_source_code_location(stderr)                    \
                   ::print_to_file(stderr,__VA_ARGS__);                  \
-                  ::print_to_file(stderr, "%{>color}");                 \
-                  print_stacktrace();)
+                  ::print_to_file(stderr, "\n");                         \
+                  print_source_code_location(stderr)                    \
+                  ::print_to_file(stderr, "%{>color}\n");               \
+                  print_stacktrace(stderr);)
 
 #ifdef assert
 #  undef assert
@@ -249,6 +251,7 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
 
 #ifdef FTB_DEBUG
 #  ifdef FTB_WINDOWS
+#    pragma message("defining debug_break")
 #    define debug_break() __debugbreak()
 #  else
 #    define debug_break() raise(SIGTRAP)

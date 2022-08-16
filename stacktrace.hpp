@@ -33,14 +33,14 @@
 
 #ifndef FTB_STACKTRACE_IMPL
 
-auto print_stacktrace() -> void;
+auto print_stacktrace(FILE* file) -> void;
 
 #else // implementations
 
 #  ifndef FTB_STACKTRACE_INFO
 
-auto print_stacktrace() -> void {
-    fprintf(stderr, "No stacktrace info available (recompile with FTB_STACKTRACE_INFO defined)\n");
+auto print_stacktrace(FILE* file) -> void {
+    fprintf(file, "No stacktrace info available (recompile with FTB_STACKTRACE_INFO defined)\n");
 }
 
 #  else // stacktace should be present
@@ -48,8 +48,8 @@ auto print_stacktrace() -> void {
 #      include <Windows.h>
 #      include <dbghelp.h>
 
-auto print_stacktrace() -> void {
-    printf("Stacktrace: \n");
+auto print_stacktrace(FILE* file) -> void {
+    fprintf(file, "Stacktrace: \n");
     unsigned int   i;
     void         * stack[ 100 ];
     HANDLE         process;
@@ -66,7 +66,7 @@ auto print_stacktrace() -> void {
 
     for( i = 0; i < frames; i++ ) {
         SymFromAddr( process, ( DWORD64 )( stack[ i ] ), 0, symbol );
-        fprintf(stderr, "  %3i: %s\n", frames - i - 1, symbol->Name);
+        fprintf(file, "  %3i: %s\n", frames - i - 1, symbol->Name);
     }
 }
 
@@ -78,8 +78,8 @@ auto print_stacktrace() -> void {
 #        include <sys/wait.h>
 #        include <sys/prctl.h>
 
-auto print_stacktrace() -> void {
-    fprintf(stderr, "Stacktrace: \n");
+auto print_stacktrace(FILE* file) -> void {
+    fprintf(file, "Stacktrace: \n");
     char pid_buf[30];
     sprintf(pid_buf, "%d", getpid());
     char name_buf[512];
@@ -87,7 +87,7 @@ auto print_stacktrace() -> void {
     prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0);
     int child_pid = fork();
     if (!child_pid) {
-        dup2(2,1); // redirect output to stderr - edit: unnecessary?
+        // dup2(2,1); // redirect output to file - edit: unnecessary?
 
         // NOTE(Felix): the "-n" flag will prevent loading the ~/.gdbinit file
         //   which users might have created to disable some additional
@@ -104,7 +104,7 @@ auto print_stacktrace() -> void {
 #        include <execinfo.h>
 
 auto print_stacktrace() -> void {
-    fprintf(stderr,
+    fprintf(file,
             "Stacktrace (this is unmagled -- sorry\n"
             "  (you can recompile with FTB_STACKTRACE_USE_GDB defined and -rdynamic to get one) \n");
     char **strings;
@@ -114,8 +114,8 @@ auto print_stacktrace() -> void {
     size = backtrace(array, MAX_SIZE);
     strings = backtrace_symbols(array, size);
     for (i = 0; i < size; i++)
-        fprintf(stderr, "  %3lu: %s\n", size - i - 1, strings[i]);
-    fputs("", stderr);
+        fprintf(file, "  %3lu: %s\n", size - i - 1, strings[i]);
+    fputs("", file);
     free(strings);
 }
 
