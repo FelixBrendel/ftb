@@ -57,13 +57,23 @@ typedef char    path_char;
 struct String_Slice;
 struct String;
 
-inline auto heap_copy_c_string(const char* str) -> char* {
-#ifdef FTB_WINDOWS
-    return _strdup(str);
-#else
-    return strdup(str);
-#endif
+inline auto heap_copy_limited_c_string(const char* str, u64 length) -> char* {
+    char* result = (char*)malloc(length+1);
+
+    if (!result)
+        return nullptr;
+
+    memcpy(result, str, length);
+    result[length] = '\0';
+
+    return result;
 }
+
+inline auto heap_copy_c_string(const char* str) -> char* {
+    u64 length = strlen(str);
+    return heap_copy_limited_c_string(str, length);
+}
+
 
 auto inline string_equal(const char* input, const char* check) -> bool {
     return strcmp(input, check) == 0;
