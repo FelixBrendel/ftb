@@ -206,9 +206,13 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
     } while(0)
 
 
+#define one_statement(statements) do {statements} while(0)
+
 #define panic_if(cond, ...)                     \
-    if(!(cond));                                \
-    else panic(__VA_ARGS__)
+    do {                                        \
+        if(!(cond)){}                           \
+        else panic(__VA_ARGS__);                \
+    } while(0)
 
 #ifdef FTB_DEBUG
 #  define debug_panic(...)    panic(__VA_ARGS__)
@@ -218,7 +222,6 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
 #  define debug_panic_if(...)
 #endif
 
-#define one_statement(statements) do {statements} while(0)
 
 #ifdef FTB_DEBUG
 #  define log_debug(...)   one_statement(print("%{color<}[ DEBUG ] ", console_cyan_dim); print(__VA_ARGS__); println("%{>color}");)

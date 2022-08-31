@@ -254,6 +254,7 @@ int maybe_special_print(FILE* file, static_string format, int* pos, va_list* arg
         int element_count;
 
         ++end_pos;
+        // TODO(Felix): replace this with strtol
         sscanf(format+end_pos, "%d", &element_count);
 
         while (format[end_pos] != '}' &&
@@ -304,6 +305,7 @@ int maybe_special_print(FILE* file, static_string format, int* pos, va_list* arg
         if (format[end_pos] == '*') {
             element_count =  va_arg(*arg_list, u32);
         } else {
+            // TODO(Felix): replace this with strtol
             sscanf(format+end_pos, "%d", &element_count);
         }
 
