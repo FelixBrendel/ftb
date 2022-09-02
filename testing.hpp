@@ -34,8 +34,6 @@
 
 typedef s32 testresult;
 
-#define f64_epsilon DBL_EPSILON
-#define f32_epsilon FLT_EPSILON
 #define pass 1
 #define fail 0
 

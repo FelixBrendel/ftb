@@ -33,6 +33,9 @@
 #include <string.h>
 #include <stdlib.h>
 
+#define f64_epsilon 2.2204460492503131e-16
+#define f32_epsilon 1.19209290e-7f
+
 typedef int8_t   s8;
 typedef int16_t s16;
 typedef int32_t s32;

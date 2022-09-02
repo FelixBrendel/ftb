@@ -638,7 +638,8 @@ int print_str(FILE* f, char* str) {
     return print_to_file(f, "%s", str);
 }
 
-int print_color_start(FILE* f, char* str) {
+int print_color_start(FILE* f, void* vp_str) {
+    char* str = (char*)vp_str;
     if (color_stack_count == color_stack_allocated) {
         color_stack_allocated *= 2;
         color_stack =
