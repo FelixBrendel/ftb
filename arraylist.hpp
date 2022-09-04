@@ -585,4 +585,8 @@ struct String_Split {
         return result;
     }
 
+    String last() {
+        return (*this)[splits.count];
+    }
+
 };
