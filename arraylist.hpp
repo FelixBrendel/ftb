@@ -48,6 +48,7 @@
     Stack_Array_List<type> { (type*)alloca(length * sizeof(type)), length, 0 }
 
 
+
 template <typename type>
 struct Stack_Array_List {
     type* data;

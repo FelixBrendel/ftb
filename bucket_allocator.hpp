@@ -87,7 +87,14 @@ struct Bucket_Allocator {
     }
 
     u32 count_elements() {
-        free_list.sort();
+        // TODO(Felix): maybe we only need to take the last used element idx,
+        //   with the next_bucket_index and next_index_in_latest_bucket nad
+        //   subtract the length of the free list? So we dont have to sort it?
+        auto voidp_cmp = [](const void** a, const void** b) -> s32 {
+            return (s32)((byte*)*a - (byte*)*b);
+        };
+
+        free_list.sort(voidp_cmp);
         type* val;
         u32 count = 0;
         for (u32 i = 0; i < next_bucket_index; ++i) {
@@ -107,6 +114,10 @@ struct Bucket_Allocator {
 
     template <typename lambda>
     void for_each(lambda p) {
+        auto voidp_cmp = [](const void** a, const void** b) -> s32 {
+            return (s32)((byte*)*a - (byte*)*b);
+        };
+
         free_list.sort(voidp_cmp);
 
         type* val;
