@@ -48,15 +48,6 @@
     Stack_Array_List<type> { (type*)alloca(length * sizeof(type)), length, 0 }
 
 
-static s32 int_cmp (const s32* a, const s32* b) {
-    return *a - *b;
-}
-
-static s32 voidp_cmp (const void** a, const void** b) {
-    return (s32)((byte*)*a - (byte*)*b);
-}
-
-
 template <typename type>
 struct Stack_Array_List {
     type* data;
