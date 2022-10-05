@@ -32,6 +32,8 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdarg.h>
+#include <stdio.h>
 
 #define f64_epsilon 2.2204460492503131e-16
 #define f32_epsilon 1.19209290e-7f
@@ -82,6 +84,7 @@ auto inline string_equal(const char* input, const char* check) -> bool {
     return strcmp(input, check) == 0;
 }
 
+
 struct String {
     char* data;
     u64 length;
@@ -116,3 +119,14 @@ struct String {
 #endif
     }
 };
+
+auto inline print_into_string(String string, const char* format, ...) -> bool {
+    va_list args;
+    va_start(args, format);
+
+    s32 written = vsnprintf(string.data, string.length, format, args);
+
+    va_end(args);
+
+    return written >= 0 && written < string.length;
+}

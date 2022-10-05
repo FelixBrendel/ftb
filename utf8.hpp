@@ -13,9 +13,12 @@ Unicode_Code_Point bytes_to_code_point(const byte*);
 // NOTE(Felix): Assumes that the out_str has enough bytes allocated to be able
 //   to hold Unicode_Code_Point::byte_length many bytes, returns the number of
 //   bytes written.
-u32 code_point_to_bytes(Unicode_Code_Point cp, char* out_string);
-u32 code_point_to_bytes(u32 cp, char* out_string);
-u32 get_byte_length_for_code_point(u32 cp);
+u32  code_point_to_bytes(Unicode_Code_Point cp, char* out_string);
+u32  code_point_to_bytes(u32 cp, char* out_string);
+u32  get_byte_length_for_code_point(u32 cp);
+bool strncpy_0(char* dest, const char* src, u64 dest_size);
+bool strncpy_utf8_0(char* dest, const char* src, u64 dest_size);
+
 
 
 
@@ -88,6 +91,43 @@ u32 code_point_to_bytes(u32 cp, char* out_string) {
     u_cp.byte_length = get_byte_length_for_code_point(cp);
     return code_point_to_bytes(u_cp, out_string);
 }
+
+bool strncpy_0(char* dest, const char* src, u64 dest_size) {
+    u64 src_len = strlen(src);
+    if (src_len >= dest_size) {
+        strncpy(dest, src, dest_size-1);
+        dest[dest_size-1] = '\0';
+        return false;
+    } else {
+        strcpy(dest, src);
+        dest[src_len] = '\0';
+        return true;
+    }
+}
+
+bool strncpy_utf8_0(char* dest, const char* src, u64 dest_size) {
+    u64 bytes_to_copy = 0;
+
+    const char* cursor = src;
+    bool copied_all = true;
+
+    while (*cursor) {
+        Unicode_Code_Point cp = bytes_to_code_point((const byte*)cursor);
+        if (bytes_to_copy + cp.byte_length >= dest_size) {
+            copied_all = false;
+            break;
+        }
+
+        bytes_to_copy += cp.byte_length;
+        cursor += cp.byte_length;
+    }
+
+    strncpy(dest, src, bytes_to_copy);
+    dest[bytes_to_copy] = '\0';
+
+    return copied_all;
+}
+
 
 #endif
 
