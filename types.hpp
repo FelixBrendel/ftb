@@ -99,6 +99,12 @@ struct String {
             strncmp(data, other.data, other.length) == 0;
     }
 
+    s32 operator<(String other) {
+        return strncmp(data,
+                       other.data,
+                       length < other.length ? length : other.length); // min length
+    }
+
     static String from(const char* str) {
         String r;
 
