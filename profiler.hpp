@@ -30,14 +30,21 @@ struct Timer {
         file   = p_file;
         line   = p_line;
         name   = p_name;
+
+        if (name)
+            println("%{color<}[PROFILE] %s%{>color} (%s:%i)", console_green_bold, name, file, line);
+        else
+            println("%{color<}[PROFILE]%{>color} Block at %s:%i", console_green_bold, file, line);
+        push_print_prefix("|   ");
+
+
         start = start_timer();
     }
     ~Timer() {
         u64 nanos = stop_timer(start);
-        if (name)
-            println("%{color<}[PROFILE] %s%{>color} (%s:%i)\n -> took %{color<}%.2fms%{>color}", console_green_bold, name, file, line, console_green_bold, nanos / 1.0e6); \
-        else
-            println("%{color<}[PROFILE]%{>color} Block at %s:%i\n -> took %{color<}%.2fms%{>color}", console_green_bold, file, line, console_green_bold, nanos / 1.0e6); \
+
+        pop_print_prefix();
+        println("-> took %{color<}%.2fms%{>color}", console_green_bold, nanos / 1.0e6);
     }
 };
 

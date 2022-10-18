@@ -140,32 +140,32 @@ auto print_to_string(char** out, static_string format, ...) -> s32;
 auto print_to_file(FILE* file, static_string format, ...) -> s32;
 auto print(static_string format, ...) -> s32;
 auto println(static_string format, ...) -> s32;
-auto increase_indentation(s32 indentation) -> void;
-auto decrease_indentation(s32 indentation) -> void;
+
+auto push_print_prefix(static_string) -> void;
+auto pop_print_prefix() -> void;
+
 auto init_printer() -> void;
 auto deinit_printer() -> void;
 
-#define with_indentation(amount)                    \
-    MPP_BEFORE(1, increase_indentation(amount);)    \
-    MPP_DEFER(2, decrease_indentation(amount);)
-
-
+#define with_print_prefix(pfx)                  \
+    MPP_BEFORE(1, push_print_prefix(pfx);)      \
+    MPP_DEFER(2,  pop_print_prefix();)
 
 
 #ifdef FTB_PRINT_IMPL
 
 
-
-
 FILE* ftb_stdout = stdout;
-s32 indentation = 0;
-
 
 struct Custom_Printer {
     const char*           invocation;
     printer_function_ptr  fun;
     Printer_Function_Type type;
 };
+
+const char** prefix_stack;
+u32          prefix_stack_count;
+u32          prefix_stack_allocated;
 
 const char** color_stack;
 u32          color_stack_count;
@@ -578,7 +578,11 @@ int println(static_string format, ...) {
     va_start(arg_list, format);
 
     int num_printed_chars = 0;
-    num_printed_chars += print_spaces(stdout, indentation);
+
+    for (u32 i = 0; i < prefix_stack_count; ++i) {
+        num_printed_chars += print(prefix_stack[i]);
+    }
+
     num_printed_chars += print_va_args_to_file(ftb_stdout, format, &arg_list);
     num_printed_chars += print("\n");
     fflush(stdout);
@@ -588,13 +592,25 @@ int println(static_string format, ...) {
     return num_printed_chars;
 }
 
+void push_print_prefix(static_string pfx) {
 
-void increase_indentation(s32 i) {
-    indentation += i;
+    if (prefix_stack_count == color_stack_allocated) {
+        prefix_stack_allocated *= 2;
+        prefix_stack =
+            (const char**)realloc(prefix_stack, sizeof(prefix_stack[0])*prefix_stack_allocated);
+    }
+
+    prefix_stack[prefix_stack_count] = pfx;
+    ++prefix_stack_count;
 }
 
-void decrease_indentation(s32 i) {
-    indentation -= i;
+void pop_print_prefix() {
+#ifdef FTB_INTERNAL_DEBUG
+    if (prefix_stack_count == 0)
+        fprintf(stderr, "ERROR: prefix_stack_count already 0\n");
+#endif
+
+    --prefix_stack_count;
 }
 
 int print_indented(u32 indentation, static_string format, ...) {
@@ -652,6 +668,12 @@ int print_color_start(FILE* f, void* vp_str) {
 }
 
 int print_color_end(FILE* f) {
+#ifdef FTB_INTERNAL_DEBUG
+    if (color_stack_count == 0) {
+        fprintf(stderr, "ERROR: color_stack_count already 0\n");
+    }
+#endif
+
     --color_stack_count;
     if (color_stack_count == 0) {
         return print_to_file(f, "%s", console_normal);
@@ -750,10 +772,15 @@ void init_printer() {
     custom_printers           =
         (Custom_Printer*)malloc(sizeof(Custom_Printer)*custom_printers_allocated);
 
-    color_stack_count    = 0;
+    color_stack_count     = 0;
     color_stack_allocated = 16;
-    color_stack          =
+    color_stack           =
         (const char**)malloc(sizeof(char*)*color_stack_allocated);
+
+    prefix_stack_count     = 0;
+    prefix_stack_allocated = 16;
+    prefix_stack           =
+        (const char**)malloc(sizeof(char*)*prefix_stack_allocated);
 
     register_printer("spaces",      print_spaces,      Printer_Function_Type::_32b);
     register_printer("u32",         print_u32,         Printer_Function_Type::_32b);

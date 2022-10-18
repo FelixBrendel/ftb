@@ -34,6 +34,7 @@
 
 #ifdef FTB_INTERNAL_DEBUG
 #  include <stdio.h>
+#  include "print.hpp"
 #endif
 
 #include "types.hpp"
