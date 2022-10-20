@@ -59,8 +59,9 @@
 #include "platform.hpp"
 #include "stacktrace.hpp"
 
-#define array_length(arr) (sizeof(arr) / sizeof(arr[0]))
-#define zero_out(thing) memset(&(thing), 0, sizeof((thing)));
+#define array_length(arr)   (sizeof(arr) / sizeof(arr[0]))
+#define zero_out(thing)     memset(&(thing), 0, sizeof((thing)));
+#define deadbeef_out(thing) memset(&(thing), 0xdeadbeef, sizeof((thing)));
 
 #ifdef FTB_WINDOWS
 #else
