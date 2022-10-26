@@ -1,7 +1,7 @@
 /*
  * BSD 2-Clause License
  *
- * Copyright (c) 2021, Felix Brendel
+ * Copyright (c) 2022, Felix Brendel
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,50 +29,54 @@
 #pragma once
 #include "types.hpp"
 
-auto read_entire_file(const char* filename) -> String;
+struct File_Read {
+    bool   success;
+    String contents;
+};
+
+auto read_entire_file(const char* filename) -> File_Read;
 
 #ifdef FTB_IO_IMPL
 #  include <stdio.h>
-#  include "print.hpp"
 #  include "macros.hpp"
-#  include "stacktrace.hpp"
 
-auto read_entire_file(const char* filename) -> String  {
-    String ret;
-    ret.data = nullptr;
+auto read_entire_file(const char* filename) -> File_Read  {
+    File_Read ret {};
+
     FILE *fp = fopen(filename, "rb");
     if (fp) {
         defer { fclose(fp); };
         /* Go to the end of the file. */
         if (fseek(fp, 0L, SEEK_END) == 0) {
             /* Get the size of the file. */
-            ret.length = ftell(fp) + 1;
-            if (ret.length == 0) {
-                fputs("Empty file", stderr);
+            ret.contents.length = ftell(fp) + 1;
+            if (ret.contents.length == 0) {
+                ret.success = true;
                 return ret;
             }
 
             /* Go back to the start of the file. */
             if (fseek(fp, 0L, SEEK_SET) != 0) {
-                panic("Error reading file");
-                return ret;
+                return { false };
             }
 
             /* Allocate our buffer to that size. */
-            ret.data = (char*)calloc(ret.length+1, sizeof(char));
+            ret.contents.data = (char*)calloc(ret.contents.length+1, sizeof(char));
 
             /* Read the entire file into memory. */
-            ret.length = fread(ret.data, sizeof(char), ret.length, fp);
+            ret.contents.length = fread(ret.contents.data, sizeof(char),
+                                        ret.contents.length, fp);
 
-            ret.data[ret.length] = '\0';
+            ret.contents.data[ret.contents.length] = '\0';
             if (ferror(fp) != 0) {
-                panic("Error reading file");
+                return { false };
             }
         }
     } else {
-        panic("Cannot read file: %s", filename);
+        return { false };
     }
 
+    ret.success = true;
     return ret;
 }
 
