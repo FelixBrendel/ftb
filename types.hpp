@@ -134,5 +134,5 @@ auto inline print_into_string(String string, const char* format, ...) -> bool {
 
     va_end(args);
 
-    return written >= 0 && written < string.length;
+    return written >= 0 && (u32)written < string.length;
 }
