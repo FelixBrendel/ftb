@@ -138,8 +138,11 @@ auto print_va_args_to_string(char** out, static_string format, va_list* arg_list
 auto print_va_args(static_string format, va_list* arg_list) -> s32;
 auto print_to_string(char** out, static_string format, ...) -> s32;
 auto print_to_file(FILE* file, static_string format, ...) -> s32;
+
 auto print(static_string format, ...) -> s32;
 auto println(static_string format, ...) -> s32;
+auto raw_print(static_string format, ...) -> s32;
+auto raw_println(static_string format, ...) -> s32;
 
 auto push_print_prefix(static_string) -> void;
 auto pop_print_prefix() -> void;
@@ -541,16 +544,6 @@ int print_to_file(FILE* file, static_string format, ...) {
     return num_printed_chars;
 }
 
-int print(static_string format, ...) {
-    va_list arg_list;
-    va_start(arg_list, format);
-
-    int num_printed_chars = print_va_args_to_file(ftb_stdout, format, &arg_list);
-
-    va_end(arg_list);
-
-    return num_printed_chars;
-}
 
 int print_spaces(FILE* f, s32 num) {
     int sum = 0;
@@ -573,18 +566,66 @@ int print_spaces(FILE* f, s32 num) {
     return sum;
 }
 
+
+int raw_print(static_string format, ...) {
+    va_list arg_list;
+    va_start(arg_list, format);
+
+    int num_printed_chars = print_va_args_to_file(ftb_stdout, format, &arg_list);
+
+    va_end(arg_list);
+
+    return num_printed_chars;
+}
+
+int raw_println(static_string format, ...) {
+    va_list arg_list;
+    va_start(arg_list, format);
+
+    int num_printed_chars = 0;
+
+    num_printed_chars += print_va_args_to_file(ftb_stdout, format, &arg_list);
+    num_printed_chars += raw_print("\n");
+    fflush(stdout);
+
+    va_end(arg_list);
+
+    return num_printed_chars;
+}
+
+int print_prefixes(FILE* out_file) {
+    int num_printed_chars = 0;
+
+    for (u32 i = 0; i < prefix_stack_count; ++i) {
+        num_printed_chars += print_to_file(out_file, prefix_stack[i]);
+    }
+
+    return num_printed_chars;
+}
+
+int print(static_string format, ...) {
+    va_list arg_list;
+    va_start(arg_list, format);
+
+    int num_printed_chars = 0;
+
+    num_printed_chars += print_prefixes(ftb_stdout);
+    num_printed_chars += print_va_args_to_file(ftb_stdout, format, &arg_list);
+
+    va_end(arg_list);
+
+    return num_printed_chars;
+}
+
 int println(static_string format, ...) {
     va_list arg_list;
     va_start(arg_list, format);
 
     int num_printed_chars = 0;
 
-    for (u32 i = 0; i < prefix_stack_count; ++i) {
-        num_printed_chars += print(prefix_stack[i]);
-    }
-
+    num_printed_chars += print_prefixes(ftb_stdout);
     num_printed_chars += print_va_args_to_file(ftb_stdout, format, &arg_list);
-    num_printed_chars += print("\n");
+    num_printed_chars += raw_print("\n");
     fflush(stdout);
 
     va_end(arg_list);
@@ -810,6 +851,7 @@ void init_printer() {
 
 void deinit_printer() {
     free(color_stack);
+    free(prefix_stack);
     free(custom_printers);
 }
 

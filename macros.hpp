@@ -225,19 +225,19 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
 
 
 #ifdef FTB_DEBUG
-#  define log_debug(...)   one_statement(print("%{color<}[ DEBUG ] ", console_cyan_dim); print(__VA_ARGS__); println("%{>color}");)
+#  define log_debug(...)   one_statement(::print("%{color<}[ DEBUG ] ", console_cyan_dim); ::raw_print(__VA_ARGS__); ::raw_println("%{>color}");)
 #else
 #  define log_debug(...)
 #endif
-#define log_info(...)    one_statement(::print("%{color<}[  INFO ] ", console_green);    ::print(__VA_ARGS__); ::println("%{>color}");)
-#define log_warning(...) one_statement(::print("%{color<}[WARNING] ", console_yellow);   ::print(__VA_ARGS__); ::println("%{>color}");)
-#define log_error(...)   one_statement(::print("%{color<}[ ERROR ] ", console_red_bold); ::print(__VA_ARGS__); ::println("%{>color}");)
+#define log_info(...)    one_statement(::print("%{color<}[  INFO ] ", console_green);    ::raw_print(__VA_ARGS__); ::raw_println("%{>color}");)
+#define log_warning(...) one_statement(::print("%{color<}[WARNING] ", console_yellow);   ::raw_print(__VA_ARGS__); ::raw_println("%{>color}");)
+#define log_error(...)   one_statement(::print("%{color<}[ ERROR ] ", console_red_bold); ::raw_print(__VA_ARGS__); ::raw_println("%{>color}");)
 #define log_trace()      ::println("%{color<}[ TRACE ] %s (%s:%d)%{>color}", console_cyan_dim ,__func__, __FILE__, __LINE__)
 
 #define log_error_and_stacktrace(...)                                   \
     one_statement(::print_to_file(stderr, "%{color<}[ ERROR ] ", console_red_bold); \
                   ::print_to_file(stderr,__VA_ARGS__);                  \
-                  ::print_to_file(stderr, "\n");                         \
+                  ::print_to_file(stderr, "\n");                        \
                   print_source_code_location(stderr)                    \
                   ::print_to_file(stderr, "%{>color}\n");               \
                   print_stacktrace(stderr);)
