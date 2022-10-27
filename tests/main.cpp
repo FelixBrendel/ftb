@@ -271,6 +271,13 @@ auto test_array_lists_adding_and_removing() -> testresult {
     return pass;
 }
 
+int voidp_cmp(const void** const a, const void** const b) {
+    return (int)((u8*)a - (u8*)b);
+}
+
+int int_cmp(const int* const a, const int* const b) {
+    return *a - *b;
+}
 
 auto test_array_lists_sorting() -> testresult {
     //

@@ -36,6 +36,8 @@
 #include "arraylist.hpp"
 #include "math.hpp"
 #include "io.hpp"
+#include "print.hpp"
+#include "hashmap.hpp"
 
 struct Vertex {
     V3 position;
@@ -116,7 +118,11 @@ inline auto hm_objects_match(Vertex_Fingerprint a, Vertex_Fingerprint b) -> bool
 }
 
 auto load_obj(const char* path) -> Mesh_Data {
-    String obj_str = read_entire_file(path);
+    File_Read obj_str_read = read_entire_file(path);
+    if (!obj_str_read.success)
+        return {};
+
+    String obj_str = obj_str_read.contents;
     defer_free(obj_str.data);
 
     Mesh_Data result;
@@ -293,6 +299,7 @@ auto load_obj(const char* path) -> Mesh_Data {
             }
         }
     }
+
     Hash_Map<Vertex_Fingerprint, u32> vertex_fp_to_index;
     vertex_fp_to_index.init(fprints.count);
     defer { vertex_fp_to_index.deinit(); };
