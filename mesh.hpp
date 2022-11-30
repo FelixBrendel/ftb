@@ -32,10 +32,9 @@
 
 #include <random>
 
-#include "types.hpp"
-#include "arraylist.hpp"
+#include "core.hpp"
 #include "math.hpp"
-#include "io.hpp"
+
 
 struct Vertex {
     V3 position;

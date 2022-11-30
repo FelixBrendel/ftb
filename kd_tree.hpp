@@ -28,7 +28,7 @@
 
 #pragma once
 
-#include "arraylist.hpp"
+#include "core.hpp"
 #include "math.hpp"
 #include "soa_sort.hpp"
 

@@ -72,7 +72,7 @@
 #include <ammintrin.h>
 #include <immintrin.h>
 
-#include "types.hpp"
+#include "core.hpp"
 
 typedef int (*cmpfun_r)(const void *, const void *, void *);
 typedef int (*cmpfun)(const void *, const void *);

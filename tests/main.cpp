@@ -3,8 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define FTB_TRACK_MALLOCS
-#define FTB_PRINT_IMPL
+#define FTB_CORE_IMPL
 #define FTB_ALLOCATION_STATS_IMPL
 #define FTB_HASHMAP_IMPL
 #define FTB_SCHEDULER_IMPL
@@ -13,7 +12,8 @@
 #define FTB_SOA_SORT_IMPL
 #define FTB_TYPES_IMPL
 
-#include "../types.hpp"
+#include "../math.hpp"
+#include "../core.hpp"
 
 u32 hm_hash(u32 u);
 inline bool hm_objects_match(u32 a, u32 b);
@@ -21,17 +21,25 @@ struct Key;
 u32 hm_hash(Key u);
 inline bool hm_objects_match(Key a, Key b);
 
-#include "../math.hpp"
-#include "../print.hpp"
 #include "../testing.hpp"
 #include "../bucket_allocator.hpp"
 
 #include "../hooks.hpp"
 #include "../hashmap.hpp"
-#include "../stacktrace.hpp"
 #include "../scheduler.hpp"
 #include "../soa_sort.hpp"
 #include "../kd_tree.hpp"
+
+
+auto my_int_cmp = [](const int* a, const int* b) -> s32 {
+    return (s32)(*a - *b);
+};
+
+
+auto my_voidp_cmp = [](const void** a, const void** b){
+    return (s32)((unsigned char*)*a - (unsigned char*)*b);
+};
+
 
 u32 hm_hash(u32 u) {
     return ((u64)u * 2654435761) % 4294967296;
@@ -74,7 +82,7 @@ auto test_printer() -> void {
     u64 u2 = -1;
 
     char* str;
-    print_to_string(&str, " - %{dots[5]} %{->} <> %{->,2}\n", &u1, &arr, nullptr);
+    print_to_string(&str, nullptr, " - %{dots[5]} %{->} <> %{->,2}\n", &u1, &arr, nullptr);
     print("---> %{->char}", str);
 
     print(" - %{dots[3]}\n");
@@ -271,6 +279,32 @@ auto test_array_lists_adding_and_removing() -> testresult {
     return pass;
 }
 
+auto test_array_lists_sorted_insert_and_remove() -> testresult {
+    Array_List<s32> list;
+    list.init();
+    defer {
+        list.deinit();
+    };
+
+    list.sorted_insert(3, my_int_cmp);
+    list.sorted_insert(2, my_int_cmp);
+    list.sorted_insert(7, my_int_cmp);
+    list.sorted_insert(1, my_int_cmp);
+    list.sorted_insert(6, my_int_cmp);
+    list.sorted_insert(4, my_int_cmp);
+    list.sorted_insert(5, my_int_cmp);
+
+    assert_equal_int(true, list.is_sorted(my_int_cmp));
+
+    list.sorted_remove_index(3);
+    assert_equal_int(true, list.is_sorted(my_int_cmp));
+    list.sorted_remove_index(2);
+    assert_equal_int(true, list.is_sorted(my_int_cmp));
+    list.sorted_remove_index(0);
+    assert_equal_int(true, list.is_sorted(my_int_cmp));
+
+    return pass;
+}
 
 auto test_array_lists_sorting() -> testresult {
     //
@@ -289,25 +323,25 @@ auto test_array_lists_sorting() -> testresult {
     list.append(3);
     list.append(4);
 
-    list.sort(int_cmp);
-    assert_equal_int(list.is_sorted(int_cmp), true);
+    list.sort(my_int_cmp);
+    assert_equal_int(list.is_sorted(my_int_cmp), true);
 
     list.append(4);
     list.append(2);
     list.append(1);
 
-    assert_equal_int(list.is_sorted(int_cmp), false);
-    list.sort(int_cmp);
-    assert_equal_int(list.is_sorted(int_cmp), true);
+    assert_equal_int(list.is_sorted(my_int_cmp), false);
+    list.sort(my_int_cmp);
+    assert_equal_int(list.is_sorted(my_int_cmp), true);
 
     list.clear();
     list.extend({
             8023, 7529, 2392, 7110,
             3259, 2484, 9695, 2199,
             6729, 9009, 8429, 7208});
-    assert_equal_int(list.is_sorted(int_cmp), false);
-    list.sort(int_cmp);
-    assert_equal_int(list.is_sorted(int_cmp), true);
+    assert_equal_int(list.is_sorted(my_int_cmp), false);
+    list.sort(my_int_cmp);
+    assert_equal_int(list.is_sorted(my_int_cmp), true);
 
 
     //
@@ -326,7 +360,7 @@ auto test_array_lists_sorting() -> testresult {
     list1.append(3);
     list1.append(4);
 
-    list1.sort(int_cmp);
+    list1.sort(my_int_cmp);
 
     assert_equal_int(list1.count, 4);
 
@@ -334,14 +368,14 @@ auto test_array_lists_sorting() -> testresult {
     assert_equal_int(list1[1], 2);
     assert_equal_int(list1[2], 3);
     assert_equal_int(list1[3], 4);
-    assert_equal_int(list1.is_sorted(int_cmp), true);
+    assert_equal_int(list1.is_sorted(my_int_cmp), true);
 
     list1.append(0);
     list1.append(5);
 
     assert_equal_int(list1.count, 6);
 
-    list1.sort(int_cmp);
+    list1.sort(my_int_cmp);
 
     assert_equal_int(list1[0], 0);
     assert_equal_int(list1[1], 1);
@@ -349,7 +383,7 @@ auto test_array_lists_sorting() -> testresult {
     assert_equal_int(list1[3], 3);
     assert_equal_int(list1[4], 4);
     assert_equal_int(list1[5], 5);
-    assert_equal_int(list1.is_sorted(int_cmp), true);
+    assert_equal_int(list1.is_sorted(my_int_cmp), true);
 
     //
     //
@@ -368,16 +402,16 @@ auto test_array_lists_sorting() -> testresult {
     al.append((void*)0x1703102F190);
     al.append((void*)0x1703102F1D8);
 
-    assert_equal_int(al.is_sorted(voidp_cmp), false);
-    al.sort(voidp_cmp);
-    assert_equal_int(al.is_sorted(voidp_cmp), true);
+    assert_equal_int(al.is_sorted(my_voidp_cmp), false);
+    al.sort(my_voidp_cmp);
+    assert_equal_int(al.is_sorted(my_voidp_cmp), true);
 
-    assert_not_equal_int(al.sorted_find((void*)0x1703102F100, voidp_cmp), -1);
-    assert_not_equal_int(al.sorted_find((void*)0x1703102F1D8, voidp_cmp), -1);
-    assert_not_equal_int(al.sorted_find((void*)0x1703102F148, voidp_cmp), -1);
-    assert_not_equal_int(al.sorted_find((void*)0x1703102F190, voidp_cmp), -1);
-    assert_not_equal_int(al.sorted_find((void*)0x1703102F190, voidp_cmp), -1);
-    assert_not_equal_int(al.sorted_find((void*)0x1703102F1D8, voidp_cmp), -1);
+    assert_not_equal_int(al.sorted_find((void*)0x1703102F100, my_voidp_cmp), -1);
+    assert_not_equal_int(al.sorted_find((void*)0x1703102F1D8, my_voidp_cmp), -1);
+    assert_not_equal_int(al.sorted_find((void*)0x1703102F148, my_voidp_cmp), -1);
+    assert_not_equal_int(al.sorted_find((void*)0x1703102F190, my_voidp_cmp), -1);
+    assert_not_equal_int(al.sorted_find((void*)0x1703102F190, my_voidp_cmp), -1);
+    assert_not_equal_int(al.sorted_find((void*)0x1703102F1D8, my_voidp_cmp), -1);
 
     return pass;
 }
@@ -395,13 +429,13 @@ auto test_array_lists_searching() -> testresult {
     list1.append(4);
 
 
-    s32 index = list1.sorted_find(3, int_cmp);
+    s32 index = list1.sorted_find(3, my_int_cmp);
     assert_equal_int(index, 2);
 
-    index = list1.sorted_find(1, int_cmp);
+    index = list1.sorted_find(1, my_int_cmp);
     assert_equal_int(index, 0);
 
-    index = list1.sorted_find(5, int_cmp);
+    index = list1.sorted_find(5, my_int_cmp);
     assert_equal_int(index, -1);
     return pass;
 }
@@ -492,12 +526,12 @@ auto test_array_list_sort_many() -> testresult {
         list.append(rand());
     }
 
-    assert_equal_int(list.is_sorted(int_cmp), false);
-    list.sort(int_cmp);
-    assert_equal_int(list.is_sorted(int_cmp), true);
+    assert_equal_int(list.is_sorted(my_int_cmp), false);
+    list.sort(my_int_cmp);
+    assert_equal_int(list.is_sorted(my_int_cmp), true);
 
     for (int i = 0; i < 10000; ++i) {
-        assert_not_equal_int(list.sorted_find(list.data[i], int_cmp), -1);
+        assert_not_equal_int(list.sorted_find(list.data[i], my_int_cmp), -1);
     }
 
     list.clear();
@@ -505,12 +539,12 @@ auto test_array_list_sort_many() -> testresult {
         list.append(rand());
     }
 
-    assert_equal_int(list.is_sorted(int_cmp), false);
-    list.sort(int_cmp);
-    assert_equal_int(list.is_sorted(int_cmp), true);
+    assert_equal_int(list.is_sorted(my_int_cmp), false);
+    list.sort(my_int_cmp);
+    assert_equal_int(list.is_sorted(my_int_cmp), true);
 
     for (int i = 0; i < 1111; ++i) {
-        assert_not_equal_int(list.sorted_find(list.data[i], int_cmp), -1);
+        assert_not_equal_int(list.sorted_find(list.data[i], my_int_cmp), -1);
     }
 
 
@@ -519,12 +553,12 @@ auto test_array_list_sort_many() -> testresult {
         list.append(rand());
     }
 
-    assert_equal_int(list.is_sorted(int_cmp), false);
-    list.sort(int_cmp);
-    assert_equal_int(list.is_sorted(int_cmp), true);
+    assert_equal_int(list.is_sorted(my_int_cmp), false);
+    list.sort(my_int_cmp);
+    assert_equal_int(list.is_sorted(my_int_cmp), true);
 
     for (int i = 0; i < 3331; ++i) {
-        assert_not_equal_int(list.sorted_find(list.data[i], int_cmp), -1);
+        assert_not_equal_int(list.sorted_find(list.data[i], my_int_cmp), -1);
     }
 
     return pass;
@@ -539,6 +573,7 @@ auto test_string_split() -> testresult {
 
         String_Split ss;
         ss.init(s, '|');
+        defer { ss.deinit(); };
 
         String expected0 = (String){.data = (char*)"aa", .length=2};
         String expected1 = (String){.data = (char*)"bb", .length=2};
@@ -560,6 +595,7 @@ auto test_string_split() -> testresult {
 
         String_Split ss;
         ss.init(s, '|');
+        defer { ss.deinit(); };
 
         String expected0 = (String){.data = (char*)"",   .length=0};
         String expected1 = (String){.data = (char*)"aa", .length=2};
@@ -1174,11 +1210,13 @@ auto test_kd_tree() -> testresult {
         {0,0,0}, {1,1,1},
         {2,2,2}, {3,3,3},
     });
+    defer { points.deinit(); };
 
     Array_List<int> payloads1;
     payloads1.init_from({
             0,1,2,3,
     });
+    defer { payloads1.deinit(); };
 
     struct PL {
         int a[1000];
@@ -1187,17 +1225,21 @@ auto test_kd_tree() -> testresult {
     payloads2.init_from({
         {},{},{},{},
     });
+    defer { payloads2.deinit(); };
 
     auto tree1 = Kd_Tree<int>::build_from(points.count, points.data, payloads1.data);
     auto tree2 = Kd_Tree<PL>::build_from(points.count, points.data, payloads2.data);
 
     Array_List<V3> query_points;
     query_points.init();
+    defer { query_points.deinit(); };
+
     Array_List<int> query_payloads1;
     Array_List<PL> query_payloads2;
     query_payloads1.init();
     query_payloads2.init();
-
+    defer { query_payloads1.deinit(); };
+    defer { query_payloads2.deinit(); };
 
     {
         query_points.clear();
@@ -1370,24 +1412,34 @@ auto test_bucket_queue() -> testresult {
 }
 
 s32 main(s32, char**) {
-    defer { print_malloc_stats(); };
-
     testresult result;
 
-    invoke_test(test_bucket_queue);
-    invoke_test(test_bucket_list);
-    invoke_test(test_kd_tree);
-    invoke_test(test_math);
-    invoke_test(test_sort);
-    invoke_test(test_array_lists_adding_and_removing);
-    invoke_test(test_array_lists_sorting);
-    invoke_test(test_array_lists_searching);
-    invoke_test(test_array_list_sort_many);
-    invoke_test(test_string_split);
-    invoke_test(test_stack_array_lists);
-    invoke_test(test_bucket_allocator);
-    invoke_test(test_hooks);
-    invoke_test(test_scheduler_animations);
+    Leak_Detecting_Allocator ld;
+    ld.init();
+    Bookkeeping_Allocator bk;
+    bk.init();
+    with_allocator(bk) {
+        defer { bk.print_statistics(); };
 
+        with_allocator(ld) {
+            defer { ld.print_leak_statistics(); };
+
+            invoke_test(test_bucket_queue);
+            invoke_test(test_bucket_list);
+            invoke_test(test_kd_tree);
+            invoke_test(test_math);
+            invoke_test(test_sort);
+            invoke_test(test_array_lists_adding_and_removing);
+            invoke_test(test_array_lists_sorting);
+            invoke_test(test_array_lists_sorted_insert_and_remove);
+            invoke_test(test_array_lists_searching);
+            invoke_test(test_array_list_sort_many);
+            invoke_test(test_string_split);
+            invoke_test(test_stack_array_lists);
+            invoke_test(test_bucket_allocator);
+            invoke_test(test_hooks);
+            invoke_test(test_scheduler_animations);
+        }
+    }
     return 0;
 }

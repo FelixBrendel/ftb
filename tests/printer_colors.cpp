@@ -1,7 +1,6 @@
 #define _CRT_SECURE_NO_WARNINGS
-#define FTB_PRINT_IMPL
-#define FTB_HASHMAP_IMPL
-#include "../print.hpp"
+#define FTB_CORE_IMPL
+#include "../core.hpp"
 
 int main() {
 #define test_color(code) \

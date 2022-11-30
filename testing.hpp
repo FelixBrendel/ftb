@@ -29,8 +29,7 @@
 #pragma once
 
 #include <math.h>
-#include "./types.hpp"
-#include "./allocation_stats.hpp"
+#include "./core.hpp"
 
 typedef s32 testresult;
 

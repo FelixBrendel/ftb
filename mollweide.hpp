@@ -28,10 +28,10 @@
 
 #pragma once
 
-#include "types.hpp"
+#include "core.hpp"
 #include "math.hpp"
 #include "bucket_allocator.hpp"
-#include "arraylist.hpp"
+
 
 void lat_lng_to_mollweide(f32 phi, f32 lambda, f32* out_x, f32* out_y);
 void mollweide_to_lat_lng(f32 x, f32 y, f32* out_phi, f32* out_lambda);

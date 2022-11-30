@@ -8,3 +8,4 @@ samples.obj
 /tests/obj/full_sphere.obj
 /tests/obj/partial_sphere.obj
 /tests/heatmap.bmp
+/tests/bin/

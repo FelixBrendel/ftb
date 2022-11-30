@@ -27,7 +27,7 @@
  */
 
 #pragma once
-#include "./arraylist.hpp"
+#include "./core.hpp"
 
 #include <type_traits> // For std::decay
 

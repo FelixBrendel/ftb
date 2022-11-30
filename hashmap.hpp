@@ -31,8 +31,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "types.hpp"
-#include "arraylist.hpp"
+#include "core.hpp"
 
 #ifndef FTB_HASHMAP_IMPL
 

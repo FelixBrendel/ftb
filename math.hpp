@@ -29,8 +29,8 @@
 #pragma once
 #include <cmath>
 #include <float.h>
-#include "types.hpp"
-#include "macros.hpp"
+#include "core.hpp"
+
 
 #define FTB_USING_MATH
 

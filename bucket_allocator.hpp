@@ -27,8 +27,7 @@
  */
 
 #pragma once
-#include "arraylist.hpp"
-#include "types.hpp"
+#include "core.hpp"
 
 template <typename type>
 struct Bucket_Allocator {

@@ -27,12 +27,8 @@
  */
 
 #pragma once
-#include "macros.hpp"
-#include "types.hpp"
-#include "print.hpp"
+#include "core.hpp"
 #include "bucket_allocator.hpp"
-#include "arraylist.hpp"
-#include "stacktrace.hpp"
 
 
 // NOTE(Felix): since we want to be able to interpolate any data in principle,
