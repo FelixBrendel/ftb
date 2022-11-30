@@ -141,8 +141,6 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
 #  define defer auto DEFER(__LINE__) = defer_dummy{} *[&]()
 #endif // defer
 
-// #define defer_free(var) defer { free(var); }
-
 #define create_guarded_block(before_code, after_code)   \
     if ([&](){before_code; return false;}());           \
     else if (defer {after_code}); else
@@ -1958,9 +1956,9 @@ void init_printer(Allocator_Base* allocator) {
 }
 
 void deinit_printer() {
-    free(color_stack);
-    free(prefix_stack);
-    free(custom_printers);
+    printer_allocator->deallocate(color_stack);
+    printer_allocator->deallocate(prefix_stack);
+    printer_allocator->deallocate(custom_printers);
 }
 #ifndef FTB_NO_INIT_PRINTER
 namespace {
