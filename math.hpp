@@ -970,7 +970,7 @@ auto quat_from_XYZ(f32 x, f32 y, f32 z) -> Quat {
         .x = sx*cy*cz - cx*sy*sz,
         .y = cx*sy*cz + sx*cy*sz,
         .z = cx*cy*sz - sx*sy*cz,
-        .w = cx*cy*cz + sx*sy*sz,
+        .w = cx*cy*cz + sx*sy*sz
     };
 }
 

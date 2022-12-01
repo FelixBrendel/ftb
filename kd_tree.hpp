@@ -58,6 +58,8 @@ struct Kd_Tree {
         Kd_Node_Idx right_idx = -1;
     };
 
+    Allocator_Base* allocator = nullptr;
+
     // Root of the tree
     Kd_Node_Idx root = -1;
 
@@ -67,16 +69,42 @@ struct Kd_Tree {
     Kd_Node*  nodes    = nullptr;
     PayloadT* payloads = nullptr;
 
-    static auto build_from(u32 point_count, V3* points, PayloadT* payloads = nullptr) -> Kd_Tree<PayloadT> {
+    void init(Allocator_Base* back_allocator = nullptr) {
+        if (!back_allocator)
+            back_allocator = grab_current_allocator();
+
+        allocator = back_allocator;
+
+        root = -1;
+
+        node_count           = 0;
+        allocated_node_count = 0;
+
+        nodes    = nullptr;
+        payloads = nullptr;
+    }
+
+    void deinit() {
+        allocator->deallocate(nodes);
+        allocator->deallocate(payloads);
+    }
+
+    static auto build_from(u32 point_count, V3* points, PayloadT* payloads = nullptr, Allocator_Base* back_allocator = nullptr) -> Kd_Tree<PayloadT> {
+        Kd_Tree<PayloadT> tree {};
+
+        if (!back_allocator)
+            back_allocator = grab_current_allocator();
+
+        tree.allocator = back_allocator;
+
         if (point_count == 0) {
-            return {};
+            return tree;
         }
 
-        Kd_Tree<PayloadT> tree;
 
-        tree.nodes = (Kd_Node*)malloc(sizeof(Kd_Node) * point_count);
+        tree.nodes = back_allocator->allocate<Kd_Node>(point_count);
         if (payloads) {
-            tree.payloads = (PayloadT*)malloc(sizeof(*payloads) * point_count);
+            tree.payloads = back_allocator->allocate<PayloadT>(point_count);
         } else {
             payloads = nullptr;
         }
@@ -91,10 +119,11 @@ struct Kd_Tree {
     auto reserve(u32 to_reserve) -> void {
         if (allocated_node_count - node_count < to_reserve) {
             // at least allocate 16
-            allocated_node_count = 2*allocated_node_count < 16 ? 16 : 2*allocated_node_count;
-            nodes = (Kd_Node*)realloc(nodes, allocated_node_count * sizeof(Kd_Node));
+            allocated_node_count = MAX(16, 2*allocated_node_count);
+
+            nodes = allocator->resize<Kd_Node>(nodes, allocated_node_count);
             if (payloads) {
-                payloads = (PayloadT*)realloc(payloads, allocated_node_count * sizeof(PayloadT));
+                payloads = allocator->resize<PayloadT>(payloads, allocated_node_count);
             }
         }
     }

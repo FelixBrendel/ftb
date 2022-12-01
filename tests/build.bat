@@ -14,12 +14,12 @@ set BINDIR_LINUX=./%BINDIR_RAW%
 
 echo.
 echo clang:
-clang++ -g -std=c++17 alloctest.cpp -o %BINDIR_WIN%\clang_alloctest.exe || exit 1
-clang++ -g -std=c++17 printer_colors.cpp -o %BINDIR_WIN%\clang_printer_colors.exe || exit 1
+rem clang++ -g -std=c++17 alloctest.cpp -o %BINDIR_WIN%\clang_alloctest.exe || exit 1
+rem clang++ -g -std=c++17 printer_colors.cpp -o %BINDIR_WIN%\clang_printer_colors.exe || exit 1
 clang++ -g -std=c++17 %SRC% -o %BINDIR_WIN%\clang_%EXE_WIN%  || exit 1
 echo.
-%BINDIR_WIN%\clang_alloctest.exe
-%BINDIR_WIN%\clang_printer_colors
+rem %BINDIR_WIN%\clang_alloctest.exe
+rem %BINDIR_WIN%\clang_printer_colors
 %BINDIR_WIN%\clang_%EXE_WIN%
 
 rem echo.

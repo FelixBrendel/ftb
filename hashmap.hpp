@@ -85,6 +85,8 @@ template <typename key_type, typename value_type>
 struct Hash_Map {
     u32 current_capacity;
     u32 cell_count;
+    Allocator_Base* allocator;
+
     struct HM_Cell {
         key_type original;
         u64  hash;
@@ -96,14 +98,12 @@ struct Hash_Map {
         value_type object;
     }* data;
 
-    template <typename lambda>
-    void for_each(lambda p) {
-        for(u32 index = 0; index < current_capacity; ++index)
-            if (data[index].occupancy == HM_Cell::Occupancy::Occupied)
-                p(data[index].original, data[index].object, index);
-    }
+    void init(u32 initial_capacity = 8, Allocator_Base* back_allocator = nullptr) {
+        if (back_allocator)
+            allocator = back_allocator;
+        else
+            allocator = grab_current_allocator();
 
-    void init(u32 initial_capacity = 8) {
         // round up to next pow of 2
         --initial_capacity;
         initial_capacity |= initial_capacity >> 1;
@@ -115,12 +115,20 @@ struct Hash_Map {
         // until here
         current_capacity = initial_capacity;
         cell_count = 0;
-        data = (HM_Cell*)calloc(initial_capacity, sizeof(HM_Cell));
+        data = allocator->allocate_0<HM_Cell>(initial_capacity);
     }
 
     void deinit() {
-        free(data);
+        allocator->deallocate(data);
         data = nullptr;
+    }
+
+
+    template <typename lambda>
+    void for_each(lambda p) {
+        for(u32 index = 0; index < current_capacity; ++index)
+            if (data[index].occupancy == HM_Cell::Occupancy::Occupied)
+                p(data[index].original, data[index].object, index);
     }
 
     void clear() {
@@ -250,7 +258,7 @@ struct Hash_Map {
                 /* collision, check resize */
                 if ((cell_count*1.0f / current_capacity) > 0.666f) {
                     auto old_data = data;
-                    data = (HM_Cell*)calloc(current_capacity*4, sizeof(HM_Cell));
+                    data = allocator->allocate_0<HM_Cell>(current_capacity*4);
                     cell_count = 0;
                     current_capacity *= 4;
 
@@ -261,7 +269,7 @@ struct Hash_Map {
                             set_object(cell.original, cell.object, cell.hash);
                         }
                     }
-                    free(old_data);
+                    allocator->deallocate(old_data);
                     index = hash_val & (current_capacity - 1);
                 }
                 ++cell_count;
@@ -304,7 +312,7 @@ struct Hash_Map {
         defer { fclose(out); };
         for (u32 i = 0; i < current_capacity; ++i) {
             if (data[i].occupancy == HM_Cell::Occupancy::Avaliable) {
-                fprintf(out, "%04u [FREE]\n", i);
+                fprintf(out, "%04u [AVAILABLE]\n", i);
             } else if (data[i].occupancy == HM_Cell::Occupancy::Deleted) {
                 fprintf(out, "%04u [DELETED]  hash: %llu (wants to be %llu)\n", i, data[i].hash, data[i].hash & (current_capacity - 1));
             } else {

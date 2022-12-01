@@ -1154,7 +1154,6 @@ struct Printing_Allocator {
     void init(Allocator_Base* next_allocator = nullptr);
 };
 
-
 struct Resettable_Allocator {
     Allocator_Base base;
 
@@ -1164,7 +1163,6 @@ struct Resettable_Allocator {
     void deinit();
     void deallocate_everyting_still_allocated();
 };
-
 
 struct Allocation_Info {
     void* prt;
@@ -1209,6 +1207,8 @@ struct Linear_Allocator {
 
 
 #ifdef FTB_CORE_IMPL
+
+
 // ----------------------------------------------------------------------------
 //                              IO impl
 // ----------------------------------------------------------------------------
@@ -1255,7 +1255,7 @@ auto read_entire_file(const char* filename, Allocator_Base* allocator) -> File_R
     return ret;
 }
 
-
+
 // ----------------------------------------------------------------------------
 //                              print impl
 // ----------------------------------------------------------------------------
@@ -1280,9 +1280,6 @@ u32          color_stack_allocated;
 Custom_Printer* custom_printers;
 u32             custom_printers_count;
 u32             custom_printers_allocated;
-
-// Hash_Map<char*, printer_function_ptr> printer_map = {};
-// Hash_Map<char*, int>                  type_map    = {};
 
 Custom_Printer* find_custom_printer(const char *spec) {
     for (u32 i = 0; i < custom_printers_count; ++i) {
@@ -1956,9 +1953,9 @@ void init_printer(Allocator_Base* allocator) {
 }
 
 void deinit_printer() {
-    printer_allocator->deallocate(color_stack);
-    printer_allocator->deallocate(prefix_stack);
-    printer_allocator->deallocate(custom_printers);
+    print_allocator->deallocate(color_stack);
+    print_allocator->deallocate(prefix_stack);
+    print_allocator->deallocate(custom_printers);
 }
 #ifndef FTB_NO_INIT_PRINTER
 namespace {
@@ -1973,7 +1970,7 @@ namespace {
 }
 #endif // FTB_NO_INIT_PRINTER
 
-
+
 // ----------------------------------------------------------------------------
 //                              string implementation
 // ----------------------------------------------------------------------------
@@ -2013,6 +2010,7 @@ void String::free(Allocator_Base* allocator) {
 #endif
 }
 
+
 // ----------------------------------------------------------------------------
 //                              utf8 implementation
 // ----------------------------------------------------------------------------
@@ -2121,6 +2119,7 @@ bool strncpy_utf8_0(char* dest, const char* src, u64 dest_size) {
 }
 
 
+
 // ----------------------------------------------------------------------------
 //                              allocator implementation
 // ----------------------------------------------------------------------------
@@ -2560,7 +2559,6 @@ Allocator_Functions allocator_function_table[((int)Allocator_Type::Allocator_Typ
 #undef ALLOCATOR
 };
 
-
 //
 // Base Allocator functions
 //
@@ -2606,6 +2604,7 @@ void Allocator_Base::deallocate(void* old) {
     }
 }
 
+
 // ----------------------------------------------------------------------------
 //                              stacktrace impl
 // ----------------------------------------------------------------------------

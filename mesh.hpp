@@ -119,7 +119,9 @@ auto load_obj(const char* path) -> Mesh_Data {
         return {};
 
     String obj_str = obj_str_read.contents;
-    defer_free(obj_str.data);
+    defer{
+        dealloc(obj_str.data);
+    };
 
     Mesh_Data result;
 

@@ -46,11 +46,26 @@ struct Mollweide_Grid {
 
     u32 subdivision_level;
     Bucket_List<Entry>* buckets;
+    Allocator_Base* allocator;
 
-    void init(u32 subdivisions) {
+    void init(u32 subdivisions, Allocator_Base* back_allocator = nullptr) {
+        if (!back_allocator)
+            back_allocator = grab_current_allocator();
+
+        allocator = back_allocator;
+
         buckets = nullptr;
         subdivision_level = 0;
         change_subdivision_level(subdivisions);
+    }
+
+    void deinit() {
+        u32 cell_count = get_num_cells();
+        for (u32 i = 0; i < cell_count; ++i) {
+            if (buckets[i].allocator.buckets)
+                buckets[i].deinit();
+        }
+        allocator->deallocate(buckets);
     }
 
     void clear() {
@@ -61,14 +76,6 @@ struct Mollweide_Grid {
         }
     }
 
-    void deinit() {
-            u32 cell_count = get_num_cells();
-        for (u32 i = 0; i < cell_count; ++i) {
-            if (buckets[i].allocator.buckets)
-                buckets[i].deinit();
-        }
-        free(buckets);
-    }
 
     void get_dimensions(u32* out_width, u32* out_height) {
         *out_width  = 1 << (subdivision_level + 1); // width  = 2 * 2 ** s_l
@@ -131,7 +138,7 @@ struct Mollweide_Grid {
         u32 idx = grid_width * y_idx + x_idx;
 
         if (!buckets[idx].allocator.buckets) {
-            buckets[idx].init(1024, 4);
+            buckets[idx].init(1024, 4, allocator);
         }
 
         buckets[idx].append(*e);
@@ -145,8 +152,9 @@ struct Mollweide_Grid {
         u32 old_cell_count = get_num_cells();
 
         subdivision_level = new_subdivisions;
-                                           u32 cell_count = get_num_cells();
-        buckets = (Bucket_List<Entry>*)calloc(cell_count, sizeof(buckets[0]));
+        u32 cell_count = get_num_cells();
+
+        buckets = allocator->allocate_0<Bucket_List<Entry>>(cell_count);
 
         if (old_buckets) {
             for (u32 i = 0; i < old_cell_count; ++i) {
@@ -156,7 +164,8 @@ struct Mollweide_Grid {
 
                 old_buckets[i].deinit();
             }
-            free(old_buckets);
+
+            allocator->deallocate(old_buckets);
         }
     }
 
@@ -203,7 +212,10 @@ struct Mollweide_Grid {
     //
     //   Protip: The rendered image does not suffer from resampling issues when
     //   'height' is a multiple of the grid height (2 ** subdiv_level)
-    auto render_heatmap(u32 height) -> u8* {
+    auto render_heatmap(u32 height, Allocator_Base* pixel_allocator = nullptr) -> u8* {
+        if (!pixel_allocator)
+            pixel_allocator = grab_current_allocator();
+
         struct Pixel {
             u8 r;
             u8 g;
@@ -229,7 +241,7 @@ struct Mollweide_Grid {
             }
         }
 
-        Pixel* pixels = (Pixel*)malloc(width * height * sizeof(pixels[0]));
+        Pixel* pixels = pixel_allocator->allocate<Pixel>(width * height);
 
         u32 grid_width, grid_height;
         get_dimensions(&grid_width, &grid_height);

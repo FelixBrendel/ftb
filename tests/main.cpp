@@ -4,13 +4,10 @@
 #include <string.h>
 
 #define FTB_CORE_IMPL
-#define FTB_ALLOCATION_STATS_IMPL
 #define FTB_HASHMAP_IMPL
 #define FTB_SCHEDULER_IMPL
-#define FTB_STACKTRACE_IMPL
 #define FTB_MATH_IMPL
 #define FTB_SOA_SORT_IMPL
-#define FTB_TYPES_IMPL
 
 #include "../math.hpp"
 #include "../core.hpp"
@@ -108,7 +105,7 @@ auto test_printer() -> void {
 
 }
 
-auto test_hm() -> testresult {
+auto test_hashmap() -> testresult {
     Hash_Map<u32, u32> h1;
     h1.init();
     defer { h1.deinit(); };
@@ -143,9 +140,9 @@ auto test_hm() -> testresult {
     assert_true(h2.get_object({.x = 1, .y = 2, .z = 3}) == 1);
     assert_true(h2.get_object({.x = 3, .y = 3, .z = 3}) == 3);
 
-    h2.for_each([] (Key k, u32 v, u32 i) {
-        print("%{s32} %{u32} %{u32}\n", k.x, v, i);
-    });
+    // h2.for_each([] (Key k, u32 v, u32 i) {
+        // print("%{s32} %{u32} %{u32}\n", k.x, v, i);
+    // });
 
     return pass;
 }
@@ -440,8 +437,8 @@ auto test_array_lists_searching() -> testresult {
     return pass;
 }
 
-auto test_bucket_allocator() -> testresult {
-    Bucket_Allocator<s32> ba;
+auto test_typed_bucket_allocator() -> testresult {
+    Typed_Bucket_Allocator<s32> ba;
     ba.init();
     defer {
         ba.deinit();
@@ -470,7 +467,7 @@ auto test_bucket_allocator() -> testresult {
 
 
 
-    Bucket_Allocator<s32> ba2;
+    Typed_Bucket_Allocator<s32> ba2;
     ba2.init();
     defer {
         ba2.deinit();
@@ -485,16 +482,16 @@ auto test_bucket_allocator() -> testresult {
     s32* s3_copy2 = ba2.allocate();
     s32* s3_copy3 = ba2.allocate();
     *s3_copy = 3;
-    ba2.free_object(s3_copy);
+    ba2.deallocate(s3_copy);
 
 
     s4 = ba2.allocate();
 
-    ba2.free_object(s3_copy2);
+    ba2.deallocate(s3_copy2);
 
     s5 = ba2.allocate();
 
-    ba2.free_object(s3_copy3);
+    ba2.deallocate(s3_copy3);
 
     *s1 = 1;
     *s2 = 2;
@@ -1229,6 +1226,10 @@ auto test_kd_tree() -> testresult {
 
     auto tree1 = Kd_Tree<int>::build_from(points.count, points.data, payloads1.data);
     auto tree2 = Kd_Tree<PL>::build_from(points.count, points.data, payloads2.data);
+    defer {
+        tree1.deinit();
+        tree2.deinit();
+    };
 
     Array_List<V3> query_points;
     query_points.init();
@@ -1277,7 +1278,10 @@ auto test_kd_tree() -> testresult {
         query_points.clear();
         query_payloads1.clear();
 
-        Kd_Tree tree;
+        Kd_Tree<Empty> tree;
+        tree.init();
+        defer { tree.deinit(); };
+
         tree.add({0,0,0});
         tree.add({1,0,0});
         tree.add({0,1,0});
@@ -1311,7 +1315,7 @@ auto test_bucket_list() -> testresult {
     list.append(2);
     list.append(3);
 
-    assert_equal_int(list.count(), 3);
+    assert_equal_int(list.count_elements(), 3);
 
     u32 index = 0;
     list.for_each([&](int* i) -> testresult {
@@ -1325,7 +1329,7 @@ auto test_bucket_list() -> testresult {
     assert_equal_int(list[2], 3);
 
     list.remove_index(1);
-    assert_equal_int(list.count(), 2);
+    assert_equal_int(list.count_elements(), 2);
     assert_equal_int(list[0], 1);
     assert_equal_int(list[1], 3);
 
@@ -1341,17 +1345,34 @@ auto test_bucket_list() -> testresult {
     });
 
     list[0] = 3;
-    assert_equal_int(list.count(), 2);
+    assert_equal_int(list.count_elements(), 2);
     assert_equal_int(list[0], 3);
     list.append(3);
     list.append(3);
     list.append(3);
     list.append(10);
-    assert_equal_int(list.count(), 6);
+    assert_equal_int(list.count_elements(), 6);
 
     return pass;
 }
 
+auto test_bucket_list_leak() -> testresult {
+    Bucket_List<int> l;
+    l.init(2);
+    defer { l.deinit(); };
+
+    l.append(1);
+    l.append(1); // next bucket
+    int* old_bucket = l.buckets[1];
+    l.remove_index(0);
+
+    l.append(1); // next bucket again
+    int* new_bucket = l.buckets[1];
+
+    assert_equal_int(old_bucket, new_bucket);
+
+    return true;
+}
 
 auto test_bucket_queue() -> testresult {
     Bucket_Queue<int> q;
@@ -1404,8 +1425,8 @@ auto test_bucket_queue() -> testresult {
     assert_equal_int(q.get_next(), 6);
     assert_equal_int(q.get_next(), 7);
 
-    assert_equal_int(q.bucket_list.allocator.next_index_in_latest_bucket, 0);
-    assert_equal_int(q.bucket_list.allocator.next_bucket_index,0);
+    assert_equal_int(q.bucket_list.next_index_in_latest_bucket, 0);
+    assert_equal_int(q.bucket_list.next_bucket_index,0);
     assert_equal_int(q.start_idx,0);
 
     return pass;
@@ -1424,10 +1445,12 @@ s32 main(s32, char**) {
         with_allocator(ld) {
             defer { ld.print_leak_statistics(); };
 
-            invoke_test(test_bucket_queue);
             invoke_test(test_bucket_list);
+            invoke_test(test_bucket_list_leak);
+            invoke_test(test_bucket_queue);
             invoke_test(test_kd_tree);
             invoke_test(test_math);
+            invoke_test(test_hashmap);
             invoke_test(test_sort);
             invoke_test(test_array_lists_adding_and_removing);
             invoke_test(test_array_lists_sorting);
@@ -1436,7 +1459,7 @@ s32 main(s32, char**) {
             invoke_test(test_array_list_sort_many);
             invoke_test(test_string_split);
             invoke_test(test_stack_array_lists);
-            invoke_test(test_bucket_allocator);
+            invoke_test(test_typed_bucket_allocator);
             invoke_test(test_hooks);
             invoke_test(test_scheduler_animations);
         }

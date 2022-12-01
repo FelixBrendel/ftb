@@ -150,6 +150,8 @@ struct Action_Or_Animation {
 
 
 struct Scheduler {
+    Allocator_Base* allocator;
+
     // For user defined shapers t -> t
     Shaper_F       _shapers[127];
     // Interpolators for user types
@@ -158,21 +160,21 @@ struct Scheduler {
 
     // Per reset cycle:
     // PING
-    Bucket_Allocator<Scheduled_Animation> _active_animations_1;
-    Bucket_Allocator<Scheduled_Action>    _scheduled_actions_1;
-    Bucket_Allocator<Action>              _chained_actions_1;
+    Typed_Bucket_Allocator<Scheduled_Animation> _active_animations_1;
+    Typed_Bucket_Allocator<Scheduled_Action>    _scheduled_actions_1;
+    Typed_Bucket_Allocator<Action>              _chained_actions_1;
     // PONG
-    Bucket_Allocator<Scheduled_Animation> _active_animations_2;
-    Bucket_Allocator<Scheduled_Action>    _scheduled_actions_2;
-    Bucket_Allocator<Action>              _chained_actions_2;
+    Typed_Bucket_Allocator<Scheduled_Animation> _active_animations_2;
+    Typed_Bucket_Allocator<Scheduled_Action>    _scheduled_actions_2;
+    Typed_Bucket_Allocator<Action>              _chained_actions_2;
 
-    Bucket_Allocator<Scheduled_Animation>* active_animations;
-    Bucket_Allocator<Scheduled_Action>*    scheduled_actions;
-    Bucket_Allocator<Action>*              chained_actions;
+    Typed_Bucket_Allocator<Scheduled_Animation>* active_animations;
+    Typed_Bucket_Allocator<Scheduled_Action>*    scheduled_actions;
+    Typed_Bucket_Allocator<Action>*              chained_actions;
 
-    Bucket_Allocator<Scheduled_Animation>* future_active_animations;
-    Bucket_Allocator<Scheduled_Action>*    future_scheduled_actions;
-    Bucket_Allocator<Action>*              future_chained_actions;
+    Typed_Bucket_Allocator<Scheduled_Animation>* future_active_animations;
+    Typed_Bucket_Allocator<Scheduled_Action>*    future_scheduled_actions;
+    Typed_Bucket_Allocator<Action>*              future_chained_actions;
 
     // Per Tick:
     // if something is deleted while iterating over them
@@ -186,7 +188,7 @@ struct Scheduler {
     bool _should_stop_iterating = false;
     u64 _action_stamp_counter = 0;
 
-    auto init() -> void;
+    auto init(Allocator_Base* back_allocator) -> void;
     auto deinit() -> void;
     auto reset() -> void;
 
@@ -212,14 +214,19 @@ struct Scheduler {
 
 #ifdef FTB_SCHEDULER_IMPL
 
-auto Scheduler::init () -> void {
-    _active_animations_1.init();
-    _scheduled_actions_1.init();
-    _chained_actions_1.init();
+auto Scheduler::init (Allocator_Base* back_allocator = nullptr) -> void {
+    if (!back_allocator)
+        back_allocator = grab_current_allocator();
 
-    _active_animations_2.init();
-    _scheduled_actions_2.init();
-    _chained_actions_2.init();
+    allocator = back_allocator;
+
+    _active_animations_1.init(16, 8, allocator);
+    _scheduled_actions_1.init(16, 8, allocator);
+    _chained_actions_1.init(16, 8, allocator);
+
+    _active_animations_2.init(16, 8, allocator);
+    _scheduled_actions_2.init(16, 8, allocator);
+    _chained_actions_2.init(16, 8, allocator);
 
     active_animations = &_active_animations_1;
     scheduled_actions = &_scheduled_actions_1;
@@ -230,9 +237,9 @@ auto Scheduler::init () -> void {
     future_chained_actions   = &_chained_actions_2;
 
 
-    _animations_marked_for_deletion.init();
-    _actions_marked_for_deletion.init();
-    _chained_actions_to_be_run_after_iteration.init(20);
+    _animations_marked_for_deletion.init(8, allocator);
+    _actions_marked_for_deletion.init(8, allocator);
+    _chained_actions_to_be_run_after_iteration.init(20, allocator);
 }
 
 auto Scheduler::deinit() -> void {
@@ -421,9 +428,9 @@ auto Scheduler::_actually_reset() -> void {
     _actions_marked_for_deletion.clear();
 
     // swap ping pong
-    Bucket_Allocator<Scheduled_Animation>* t_active_animations = active_animations;
-    Bucket_Allocator<Scheduled_Action>*    t_scheduled_actions = scheduled_actions;
-    Bucket_Allocator<Action>*              t_chained_actions   = chained_actions;
+    Typed_Bucket_Allocator<Scheduled_Animation>* t_active_animations = active_animations;
+    Typed_Bucket_Allocator<Scheduled_Action>*    t_scheduled_actions = scheduled_actions;
+    Typed_Bucket_Allocator<Action>*              t_chained_actions   = chained_actions;
 
     active_animations = future_active_animations;
     scheduled_actions = future_scheduled_actions;
@@ -516,7 +523,7 @@ auto Scheduler::handle_chained_action(Action* action) -> void {
         execute_action(action);
 
         log_debug("DELETING action %s %d", action->name, action->creation_stamp);
-        chained_actions->free_object(action);
+        chained_actions->deallocate(action);
         action = action->next;
 
         if (_should_stop_iterating) break;
@@ -666,10 +673,10 @@ auto Scheduler::update_all(f32 delta_time) -> void {
         //   check if a bucket is active or freed, so for_each will be called
         //   for buckets that are no longer alive. -Felix Dec 18 2020
         for (auto anim : _animations_marked_for_deletion) {
-            active_animations->free_object(anim);
+            active_animations->deallocate(anim);
         }
         for (auto action : _actions_marked_for_deletion) {
-            scheduled_actions->free_object(action);
+            scheduled_actions->deallocate(action);
         }
         _animations_marked_for_deletion.clear();
         _actions_marked_for_deletion.clear();
