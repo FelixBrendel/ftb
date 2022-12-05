@@ -20,6 +20,7 @@ inline bool hm_objects_match(Key a, Key b);
 
 #include "../testing.hpp"
 #include "../bucket_allocator.hpp"
+#include "../pool_allocator.hpp"
 
 #include "../hooks.hpp"
 #include "../hashmap.hpp"
@@ -1374,6 +1375,154 @@ auto test_bucket_list_leak() -> testresult {
     return true;
 }
 
+auto test_growable_pool_allocator() -> testresult {
+    Growable_Pool_Allocator<int> pool;
+    pool.init(10);
+    defer { pool.deinit(); };
+
+    assert_equal_int(pool.count_allocated_elements(), 0);
+
+    int* ints[20];
+    for (u32 i = 0; i < array_length(ints); ++i) {
+        if (i == 0 || i == 10) {
+            assert_equal_int(pool.free_list, 0);
+        } else {
+            assert_not_equal_int(pool.free_list, 0);
+        }
+
+        ints[i] = pool.allocate();
+        *ints[i] = i;
+
+        assert_equal_int(pool.count_allocated_elements(), i+1);
+    }
+
+    assert_equal_int(pool.free_list, 0);
+
+    for (u32 i = 0; i < array_length(ints); ++i) {
+        assert_equal_int(*ints[i],  i);
+    }
+
+    for (u32 i = 0; i < 10; ++i) {
+        pool.deallocate(ints[i]);
+
+        assert_equal_int(pool.count_allocated_elements(), 20-i-1);
+    }
+
+    assert_not_equal_int(pool.free_list, 0);
+
+    for (u32 i = 0; i < 10; ++i) {
+        assert_not_null(pool.free_list);
+
+        ints[i] = pool.allocate();
+        *ints[i] = 100+i;
+
+        assert_equal_int(pool.count_allocated_elements(), 10+i+1);
+    }
+
+
+    u32 i = 0;
+    for (; i < 10; ++i) {
+        assert_equal_int(*ints[i],  i+100);
+    }
+    for (; i < 20; ++i) {
+        assert_equal_int(*ints[i],  i);
+    }
+
+    assert_not_null(pool.next_chunk);
+    assert_not_null(pool.next_chunk->next_chunk);
+    assert_null(pool.next_chunk->next_chunk->next_chunk);
+    assert_null(pool.free_list);
+
+    assert_equal_int(pool.next_chunk->data[0].element, 10);
+    assert_equal_int(pool.next_chunk->data[1].element, 11);
+    assert_equal_int(pool.next_chunk->data[2].element, 12);
+    assert_equal_int(pool.next_chunk->data[3].element, 13);
+    assert_equal_int(pool.next_chunk->data[4].element, 14);
+    assert_equal_int(pool.next_chunk->data[5].element, 15);
+    assert_equal_int(pool.next_chunk->data[6].element, 16);
+    assert_equal_int(pool.next_chunk->data[7].element, 17);
+    assert_equal_int(pool.next_chunk->data[8].element, 18);
+    assert_equal_int(pool.next_chunk->data[9].element, 19);
+
+    assert_equal_int(pool.next_chunk->next_chunk->data[0].element, 109);
+    assert_equal_int(pool.next_chunk->next_chunk->data[1].element, 108);
+    assert_equal_int(pool.next_chunk->next_chunk->data[2].element, 107);
+    assert_equal_int(pool.next_chunk->next_chunk->data[3].element, 106);
+    assert_equal_int(pool.next_chunk->next_chunk->data[4].element, 105);
+    assert_equal_int(pool.next_chunk->next_chunk->data[5].element, 104);
+    assert_equal_int(pool.next_chunk->next_chunk->data[6].element, 103);
+    assert_equal_int(pool.next_chunk->next_chunk->data[7].element, 102);
+    assert_equal_int(pool.next_chunk->next_chunk->data[8].element, 101);
+    assert_equal_int(pool.next_chunk->next_chunk->data[9].element, 100);
+
+
+    assert_equal_int(pool.count_allocated_elements(), 20);
+    pool.reset();
+    assert_equal_int(pool.count_allocated_elements(), 0);
+
+    return pass;
+}
+
+auto test_pool_allocator() -> testresult {
+    Pool_Allocator<int> pool;
+    pool.init(10);
+    defer { pool.deinit(); };
+
+    assert_equal_int(pool.count_allocated_elements(), 0);
+
+    int* ints[10];
+
+    for (u32 repeat = 0; repeat < 3; ++repeat) {
+        for (u32 i = 0; i < array_length(ints); ++i) {
+            assert_not_equal_int(pool.next_free_idx, -1);
+
+            ints[i] = pool.allocate();
+            *ints[i] = i;
+
+            assert_equal_int(pool.count_allocated_elements(), i+1);
+        }
+
+        assert_null(pool.allocate());
+
+        for (u32 i = 0; i < array_length(ints); ++i) {
+            assert_equal_int(*ints[i], i);
+        }
+
+        if (repeat != 2) {
+            pool.reset();
+        }
+    }
+
+    assert_equal_int(pool.count_allocated_elements(), 10);
+
+    for (u32 i = 0; i < 5; ++i) {
+        pool.deallocate(ints[i]);
+        assert_equal_int(pool.count_allocated_elements(), 10-i-1);
+    }
+
+    for (u32 i = 0; i < 5; ++i) {
+        ints[i] = pool.allocate();
+        *ints[i] = 100+i;
+        assert_equal_int(pool.count_allocated_elements(), 5+i+1);
+    }
+
+    assert_null(pool.allocate());
+
+    assert_equal_int(pool.data[0].element, 104);
+    assert_equal_int(pool.data[1].element, 103);
+    assert_equal_int(pool.data[2].element, 102);
+    assert_equal_int(pool.data[3].element, 101);
+    assert_equal_int(pool.data[4].element, 100);
+    assert_equal_int(pool.data[5].element, 5);
+    assert_equal_int(pool.data[6].element, 6);
+    assert_equal_int(pool.data[7].element, 7);
+    assert_equal_int(pool.data[8].element, 8);
+    assert_equal_int(pool.data[9].element, 9);
+
+
+    return pass;
+}
+
 auto test_bucket_queue() -> testresult {
     Bucket_Queue<int> q;
     q.init(/*bucket size  = */ 2,
@@ -1445,6 +1594,8 @@ s32 main(s32, char**) {
         with_allocator(ld) {
             defer { ld.print_leak_statistics(); };
 
+            invoke_test(test_pool_allocator);
+            invoke_test(test_growable_pool_allocator);
             invoke_test(test_bucket_list);
             invoke_test(test_bucket_list_leak);
             invoke_test(test_bucket_queue);

@@ -138,7 +138,7 @@ struct Bucket_List {
 
     type& operator[] (u32 index) {
 #ifdef FTB_INTERNAL_DEBUG
-        u32 el_count = count();
+        u32 el_count = count_elements();
         panic_if(index >= el_count,
                  "Bucket list: accessing index (%u) that is not ain use (num elements: %u)\n",
                  index, el_count);
