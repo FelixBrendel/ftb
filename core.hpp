@@ -432,6 +432,22 @@ struct String {
     void free(Allocator_Base* allocator = nullptr);
 };
 
+struct Allocated_String {
+    char* data;
+    u64 length;
+    Allocator_Base* allocator;
+
+    operator bool() const {
+        return data != nullptr;
+    }
+
+    bool operator==(Allocated_String other);
+    s32 operator<(Allocated_String other);
+    static Allocated_String from(const char* str, Allocator_Base* allocator = nullptr);
+    void free();
+};
+
+
 bool print_into_string(String string, const char* format, ...);
 char* heap_copy_c_string(const char* str, Allocator_Base* allocator = nullptr);
 char* heap_copy_limited_c_string(const char* str, u32 len, Allocator_Base* allocator = nullptr);
@@ -801,7 +817,7 @@ struct Array_List {
             fprintf(stderr, "ERROR: removing index that is not in use\n");
         }
 #endif
-        memmove(data+index, data+index+1, (count-index) * sizeof(type));
+        memmove(data+index, data+index+1, (count-index-1) * sizeof(type));
         --count;
     }
 
@@ -894,7 +910,7 @@ struct Array_List {
             }
         }
 
-        u32 to_move = (count-insertion_idx+1);
+        u32 to_move = (count-insertion_idx);
         if (to_move)
             memmove(&data[insertion_idx+1],
                     &data[insertion_idx],
@@ -1047,6 +1063,17 @@ struct String_Builder {
         return sb;
     }
 
+
+    static Allocated_String build_from(std::initializer_list<const char*> l,
+                                       Allocator_Base* base_allocator = nullptr)
+    {
+        String_Builder sb;
+        sb.init_from(l, base_allocator);
+        defer { sb.deinit(); };
+        return sb.build(base_allocator);
+    }
+
+
     void clear() {
         list.clear();
     }
@@ -1059,9 +1086,12 @@ struct String_Builder {
         list.append(string);
     }
 
-    char* build(Allocator_Base* base_allocator = nullptr) {
+    Allocated_String build(Allocator_Base* base_allocator = nullptr) {
         if (!base_allocator)
             base_allocator = grab_current_allocator();
+
+        Allocated_String ret {};
+        ret.allocator = base_allocator;
 
         u64 total_length = 0;
 
@@ -1088,7 +1118,10 @@ struct String_Builder {
 
         concat[cursor] = 0;
 
-        return concat;
+        ret.data = concat;
+        ret.length = cursor+1;
+
+        return ret;
     };
 };
 
@@ -1122,8 +1155,14 @@ struct String_Split {
 
     String operator[](u32 index) {
 #ifdef FTB_DEBUG
-        if (index >= splits.length) {
-            fprintf(stderr, "ERROR: String_Split access out of bounds (not even allocated).\n");
+        // NOTE(Felix): the `splits' store the position of the split, so we have
+        //   one more available index than we have splits, hence we only check >
+        //   and not >=
+        if (index > splits.length) {
+            fprintf(stderr,
+                    "ERROR: String_Split access out of bounds (not even allocated).\n"
+                    "  index:     %u\n"
+                    "  allocated: %u\n", index, splits.length);
             debug_break();
         }
 #endif
@@ -1188,9 +1227,10 @@ struct Allocation_Info {
 struct Leak_Detecting_Allocator {
     Allocator_Base base;
 
+    bool panic_on_error;
     Array_List<Allocation_Info> allocated_prts;
 
-    void init(Allocator_Base* next_allocator = nullptr);
+    void init(bool should_panic_on_error = false, Allocator_Base* next_allocator = nullptr);
     void deinit();
 
     void print_leak_statistics();
@@ -1537,7 +1577,7 @@ int maybe_fprintf(FILE* file, static_string format, int* pos, va_list* arg_list)
        format[end_pos] == 'E' ||
        format[end_pos] == 'f' ||
        format[end_pos] == 'g' ||
-       format[end_pos] == 'G' ||
+       format[end_pos] == 'G' ||
        format[end_pos] == 'o' ||
        format[end_pos] == 's' ||
        format[end_pos] == 'u' ||
@@ -2026,6 +2066,41 @@ void String::free(Allocator_Base* allocator) {
 #endif
 }
 
+bool Allocated_String::operator==(Allocated_String other) {
+    return
+        length == other.length &&
+        strncmp(data, other.data, other.length) == 0;
+}
+
+s32 Allocated_String::operator<(Allocated_String other) {
+    return strncmp(data, other.data, MIN(length, other.length));
+}
+
+Allocated_String Allocated_String::from(const char* str, Allocator_Base* allocator) {
+    Allocated_String r;
+
+    if (!allocator)
+        allocator = grab_current_allocator();
+
+    r.allocator = allocator;
+    r.length = strlen(str);
+    r.data  = allocator->allocate<char>(r.length+1);
+    strcpy(r.data, str);
+
+    return r;
+}
+
+void Allocated_String::free() {
+    if (data) {
+        allocator->deallocate(data);
+    }
+#ifdef FTB_INTERNAL_DEBUG
+    length = 0;
+    data = nullptr;
+#endif
+}
+
+
 
 // ----------------------------------------------------------------------------
 //                            strings implementation
@@ -2323,9 +2398,13 @@ void Leak_Detecting_Allocator_remove_ptr(Allocator_Base* base, void* ptr) {
     s32 idx = ld->allocated_prts.sorted_find(Allocation_Info{.prt = ptr}, alloc_info_cmp);
 
     if (idx == -1) {
-        println("%{color<}[Leak Detecting Allocator WARNING]%{color<} "
-                "Attempting to free %p which was not allocated!%{>color}%{>color}",
-                console_magenta, console_red, ptr);
+        if (ld->panic_on_error) {
+            panic("Attempting to free %p which was not allocated!", ptr);
+        } else {
+            println("%{color<}[Leak Detecting Allocator WARNING]%{color<} "
+                    "Attempting to free %p which was not allocated!%{>color}%{>color}",
+                    console_magenta, console_red, ptr);
+        }
     } else  {
         ld->allocated_prts.sorted_remove_index(idx);
     }
@@ -2362,13 +2441,14 @@ void Leak_Detecting_Allocator_deallocate(Allocator_Base* base, void* data) {
     base->next_allocator->deallocate(data);
 }
 
-void Leak_Detecting_Allocator::init(Allocator_Base* next_allocator) {
+void Leak_Detecting_Allocator::init(bool should_panic_on_error, Allocator_Base* next_allocator) {
     base.type = Allocator_Type::Leak_Detecting_Allocator;
     if (next_allocator)
         base.next_allocator = next_allocator;
     else
         base.next_allocator = grab_current_allocator();
 
+    panic_on_error = should_panic_on_error;
     allocated_prts.init(128, base.next_allocator);
 }
 
@@ -2696,7 +2776,9 @@ auto print_stacktrace(FILE* file) -> void {
         //   which users might have created to disable some additional
         //   information or warnings on screen. So we probably let them load it,
         //   by not passing "-n" to gdb
-        execl("/usr/bin/gdb", "gdb", "--batch", /*"-n",*/ "-ex", "thread", "-ex", "bt", name_buf, pid_buf, NULL);
+        execl("/usr/bin/gdb", "gdb",
+              "--batch",
+              /*"-n",*/ "-ex", "thread", "-ex", "bt", name_buf, pid_buf, NULL);
         abort(); /* If gdb failed to start */
     } else {
         waitpid(child_pid,NULL,0);
@@ -2706,7 +2788,7 @@ auto print_stacktrace(FILE* file) -> void {
 #    else // linux, but not using gdb
 #      include <execinfo.h>
 
-auto print_stacktrace() -> void {
+auto print_stacktrace(FILE* file) -> void {
     fprintf(file,
             "Stacktrace (this is unmagled -- sorry\n"
             "  (you can recompile with FTB_STACKTRACE_USE_GDB defined and -rdynamic to get one) \n");
