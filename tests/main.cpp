@@ -1581,6 +1581,18 @@ auto test_bucket_queue() -> testresult {
     return pass;
 }
 
+auto test_defer_runs_after_return() -> testresult {
+    testresult result;
+
+    defer {
+        result = fail;
+    };
+
+    result = pass;
+
+    return result;
+}
+
 s32 main(s32, char**) {
     testresult result;
 
@@ -1594,6 +1606,7 @@ s32 main(s32, char**) {
         with_allocator(ld) {
             defer { ld.print_leak_statistics(); };
 
+            invoke_test(test_defer_runs_after_return);
             invoke_test(test_pool_allocator);
             invoke_test(test_growable_pool_allocator);
             invoke_test(test_bucket_list);

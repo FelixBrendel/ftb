@@ -456,8 +456,8 @@ char* heap_copy_limited_c_string(const char* str, u32 len, Allocator_Base* alloc
 //                              IO
 // ----------------------------------------------------------------------------
 struct File_Read {
-    bool   success;
-    String contents;
+    bool             success;
+    Allocated_String contents;
 };
 
 auto read_entire_file(const char* filename, Allocator_Base* allocator = nullptr) -> File_Read;
@@ -1273,6 +1273,7 @@ auto read_entire_file(const char* filename, Allocator_Base* allocator) -> File_R
         allocator = grab_current_allocator();
 
     File_Read ret {};
+    ret.contents.allocator = allocator;
 
     FILE *fp = fopen(filename, "rb");
     if (fp) {
