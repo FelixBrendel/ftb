@@ -326,6 +326,7 @@ Unicode_Code_Point bytes_to_code_point(const byte*);
 u32  code_point_to_bytes(Unicode_Code_Point cp, char* out_string);
 u32  code_point_to_bytes(u32 cp, char* out_string);
 u32  get_byte_length_for_code_point(u32 cp);
+u32  count_chars_utf8(const char* str);
 bool strncpy_0(char* dest, const char* src, u64 dest_size);
 bool strncpy_utf8_0(char* dest, const char* src, u64 dest_size);
 
@@ -2205,6 +2206,16 @@ u32 code_point_to_bytes(u32 cp, char* out_string) {
     u_cp.code_point = cp;
     u_cp.byte_length = get_byte_length_for_code_point(cp);
     return code_point_to_bytes(u_cp, out_string);
+}
+
+u32 count_chars_utf8(const char* str) {
+    u32 len = 0;
+    while (*str) {
+        ++len;
+        Unicode_Code_Point cp = bytes_to_code_point((const byte*)str);
+        str += cp.byte_length;
+    }
+    return len;
 }
 
 bool strncpy_0(char* dest, const char* src, u64 dest_size) {

@@ -31,6 +31,7 @@
 #include <immintrin.h>
 
 #include <random>
+#include "hashmap.hpp"
 
 #include "core.hpp"
 #include "math.hpp"
@@ -118,9 +119,9 @@ auto load_obj(const char* path) -> Mesh_Data {
     if (!obj_str_read.success)
         return {};
 
-    String obj_str = obj_str_read.contents;
+    Allocated_String obj_str = obj_str_read.contents;
     defer{
-        dealloc(obj_str.data);
+        obj_str.free();
     };
 
     Mesh_Data result;
