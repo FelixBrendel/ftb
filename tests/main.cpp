@@ -8,9 +8,12 @@
 #define FTB_SCHEDULER_IMPL
 #define FTB_MATH_IMPL
 #define FTB_SOA_SORT_IMPL
+#define FTB_JSON_IMPL
+#define FTB_PARSING_IMPL
 
 #include "../math.hpp"
 #include "../core.hpp"
+#include "../json.hpp"
 
 u32 hm_hash(u32 u);
 inline bool hm_objects_match(u32 a, u32 b);
@@ -1593,6 +1596,440 @@ auto test_defer_runs_after_return() -> testresult {
     return result;
 }
 
+auto test_json_simple_object() -> testresult {
+    using namespace json;
+    const char* json_object = R"JSON(
+        {
+          "int":    123,
+          "float":  123.123,
+          "bool":   true,
+          "string": "Hello"
+        }
+)JSON";
+
+    struct Test {
+        s32    i;
+        f32    f;
+        bool   b;
+        String s;
+    };
+
+    Pattern p = Pattern {.type = Json_Type::Object}
+    |= Array_List<Pattern>::create_from({
+        member_value("int",    Json_Type::Number, Data_Type::Integer, offsetof(Test, i)),
+        member_value("float",  Json_Type::Number, Data_Type::Float,   offsetof(Test, f)),
+        member_value("bool",   Json_Type::Bool,   Data_Type::Boolean, offsetof(Test, b)),
+        member_value("string", Json_Type::String, Data_Type::String,  offsetof(Test, s)),
+    });
+
+    Test t;
+    Pattern_Match_Result result = pattern_match(json_object, p, &t);
+
+
+    defer {
+        p.deinit();
+        t.s.free();
+    };
+
+
+    assert_equal_int(result, Pattern_Match_Result::OK_CONTINUE);
+
+    assert_equal_int(t.i, 123);
+    assert_equal_f32(t.f, 123.123);
+    assert_equal_int(t.b, true);
+    assert_equal_int(strncmp("Hello", t.s.data, 5), 0);
+
+    return pass;
+}
+
+auto test_json_simple_object_new_syntax() -> testresult {
+    using namespace json;
+    const char* json_object = R"JSON(
+        {
+          "int":    123,
+          "float":  123.123,
+          "bool":   true,
+          "string": "Hello"
+        }
+)JSON";
+
+    struct Test {
+        s32    i;
+        f32    f;
+        bool   b;
+        String s;
+    };
+
+    Pattern p = json::object({
+        {"int",    json::integer (offsetof(Test, i))},
+        {"float",  json::floating(offsetof(Test, f))},
+        {"bool",   json::boolean (offsetof(Test, b))},
+        {"string", json::string  (offsetof(Test, s))},
+    });
+
+    Test t;
+    Pattern_Match_Result result = pattern_match(json_object, p, &t);
+
+
+    defer {
+        p.deinit();
+        t.s.free();
+    };
+
+
+    assert_equal_int(result, Pattern_Match_Result::OK_CONTINUE);
+
+    assert_equal_int(t.i, 123);
+    assert_equal_f32(t.f, 123.123);
+    assert_equal_int(t.b, true);
+    assert_equal_int(strncmp("Hello", t.s.data, 5), 0);
+
+    return pass;
+}
+
+auto test_json_mvg() -> testresult {
+    const char* json_str =  R"JSON(
+        {
+           "locations" : [ {
+             "type" :  "station",
+             "latitude" : 48.4126,
+             "longitude" : 11.46992,
+             "id" :  "de:09174:6840",
+             "divaId" : 6840,
+             "place" :  "Petershausen 2",
+             "name" :  "Petershausen 1",
+             "hasLiveData" : false,
+             "hasZoomData" : false,
+             "products" : [  "BAHN",  "SBAHN",  "BUS" ],
+             "aliases" :  "Bahnhof Bf. DAH MMPE",
+             "tariffZones" :  "4|5",
+             "lines" : {
+               "tram" : [ ],
+               "nachttram" : [ ],
+               "sbahn" : [ ],
+               "ubahn" : [ ],
+               "bus" : [ ],
+               "nachtbus" : [ ],
+               "otherlines" : [ ]
+            }
+          }, {
+             "type" :  "station",
+             "latitude" : 48.41323,
+             "longitude" : 11.46913,
+             "id" :  "de:09174:7167 ",
+             "divaId" : 7167,
+             "place" :  "Petershausen",
+             "name" :  "Petershausen Bf. P+R-Platz",
+             "hasLiveData" : false,
+             "hasZoomData" : false,
+             "products" : [  "BUS " ],
+             "aliases" :  "DAH ",
+             "tariffZones" :  "4|5 ",
+             "lines" : {
+               "tram" : [ ],
+               "nachttram" : [ ],
+               "sbahn" : [ ],
+               "ubahn" : [ ],
+               "bus" : [ ],
+               "nachtbus" : [ ],
+               "otherlines" : [ ]
+            }
+            }]}
+)JSON";
+
+    using namespace json;
+
+    struct Location {
+        String             type;
+        f32                latitude;
+        f32                longitude;
+        String             id;
+        s32                divaId;
+        String             place;
+        String             name;
+        bool               has_live_data;
+        bool               has_zoom_data;
+        Array_List<String> products;
+        String             aliases;
+        String             tariffZones;
+
+        auto free() -> void {
+            type.free();
+            id.free();
+            place.free();
+            name.free();
+            aliases.free();
+            tariffZones.free();
+
+            for (auto p: products) {
+                p.free();
+            }
+            products.deinit();
+        }
+
+    };
+
+    using namespace json;
+    Pattern product =
+        object({{"products", list({string(0)}, {
+                            .array_list_offset = offsetof(Location, products),
+                            .element_size = sizeof(String)
+                        })},
+                {"type",          string  (offsetof(Location, type))},
+                {"latitude",      floating(offsetof(Location, latitude))},
+                {"longitude",     floating(offsetof(Location, longitude))},
+                {"id",            string  (offsetof(Location, id))},
+                {"divaId",        integer (offsetof(Location, divaId))},
+                {"place",         string  (offsetof(Location, place))},
+                {"name",          string  (offsetof(Location, name))},
+                {"has_live_data", boolean (offsetof(Location, has_live_data))},
+                {"has_zoom_data", boolean (offsetof(Location, has_zoom_data))},
+                {"aliases",       string  (offsetof(Location, aliases))},
+                {"tariffZones",   string  (offsetof(Location, tariffZones))},
+            }, {
+                // NOTE(Felix): stop after first location
+                .leave_hook = [](void*, Hook_Context, Parser_Context) -> Pattern_Match_Result {
+                    return Pattern_Match_Result::OK_DONE;
+                }
+            });
+
+    Pattern p = object({{"locations", list({product})},});
+
+    Location mvg_loc {};
+
+    auto result = json::pattern_match((char*)json_str, p, &mvg_loc);
+
+    defer {
+        p.deinit();
+        mvg_loc.free();
+    };
+
+    assert_equal_int(result, json::Pattern_Match_Result::OK_CONTINUE);
+
+    assert_equal_int(strncmp("station", mvg_loc.type.data, mvg_loc.type.length), 0);
+    assert_equal_f32(mvg_loc.latitude, 48.412601f);
+    assert_equal_f32(mvg_loc.longitude, 11.469920f);
+    assert_equal_int(strncmp("de:09174:6840",    mvg_loc.id.data, mvg_loc.id.length), 0);
+    assert_equal_int(mvg_loc.divaId, 6840);
+    assert_equal_int(strncmp("Petershausen 2",   mvg_loc.place.data, mvg_loc.place.length), 0);
+    assert_equal_int(strncmp("Petershausen 1",   mvg_loc.name.data, mvg_loc.name.length), 0);
+    assert_equal_int(mvg_loc.has_live_data, false);
+    assert_equal_int(mvg_loc.has_zoom_data, false);
+
+    assert_equal_int(mvg_loc.products.count, 3);
+    assert_equal_int(strncmp("BAHN",  mvg_loc.products[0].data, mvg_loc.products[0].length), 0);
+    assert_equal_int(strncmp("SBAHN", mvg_loc.products[1].data, mvg_loc.products[1].length), 0);
+    assert_equal_int(strncmp("BUS",   mvg_loc.products[2].data, mvg_loc.products[2].length), 0);
+
+    assert_equal_int(strncmp("Bahnhof Bf. DAH MMPE",   mvg_loc.aliases.data, mvg_loc.aliases.length), 0);
+    assert_equal_int(strncmp("4|5",   mvg_loc.tariffZones.data, mvg_loc.tariffZones.length), 0);
+
+    return pass;
+}
+
+testresult test_json_bug() {
+    using namespace json;
+
+    struct Departure {
+        String             product;
+        String             label;
+        String             destination;
+        bool               live;
+        f32                delay;
+        bool               cancelled;
+        String             line_background_color;
+        String             departure_id;
+        bool               sev;
+        String             platform;
+        s32                stop_position_number;
+        Array_List<String> info_messages;
+
+        void free() {
+            product.free();
+            label.free();
+            destination.free();
+            line_background_color.free();
+            departure_id.free();
+            platform.free();
+
+            for (auto& s: info_messages) {
+                s.free();
+            }
+
+            info_messages.deinit();
+        }
+
+    };
+
+    struct Serving_Line {
+        String destination;
+        bool   sev;
+        String network;
+        String product;
+        String line_number;
+        String diva_id;
+
+        void free() {
+            destination.free();
+            network.free();
+            product.free();
+            line_number.free();
+            diva_id.free();
+        }
+    };
+
+    struct Departure_Infos {
+        Array_List<Serving_Line> serving_lines;
+        Array_List<Departure>    departures;
+
+        void free() {
+            for (auto& d : departures) {
+                d.free();
+            }
+            departures.deinit();
+
+            for (auto& s : serving_lines) {
+                s.free();
+            }
+            serving_lines.deinit();
+        }
+    };
+
+    const char* json_str =  R"JSON(
+       {
+         "servingLines" : [ {
+           "destination" : "Erding",
+           "sev" : false,
+           "network" : "ddb",
+           "product" : "SBAHN",
+           "lineNumber" : "S2",
+           "divaId" : "92M02"
+         }, {
+           "destination" : "Lohhof (S) Süd",
+           "sev" : false,
+           "network" : "mvv",
+           "product" : "REGIONAL_BUS",
+           "lineNumber" : "771",
+           "divaId" : "19771"
+         }, {
+           "destination" : "Petershausen",
+           "sev" : false,
+           "network" : "mvv",
+           "product" : "RUFTAXI",
+           "lineNumber" : "7280",
+           "divaId" : "18728"
+         } ],
+         "departures" : [ {
+           "departureTime" : 1662174480000,
+           "product" : "SBAHN",
+           "label" : "S2",
+           "destination" : "Erding",
+           "live" : false,
+           "delay" : 0,
+           "cancelled" : false,
+           "lineBackgroundColor" : "#9bc04c",
+           "departureId" : "c9b4b3875a8d2f53ad018b204899ffc0#1662174480000#de:09174:6840",
+           "sev" : false,
+           "platform" : "6",
+           "stopPositionNumber" : 0,
+           "infoMessages" : [ "Linie S2: Maskenpflicht nach gesetzl. Regelung; wir empfehlen eine FFP2-Maske Linie S2: Fahrradmitnahme begrenzt möglich Linie S2: Bei Fahrradmitnahme Sperrzeiten beachten Linie S2: nur 2. Kl." ]
+         }, {
+           "departureTime" : 1662175920000,
+           "product" : "SBAHN",
+           "label" : "S2",
+           "destination" : "Erding",
+           "live" : false,
+           "delay" : 0,
+           "cancelled" : false,
+           "lineBackgroundColor" : "#9bc04c",
+           "departureId" : "88cd45142d5ee37ba77295e93bb3b88f#1662175920000#de:09174:6840",
+           "sev" : false,
+           "platform" : "6",
+           "stopPositionNumber" : 0,
+           "infoMessages" : [ "Linie S2: Maskenpflicht nach gesetzl. Regelung; wir empfehlen eine FFP2-Maske Linie S2: Fahrradmitnahme begrenzt möglich Linie S2: Bei Fahrradmitnahme Sperrzeiten beachten Linie S2: nur 2. Kl." ]
+         } ]
+       }
+)JSON";
+        Pattern departure = object({
+                {"product",             string  (offsetof(Departure, product))},
+                {"label",               string  (offsetof(Departure, label))},
+                {"destination",         string  (offsetof(Departure, destination))},
+                {"live",                boolean (offsetof(Departure, live))},
+                {"delay",               floating(offsetof(Departure, delay))},
+                {"cancelled",           boolean (offsetof(Departure, cancelled))},
+                {"lineBackgroundColor", string  (offsetof(Departure, line_background_color))},
+                {"departureId",         string  (offsetof(Departure, departure_id))},
+                {"sev",                 boolean (offsetof(Departure, sev))},
+                {"platfrom",            string  (offsetof(Departure, platform))},
+                {"stopPositionNumber",  integer (offsetof(Departure, stop_position_number))},
+        });
+        Pattern serving_line = object({
+                {"destination", string( offsetof(Serving_Line, destination))},
+                {"sev",         boolean(offsetof(Serving_Line, sev))},
+                {"network",     string( offsetof(Serving_Line, network))},
+                {"product",     string( offsetof(Serving_Line, product))},
+                {"lineNumber",  string( offsetof(Serving_Line, line_number))},
+                {"divaId",      string( offsetof(Serving_Line, diva_id))},
+        });
+        Pattern p =
+            object({
+                    {"departures",
+                     list({departure},{
+                             .array_list_offset = offsetof(Departure_Infos, departures),
+                             .element_size      = sizeof(Departure)})},
+                    {"servingLines",
+                     list({serving_line},{
+                             .array_list_offset = offsetof(Departure_Infos, serving_lines),
+                             .element_size      = sizeof(Serving_Line),
+                         })}
+            });
+
+    Departure_Infos deps {};
+    Pattern_Match_Result res = pattern_match(json_str, p, &deps);
+
+    defer {
+        p.deinit();
+        deps.free();
+    };
+    assert_equal_int(res, Pattern_Match_Result::OK_CONTINUE);
+
+
+    assert_equal_int(deps.serving_lines.count, 3);
+    {
+        Serving_Line& s = deps.serving_lines[0];
+        assert_equal_int(strncmp("Erding", s.destination.data, s.destination.length), 0);
+        assert_equal_int(strncmp("ddb",    s.network.data, s.network.length), 0);
+        assert_equal_int(strncmp("SBAHN",  s.product.data, s.product.length), 0);
+        assert_equal_int(strncmp("S2",     s.line_number.data, s.line_number.length), 0);
+        assert_equal_int(strncmp("92M02",  s.diva_id.data, s.diva_id.length), 0);
+        assert_equal_int(s.sev, false);
+    } {
+        Serving_Line& s = deps.serving_lines[1];
+        assert_equal_int(strncmp("Lohhof (S) Süd", s.destination.data, s.destination.length), 0);
+        assert_equal_int(strncmp("mvv",            s.network.data, s.network.length), 0);
+        assert_equal_int(strncmp("REGIONAL_BUS",   s.product.data, s.product.length), 0);
+        assert_equal_int(strncmp("771",            s.line_number.data, s.line_number.length), 0);
+        assert_equal_int(strncmp("19771",          s.diva_id.data, s.diva_id.length), 0);
+        assert_equal_int(s.sev, false);
+    } {
+        Serving_Line& s = deps.serving_lines[2];
+        assert_equal_int(strncmp("Petershausen", s.destination.data, s.destination.length), 0);
+        assert_equal_int(strncmp("mvv",          s.network.data, s.network.length), 0);
+        assert_equal_int(strncmp("RUFTAXI",      s.product.data, s.product.length), 0);
+        assert_equal_int(strncmp("7280",         s.line_number.data, s.line_number.length), 0);
+        assert_equal_int(strncmp("18728",        s.diva_id.data, s.diva_id.length), 0);
+        assert_equal_int(s.sev, false);
+    }
+
+    assert_equal_int(deps.departures.count, 2);
+    {
+        Departure& d = deps.departures[0];
+        assert_equal_int(strncmp("S2", d.label.data, d.label.length), 0);
+    }
+
+    return pass;
+}
+
 s32 main(s32, char**) {
     testresult result;
 
@@ -1600,11 +2037,21 @@ s32 main(s32, char**) {
     ld.init();
     Bookkeeping_Allocator bk;
     bk.init();
+    defer {
+        ld.deinit();
+    };
     with_allocator(bk) {
         defer { bk.print_statistics(); };
 
         with_allocator(ld) {
             defer { ld.print_leak_statistics(); };
+
+
+            invoke_test(test_json_simple_object_new_syntax);
+            invoke_test(test_json_simple_object);
+            invoke_test(test_json_mvg);
+            invoke_test(test_json_bug);
+
 
             invoke_test(test_defer_runs_after_return);
             invoke_test(test_pool_allocator);

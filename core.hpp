@@ -416,6 +416,55 @@ extern Allocator_Base* libc_allocator;
 
 #define with_temp_allocator with_allocator(grab_temp_allocator())
 
+
+// ----------------------------------------------------------------------------
+//                              Maybe
+// ----------------------------------------------------------------------------
+struct Empty {};
+
+template <typename type>
+struct Maybe : type {
+    bool __exists;
+
+    void operator=(type v) {
+        memcpy(this, &v, sizeof(type));
+        __exists = true;
+    }
+
+    operator bool() const {
+        return __exists;
+    }
+};
+
+
+#define DEFINE_BASIC_TYPE_MAYBE(type)           \
+    template <>                                 \
+    struct Maybe<type> : Maybe<Empty> {         \
+        type value;                             \
+        void operator=(type v) {                \
+            value = v;                          \
+            __exists = true;                    \
+        }                                       \
+        type operator* () {                     \
+            return value;                       \
+        }                                       \
+    }                                           \
+
+DEFINE_BASIC_TYPE_MAYBE(bool);
+DEFINE_BASIC_TYPE_MAYBE(u8);
+DEFINE_BASIC_TYPE_MAYBE(u16);
+DEFINE_BASIC_TYPE_MAYBE(u32);
+DEFINE_BASIC_TYPE_MAYBE(u64);
+DEFINE_BASIC_TYPE_MAYBE(s8);
+DEFINE_BASIC_TYPE_MAYBE(s16);
+DEFINE_BASIC_TYPE_MAYBE(s32);
+DEFINE_BASIC_TYPE_MAYBE(s64);
+DEFINE_BASIC_TYPE_MAYBE(f32);
+DEFINE_BASIC_TYPE_MAYBE(f64);
+
+#undef DEFINE_BASIC_TYPE_MAYBE
+
+
 // ----------------------------------------------------------------------------
 //                              String
 // ----------------------------------------------------------------------------
