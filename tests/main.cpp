@@ -1960,7 +1960,7 @@ testresult test_json_bug() {
                 {"lineBackgroundColor", string  (offsetof(Departure, line_background_color))},
                 {"departureId",         string  (offsetof(Departure, departure_id))},
                 {"sev",                 boolean (offsetof(Departure, sev))},
-                {"platfrom",            string  (offsetof(Departure, platform))},
+                {"platform",            string  (offsetof(Departure, platform))},
                 {"stopPositionNumber",  integer (offsetof(Departure, stop_position_number))},
         });
         Pattern serving_line = object({
@@ -1986,6 +1986,8 @@ testresult test_json_bug() {
 
     Departure_Infos deps {};
     Pattern_Match_Result res = pattern_match(json_str, p, &deps);
+
+    // write_pattern_to_file("out.json", p, &deps);
 
     defer {
         p.deinit();

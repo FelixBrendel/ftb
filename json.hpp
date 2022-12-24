@@ -158,6 +158,7 @@ namespace json {
 
     Pattern member_value(const char* key, Json_Type source_type, Data_Type destination_type, u32 destination_offset);
     Pattern_Match_Result pattern_match(const char* string, Pattern pattern, void* user_data, Allocator_Base* allocator = nullptr);
+    void write_pattern_to_file(const char* path, Pattern pattern, void* user_data);
     void register_custom_reader_function(Data_Type dt, reader_function fun);
 }
 
@@ -733,6 +734,122 @@ namespace json {
         };
 
         return p;
+    }
+
+    void write_pattern_to_file(FILE* path, Pattern pattern, void* user_data);
+    void write_bool_to_file(FILE* out, u32 offset, void* data) {
+        bool* b = (bool*)(((byte*)data)+offset);
+        fprintf(out, *b ? "true" : "false");
+    }
+
+    void write_int_to_file(FILE* out, u32 offset, void* data) {
+        int* i = (int*)(((byte*)data)+offset);
+        fprintf(out, "%d", *i);
+    }
+
+    void write_float_to_file(FILE* out, u32 offset, void* data) {
+        float* f = (float*)(((byte*)data)+offset);
+        fprintf(out, "%f", *f);
+    }
+
+    void write_string_to_file(FILE* out, u32 offset, void* data) {
+        String* s = (String*)(((byte*)data)+offset);
+        fprintf(out, "\"%*s\"", (int)s->length, s->data);
+    }
+
+    void write_list_to_file(FILE* out, u32 array_list_offset,
+                            u32 element_size, Pattern child_pattern, void* data)
+    {
+        Array_List<void*>* list_p = (Array_List<void*>*)(((byte*)data)+array_list_offset);
+        fprintf(out, "[");
+
+        void* element_pointer = list_p->data;
+        if (list_p->count != 0) {
+            write_pattern_to_file(out, child_pattern, element_pointer);
+        }
+
+        for (u32 i = 1; i < list_p->count; ++i) {
+            fprintf(out, ", ");
+            write_pattern_to_file(out, child_pattern, element_pointer);
+        }
+
+        fprintf(out, "]");
+    }
+
+
+    void write_object_to_file(FILE* out, Array_List<Pattern> child_patterns, void* data)
+    {
+        auto print_one_key_value_pair = [&](Pattern p) {
+            panic_if (p.children.count != 1,
+                      "Children of Object_Member have to have exactly one child.");
+            fprintf(out, "\"%s\" : ", p.member.name);
+            write_pattern_to_file(out, p.children[0], data);
+        };
+
+        fprintf(out, "{");
+
+        if (child_patterns.count != 0) {
+            print_one_key_value_pair(child_patterns[0]);
+        }
+
+        for (u32 i = 1; i < child_patterns.count; ++i) {
+            fprintf(out, ", ");
+            print_one_key_value_pair(child_patterns[i]);
+        }
+
+        for (Pattern p : child_patterns) {
+            panic_if(p.type != Json_Type::Object_Member_Name,
+                     "Objects should only have children of type Json_Type::Object_Member_Name");
+
+
+        }
+
+        fprintf(out, "}");
+    }
+
+
+
+    void write_pattern_to_file(FILE* out, Pattern pattern, void* user_data) {
+        
+        switch (pattern.type) {
+            case Json_Type::Null: fprintf(out, "null"); break;
+            case Json_Type::Bool: {
+                write_bool_to_file(out, pattern.value.destination_offset, user_data);
+            } break;
+            case Json_Type::String: {
+                write_string_to_file(out, pattern.value.destination_offset, user_data);
+            } break;
+            case Json_Type::Number: {
+                if (pattern.value.destination_type == Data_Type::Integer) {
+                    write_int_to_file(out, pattern.value.destination_offset, user_data);
+                } else {
+                    write_float_to_file(out, pattern.value.destination_offset, user_data);
+                }
+            } break;
+            case Json_Type::List: {
+                panic_if(pattern.children.count != 1,
+                         "For writing, only lists with one child pattern are allowed!");
+
+                write_list_to_file(out, pattern.list.array_list_offset,
+                                   pattern.list.element_size,
+                                   pattern.children[0], user_data);
+            } break;
+            case Json_Type::Object: {
+                write_object_to_file(out, pattern.children, user_data);
+            } break;
+            default: panic("Don't know how to print json object with type %d",
+                           pattern.type);
+        }
+    }
+
+    void write_pattern_to_file(const char* path, Pattern pattern, void* user_data) {
+        FILE* out = fopen(path, "w");
+        if (!out) {
+            log_error("could not open %s for writing.", path);
+            return;
+        }
+        defer { fclose(out); };
+        write_pattern_to_file(out, pattern, user_data);
     }
 }
 #endif
