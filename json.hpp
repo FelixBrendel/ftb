@@ -47,17 +47,20 @@ namespace json {
         u32         destination_offset;
     };
 
+    struct Object_Member;
 
     struct Pattern {
         Json_Type type;
 
+        // only active if type == object
+        std::initializer_list<Object_Member> object_members;
         union {
             struct {
-                const char* name;
-            } member;
+            } object;
             struct {
                 u32 element_size;
                 u32 array_list_offset;
+                Pattern* child_pattern;
             } list;
             struct {
                 Data_Type   destination_type;
@@ -65,76 +68,57 @@ namespace json {
             } value;
         };
 
-        Array_List<Pattern>     children;
-
         parser_hook             enter_hook;
         parser_hook             leave_hook;
 
         void print() {
             println("Pattern:");
-            with_print_prefix("|  ") {
-                ::print("- type : ");
-                switch (type) {
-                    case Json_Type::Bool:               raw_println("bool");          break;
-                    case Json_Type::Invalid:            raw_println("invalid");       break;
-                    case Json_Type::Null:               raw_println("null");          break;
-                    case Json_Type::List:               raw_println("list");          break;
-                    case Json_Type::Number:             raw_println("number");        break;
-                    case Json_Type::Object:             raw_println("object");        break;
-                    case Json_Type::Object_Member_Name: raw_println("object member"); break;
-                    case Json_Type::String:             raw_println("string");        break;
-                    default: raw_println("???");
-                }
-                if (type == Json_Type::Object_Member_Name) {
-                    println("- key : %s", member.name);
-                } else if (type == Json_Type::List) {
-                    println("- list_e_size : %u", list.element_size);
-                    println("- list_offset : %u", list.array_list_offset);
-                } else {
-                    println("- dest_type   : %d", value.destination_type);
-                    println("- dest_offset : %u", value.destination_offset);
-                }
-                ::print("- children : [");
-                if (children.count == 0)
-                    raw_println("]");
-                else {
-                    with_print_prefix("   ") {
-                        for (Pattern p : children) {
-                            raw_print("\n");
-                            p.print();
-                        }
-                    }
-                    println("]");
-                }
+            // with_print_prefix("|  ") {
+            //     ::print("- type : ");
+            //     switch (type) {
+            //         case Json_Type::Bool:               raw_println("bool");          break;
+            //         case Json_Type::Invalid:            raw_println("invalid");       break;
+            //         case Json_Type::Null:               raw_println("null");          break;
+            //         case Json_Type::List:               raw_println("list");          break;
+            //         case Json_Type::Number:             raw_println("number");        break;
+            //         case Json_Type::Object:             raw_println("object");        break;
+            //         case Json_Type::Object_Member_Name: raw_println("object member"); break;
+            //         case Json_Type::String:             raw_println("string");        break;
+            //         default: raw_println("???");
+            //     }
+            //     if (type == Json_Type::Object_Member_Name) {
+            //         println("- key : %s", member.name);
+            //     } else if (type == Json_Type::List) {
+            //         println("- list_e_size : %u", list.element_size);
+            //         println("- list_offset : %u", list.array_list_offset);
+            //     } else {
+            //         println("- dest_type   : %d", value.destination_type);
+            //         println("- dest_offset : %u", value.destination_offset);
+            //     }
+            //     ::print("- children : [");
+            //     if (children.count == 0)
+            //         raw_println("]");
+            //     else {
+            //         with_print_prefix("   ") {
+            //             for (Pattern p : children) {
+            //                 raw_print("\n");
+            //                 p.print();
+            //             }
+            //         }
+            //         println("]");
+            //     }
 
 
-            }
+            // }
         }
 
-        Pattern& operator|=(Pattern child) {
-            children = Array_List<Pattern>::create_from({child});
-            return *this;
-        }
-
-        Pattern& operator|=(Array_List<Pattern> new_children) {
-            children = new_children;
-            return *this;
-        }
-
-        void deinit() {
-            if (children.data) {
-                for (auto& c: children) {
-                    c.deinit();
-                }
-                children.deinit();
-            }
-        }
     };
 
     struct Object_Member {
-        const char* key;
-        Pattern     value;
+        const char*   key;
+        Pattern pattern;
     };
+
 
     struct Parser_Hooks {
         parser_hook enter_hook;
@@ -147,7 +131,7 @@ namespace json {
     };
 
     Pattern object(std::initializer_list<Object_Member> members, Parser_Hooks hooks={0});
-    Pattern list(std::initializer_list<Pattern> members,
+    Pattern list(const Pattern& element_pattern,
                  List_Info list_info={0}, Parser_Hooks hooks={0});
     Pattern integer(u32 offset,  Parser_Hooks hooks={0});
     Pattern floating(u32 offset, Parser_Hooks hooks={0});
@@ -156,7 +140,7 @@ namespace json {
     Pattern custom(Json_Type source_type, Data_Type destination_type,
                    u32 destination_offset, Parser_Hooks hooks={0});
 
-    Pattern member_value(const char* key, Json_Type source_type, Data_Type destination_type, u32 destination_offset);
+    // Pattern member_value(const char* key, Json_Type source_type, Data_Type destination_type, u32 destination_offset);
     Pattern_Match_Result pattern_match(const char* string, Pattern pattern, void* user_data, Allocator_Base* allocator = nullptr);
     void write_pattern_to_file(const char* path, Pattern pattern, void* user_data);
     void register_custom_reader_function(Data_Type dt, reader_function fun);
@@ -241,21 +225,21 @@ namespace json {
 
     Pattern_Match_Result pattern_match_list(const char* string,
                                             Pattern list_pattern,
-                                            Array_List<Pattern> children,
+                                            Pattern child,
                                             void* user_data, u32* out_eaten,
                                             Allocator_Base* allocator);
     Pattern_Match_Result pattern_match_object(const char* string,
-                                              Array_List<Pattern> children,
+                                              Array_List<Object_Member> members,
                                               void* user_data, u32* out_eaten,
                                               Allocator_Base* allocator);
 
     Pattern_Match_Result pattern_match_value(const char* string,
-                                             Array_List<Pattern> patterns,
+                                             Pattern pattern,
                                              void* user_data, u32* out_eaten,
                                              Allocator_Base* allocator);
 
     Pattern_Match_Result pattern_match_object_member(const char* string,
-                                                     Array_List<Pattern> object_children,
+                                                     std::initializer_list<Object_Member> object_members,
                                                      void* user_data, u32* out_eaten,
                                                      Allocator_Base* allocator);
 
@@ -278,7 +262,7 @@ namespace json {
     }
 
     Pattern_Match_Result pattern_match_object(const char* string,
-                                              Array_List<Pattern> children,
+                                              std::initializer_list<Object_Member> members,
                                               void* user_data, u32* out_eaten,
                                               Allocator_Base* allocator)
     {
@@ -296,7 +280,7 @@ namespace json {
 
             u32 sub_eaten = 0;
             Pattern_Match_Result sub_result =
-                pattern_match_object_member(string+eaten, children, user_data,
+                pattern_match_object_member(string+eaten, members, user_data,
                                             &sub_eaten, allocator);
             if (sub_result == Pattern_Match_Result::ERROR) {
                 *out_eaten = 0;
@@ -330,7 +314,7 @@ namespace json {
     }
 
     Pattern_Match_Result pattern_match_value(const char* string,
-                                             Array_List<Pattern> patterns,
+                                             Pattern pattern,
                                              void* user_data, u32* out_eaten,
                                              Allocator_Base* allocator)
     {
@@ -339,26 +323,13 @@ namespace json {
         eaten += eat_whitespace(string);
 
         Json_Type thing_at_point = identify_thing(string+eaten);
-        bool pattern_found = false;
-        Pattern pattern_todo;
-        for (auto c : patterns){
-            if (c.type == thing_at_point) {
-                // we found a pattern for this thing at point
-                pattern_found = true;
-                pattern_todo = c;
-                break;
-            }
-        }
-        if (!pattern_found)
-            return Pattern_Match_Result::ERROR;
-
 
         Pattern_Match_Result enter_message = Pattern_Match_Result::OK_CONTINUE;
         Pattern_Match_Result leave_message = Pattern_Match_Result::OK_CONTINUE;
         // maybe run enter hook
-        if (pattern_todo.enter_hook) {
+        if (pattern.enter_hook) {
             enter_message =
-                pattern_todo.enter_hook(user_data, {thing_at_point}, {string+eaten});
+                pattern.enter_hook(user_data, {thing_at_point}, {string+eaten});
         }
 
         // if children were registered for this pattern
@@ -367,20 +338,20 @@ namespace json {
             // The only types that actually can contain children
             Pattern_Match_Result sub_result;
             if (thing_at_point == Json_Type::Object) {
-                sub_result = pattern_match_object(string+eaten, pattern_todo.children,
+                sub_result = pattern_match_object(string+eaten, pattern.object_members,
                                                   user_data, &eaten_sub_object, allocator);
             } else if (thing_at_point == Json_Type::List) {
-                sub_result = pattern_match_list(string+eaten, pattern_todo,
-                                                pattern_todo.children,
+                sub_result = pattern_match_list(string+eaten, pattern,
+                                                *pattern.list.child_pattern,
                                                 user_data, &eaten_sub_object, allocator);
             } else {
                 // match simple values
 
-                panic_if(pattern_todo.type == Json_Type::Object_Member_Name,
+                panic_if(pattern.type == Json_Type::Object_Member_Name,
                          "object member not valid here");
-                if (thing_at_point == pattern_todo.type) {
-                    read_into((void*)(((u8*)user_data)+pattern_todo.value.destination_offset),
-                              pattern_todo.value.destination_type,
+                if (thing_at_point == pattern.type) {
+                    read_into((void*)(((u8*)user_data)+pattern.value.destination_offset),
+                              pattern.value.destination_type,
                               string+eaten);
                 }
 
@@ -401,9 +372,9 @@ namespace json {
         }
 
         // maybe run leave hook
-        if (pattern_todo.leave_hook) {
+        if (pattern.leave_hook) {
             leave_message =
-                pattern_todo.leave_hook(user_data, {thing_at_point}, {string+eaten});
+                pattern.leave_hook(user_data, {thing_at_point}, {string+eaten});
         }
 
         if (enter_message == Pattern_Match_Result::ERROR ||
@@ -431,7 +402,7 @@ namespace json {
 
     Pattern_Match_Result pattern_match_list(const char* string,
                                             Pattern list_pattern,
-                                            Array_List<Pattern> children,
+                                            Pattern child,
                                             void* user_data, u32* out_eaten,
                                             Allocator_Base* allocator)
     {
@@ -451,9 +422,6 @@ namespace json {
                 // make sure the list is long enough
                 u32    elem_size = list_pattern.list.element_size;
                 Array_List<byte>* list = (Array_List<byte>*)((u8*)base_user_data+list_pattern.list.array_list_offset);
-                // u32*   allocated =   (u32*);
-                // u32*   present   =   (u32*)((u8*)base_user_data+list_pattern.list.num_present_offset);
-                // void** data      = (void**)((u8*)base_user_data+list_pattern.list.destination_offset);
 
                 u32 old_allocated = list->length;
                 if (list->count == list->length) {
@@ -475,8 +443,8 @@ namespace json {
             }
 
             Pattern_Match_Result sub_result
-                = pattern_match_value(string+eaten, children, user_data, &sub_eaten,
-                                      allocator);
+                = pattern_match_value(string+eaten, child, user_data,
+                                      &sub_eaten, allocator);
 
             if (sub_result == Pattern_Match_Result::ERROR)
                 return Pattern_Match_Result::ERROR;
@@ -508,7 +476,7 @@ namespace json {
     }
 
     Pattern_Match_Result pattern_match_object_member(const char* string,
-                                                     Array_List<Pattern> object_children,
+                                                     std::initializer_list<Object_Member> members,
                                                      void* user_data, u32* out_eaten,
                                                      Allocator_Base* allocator)
     {
@@ -537,39 +505,22 @@ namespace json {
 
         eaten += eat_whitespace(string+eaten);
 
-        // check for key mappings
-        // bool found_mapping_todo = false;
-        // Key_Mapping mapping_todo;
-        // for (auto m : mappings) {
-        //     if (strncmp(m.key, member_name, member_name_len) == 0) {
-        //         mapping_todo = m;
-        //         found_mapping_todo = true;
-        //         break;
-        //     }
-        // }
-        // if (found_mapping_todo) {
-        //     value_lengh =
-        //         read_into((void*)(((u8*)user_data)+mapping_todo.destination_offset),
-        //                   mapping_todo.destination_data_type,
-        //                   string+eaten);
-        // }
-
         // check for children patterns with that member name
         bool found_pattern_todo = false;
         Pattern pattern_todo;
-        for (auto p : object_children) {
-            if (p.type == Json_Type::Object_Member_Name  &&
-                strncmp(p.member.name, member_name, member_name_len) == 0)
+        for (Object_Member om : members) {
+            if (strlen(om.key) == member_name_len &&
+                strncmp(om.key, member_name, member_name_len) == 0)
             {
                 found_pattern_todo = true;
-                pattern_todo = p;
+                pattern_todo = om.pattern;
                 break;
             }
         }
         Pattern_Match_Result sub_result = Pattern_Match_Result::OK_CONTINUE;
         if (found_pattern_todo) {
             value_lengh = 0;
-            sub_result = pattern_match_value(string+eaten, pattern_todo.children, user_data,
+            sub_result = pattern_match_value(string+eaten, pattern_todo, user_data,
                                              &value_lengh, allocator);
 
             if (sub_result == Pattern_Match_Result::ERROR)
@@ -595,28 +546,28 @@ namespace json {
             allocator = grab_current_allocator();
 
         u32 eaten = 0;
-        Array_List<Pattern> patterns = Array_List<Pattern>::create_from({pattern});
-        defer { patterns.deinit(); };
 
-        return pattern_match_value(string, patterns, user_data, &eaten, allocator);
+        return pattern_match_value(string, pattern, user_data, &eaten, allocator);
     }
 
-    Pattern member_value(const char* key, Json_Type source_type, Data_Type destination_type, u32 destination_offset) {
-        Pattern p = Pattern {
-            .type     = Json_Type::Object_Member_Name,
-            .member   = { .name = key },
-            .children = Array_List<Pattern>::create_from({
-                {
-                    .type = source_type,
-                    .value = {
-                        .destination_type   = destination_type,
-                        .destination_offset = destination_offset
-                    }
-                }
-                })
-        };
-        return p;
-    }
+
+    // Pattern member_value(const char* key, Json_Type source_type, Data_Type destination_type, u32 destination_offset) {
+    //     Pattern p = Pattern {
+    //         .type     = Json_Type::Object_Member_Name,
+    //         .member   = { .name = key },
+    //         .children = Array_List<Pattern>::create_from({
+    //             {
+    //                 .type = source_type,
+    //                 .value = {
+    //                     .destination_type   = destination_type,
+    //                     .destination_offset = destination_offset
+    //                 }
+    //             }
+    //             })
+    //     };
+    //     return p;
+    // }
+
 
     Pattern string(u32 offset, Parser_Hooks hooks) {
         Pattern p = Pattern {
@@ -682,19 +633,12 @@ namespace json {
         if (members.size() == 0)
             return p;
 
-        p.children.init(members.size());
-        for (const Object_Member& om : members) {
-            p.children.append(
-                Pattern {
-                    .type     = Json_Type::Object_Member_Name,
-                    .member   = { .name = om.key }
-                } |= om.value);
-        }
+        p.object_members = members;
 
         return p;
     }
 
-    Pattern list(std::initializer_list<Pattern> elements,
+    Pattern list(const Pattern& element_pattern,
                  List_Info list_info,
                  Parser_Hooks hooks)
     {
@@ -702,20 +646,13 @@ namespace json {
             .type = Json_Type::List,
             .list = {
                 .element_size      = list_info.element_size,
-                .array_list_offset = list_info.array_list_offset
+                .array_list_offset = list_info.array_list_offset,
+                .child_pattern     = (Pattern*)&element_pattern
             },
             .enter_hook = hooks.enter_hook,
             .leave_hook = hooks.leave_hook
         };
 
-        if (elements.size() == 0)
-            return p;
-
-        p.children.init(elements.size());
-
-        for (Pattern e: elements) {
-            p.children.append(e);
-        }
 
         return p;
     }
@@ -777,31 +714,25 @@ namespace json {
     }
 
 
-    void write_object_to_file(FILE* out, Array_List<Pattern> child_patterns, void* data)
+    void write_object_to_file(FILE* out, std::initializer_list<Object_Member> members, void* data)
     {
-        auto print_one_key_value_pair = [&](Pattern p) {
-            panic_if (p.children.count != 1,
-                      "Children of Object_Member have to have exactly one child.");
-            fprintf(out, "\"%s\" : ", p.member.name);
-            write_pattern_to_file(out, p.children[0], data);
+        auto print_one_key_value_pair = [&](Object_Member om) {
+            fprintf(out, "\"%s\" : ", om.key);
+            write_pattern_to_file(out, om.pattern, data);
         };
 
         fprintf(out, "{");
 
-        if (child_patterns.count != 0) {
-            print_one_key_value_pair(child_patterns[0]);
+        if (members.size() != 0) {
         }
 
-        for (u32 i = 1; i < child_patterns.count; ++i) {
-            fprintf(out, ", ");
-            print_one_key_value_pair(child_patterns[i]);
-        }
+        u32 i = 0;
+        for (Object_Member om : members) {
+            if (i++ != 0) {
+                fprintf(out, ", ");
+            }
 
-        for (Pattern p : child_patterns) {
-            panic_if(p.type != Json_Type::Object_Member_Name,
-                     "Objects should only have children of type Json_Type::Object_Member_Name");
-
-
+            print_one_key_value_pair(om);
         }
 
         fprintf(out, "}");
@@ -810,7 +741,7 @@ namespace json {
 
 
     void write_pattern_to_file(FILE* out, Pattern pattern, void* user_data) {
-        
+
         switch (pattern.type) {
             case Json_Type::Null: fprintf(out, "null"); break;
             case Json_Type::Bool: {
@@ -827,15 +758,12 @@ namespace json {
                 }
             } break;
             case Json_Type::List: {
-                panic_if(pattern.children.count != 1,
-                         "For writing, only lists with one child pattern are allowed!");
-
                 write_list_to_file(out, pattern.list.array_list_offset,
                                    pattern.list.element_size,
-                                   pattern.children[0], user_data);
+                                   *pattern.list.child_pattern, user_data);
             } break;
             case Json_Type::Object: {
-                write_object_to_file(out, pattern.children, user_data);
+                write_object_to_file(out, pattern.object_members, user_data);
             } break;
             default: panic("Don't know how to print json object with type %d",
                            pattern.type);
@@ -851,5 +779,6 @@ namespace json {
         defer { fclose(out); };
         write_pattern_to_file(out, pattern, user_data);
     }
+
 }
 #endif

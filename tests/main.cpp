@@ -1596,51 +1596,6 @@ auto test_defer_runs_after_return() -> testresult {
     return result;
 }
 
-auto test_json_simple_object() -> testresult {
-    using namespace json;
-    const char* json_object = R"JSON(
-        {
-          "int":    123,
-          "float":  123.123,
-          "bool":   true,
-          "string": "Hello"
-        }
-)JSON";
-
-    struct Test {
-        s32    i;
-        f32    f;
-        bool   b;
-        String s;
-    };
-
-    Pattern p = Pattern {.type = Json_Type::Object}
-    |= Array_List<Pattern>::create_from({
-        member_value("int",    Json_Type::Number, Data_Type::Integer, offsetof(Test, i)),
-        member_value("float",  Json_Type::Number, Data_Type::Float,   offsetof(Test, f)),
-        member_value("bool",   Json_Type::Bool,   Data_Type::Boolean, offsetof(Test, b)),
-        member_value("string", Json_Type::String, Data_Type::String,  offsetof(Test, s)),
-    });
-
-    Test t;
-    Pattern_Match_Result result = pattern_match(json_object, p, &t);
-
-
-    defer {
-        p.deinit();
-        t.s.free();
-    };
-
-
-    assert_equal_int(result, Pattern_Match_Result::OK_CONTINUE);
-
-    assert_equal_int(t.i, 123);
-    assert_equal_f32(t.f, 123.123);
-    assert_equal_int(t.b, true);
-    assert_equal_int(strncmp("Hello", t.s.data, 5), 0);
-
-    return pass;
-}
 
 auto test_json_simple_object_new_syntax() -> testresult {
     using namespace json;
@@ -1672,7 +1627,6 @@ auto test_json_simple_object_new_syntax() -> testresult {
 
 
     defer {
-        p.deinit();
         t.s.free();
     };
 
@@ -1683,6 +1637,88 @@ auto test_json_simple_object_new_syntax() -> testresult {
     assert_equal_f32(t.f, 123.123);
     assert_equal_int(t.b, true);
     assert_equal_int(strncmp("Hello", t.s.data, 5), 0);
+
+    return pass;
+}
+
+auto test_json_config() -> testresult {
+    using namespace json;
+
+    const char* json_str = R"JSON({
+    "config_version" : 1,
+    "db_client_id" : "bb3f296b73ffba5c09138aa612187290",
+    "db_client_secret" : "cd92b98cfd0e2ddf2e70f42bbe8cb744",
+    "mvg_location_names" : [
+        "Petershausen P+R",
+        "Petershausen",
+    ],
+    "db_station_names" : [
+        "Petershausen"
+    ],
+    "vehicle_type_blacklist" : [],
+    "destination_blacklist" : [],
+})JSON";
+
+    // TODO(Felix): use the custom Vehicle_Type here too
+    struct Tafel_Config {
+        int config_version;
+
+        String db_client_id;
+        String db_client_secret;
+
+        Array_List<String> mvg_locations;
+        Array_List<String> db_stations;
+        Array_List<String> destination_blacklist;
+        // Array_List<Vehicle_Type> vehicle_type_blacklist;
+
+        void free() {
+            db_client_id.free();
+            db_client_secret.free();
+
+            for (String s : mvg_locations)         s.free();
+            for (String s : db_stations)           s.free();
+            for (String s : destination_blacklist) s.free();
+
+            mvg_locations.deinit();
+            db_stations.deinit();
+            destination_blacklist.deinit();
+            // vehicle_type_blacklist.deinit();
+        }
+    };
+
+    Pattern p = object({
+        {"config_version",     integer(offsetof(Tafel_Config, config_version))},
+        {"db_client_id",       string (offsetof(Tafel_Config, db_client_id))},
+        {"db_client_secret",   string (offsetof(Tafel_Config, db_client_secret))},
+        {"mvg_location_names", list(string(0), {
+                .array_list_offset = offsetof(Tafel_Config, mvg_locations),
+                .element_size      = sizeof(Tafel_Config::mvg_locations[0]),
+                })},
+        {"db_station_names",  list(string(0), {
+                .array_list_offset = offsetof(Tafel_Config, db_stations),
+                .element_size      = sizeof(Tafel_Config::db_stations[0]),
+                })},
+        {"destination_blacklist", list(string(0), {
+                .array_list_offset = offsetof(Tafel_Config, destination_blacklist),
+                .element_size      = sizeof(Tafel_Config::destination_blacklist[0]),
+                })},
+        // {"vehicle_type_blacklist", list(
+                    // custom(Json_Type::String, (Data_Type)Custom_Data_Types::VEHICLE_TYPE, 0),
+            // {
+                // .array_list_offset = offsetof(Tafel_Config, vehicle_type_blacklist),
+                // .element_size      = sizeof(Tafel_Config::vehicle_type_blacklist[0]),
+            // })}
+    });
+
+
+    Tafel_Config config_result {};
+    Pattern_Match_Result match_result = pattern_match(json_str, p, &config_result);
+
+    defer {
+        config_result.free();
+    };
+
+    assert_equal_int(config_result.config_version, 1);
 
     return pass;
 }
@@ -1800,7 +1836,6 @@ auto test_json_mvg() -> testresult {
     auto result = json::pattern_match((char*)json_str, p, &mvg_loc);
 
     defer {
-        p.deinit();
         mvg_loc.free();
     };
 
@@ -1990,7 +2025,6 @@ testresult test_json_bug() {
     // write_pattern_to_file("out.json", p, &deps);
 
     defer {
-        p.deinit();
         deps.free();
     };
     assert_equal_int(res, Pattern_Match_Result::OK_CONTINUE);
@@ -2050,10 +2084,9 @@ s32 main(s32, char**) {
 
 
             invoke_test(test_json_simple_object_new_syntax);
-            invoke_test(test_json_simple_object);
             invoke_test(test_json_mvg);
             invoke_test(test_json_bug);
-
+            invoke_test(test_json_config)
 
             invoke_test(test_defer_runs_after_return);
             invoke_test(test_pool_allocator);
