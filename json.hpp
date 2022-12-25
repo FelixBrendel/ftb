@@ -131,7 +131,7 @@ namespace json {
     };
 
     Pattern object(std::initializer_list<Object_Member> members, Parser_Hooks hooks={0});
-    Pattern list(const Pattern& element_pattern,
+    Pattern list(Pattern element_pattern,
                  List_Info list_info={0}, Parser_Hooks hooks={0});
     Pattern integer(u32 offset,  Parser_Hooks hooks={0});
     Pattern floating(u32 offset, Parser_Hooks hooks={0});
@@ -638,16 +638,18 @@ namespace json {
         return p;
     }
 
-    Pattern list(const Pattern& element_pattern,
+    Pattern list(Pattern element_pattern,
                  List_Info list_info,
                  Parser_Hooks hooks)
     {
+        Pattern* child = new Pattern;
+        *child = element_pattern;
         Pattern p = Pattern {
             .type = Json_Type::List,
             .list = {
                 .element_size      = list_info.element_size,
                 .array_list_offset = list_info.array_list_offset,
-                .child_pattern     = (Pattern*)&element_pattern
+                .child_pattern     = child
             },
             .enter_hook = hooks.enter_hook,
             .leave_hook = hooks.leave_hook

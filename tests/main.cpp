@@ -1719,6 +1719,21 @@ auto test_json_config() -> testresult {
     };
 
     assert_equal_int(config_result.config_version, 1);
+    assert_equal_string(config_result.db_client_id,
+                        string_from_literal("bb3f296b73ffba5c09138aa612187290"));
+
+    assert_equal_string(config_result.db_client_secret,
+                        string_from_literal("cd92b98cfd0e2ddf2e70f42bbe8cb744"));
+
+    assert_equal_int(config_result.mvg_locations.count, 2);
+    assert_equal_string(config_result.mvg_locations[0],
+                        string_from_literal("Petershausen P+R"));
+    assert_equal_string(config_result.mvg_locations[1],
+                        string_from_literal("Petershausen"));
+
+    assert_equal_int(config_result.db_stations.count, 1);
+    assert_equal_string(config_result.db_stations[0],
+                        string_from_literal("Petershausen"));
 
     return pass;
 }
@@ -2059,8 +2074,384 @@ testresult test_json_bug() {
 
     assert_equal_int(deps.departures.count, 2);
     {
-        Departure& d = deps.departures[0];
-        assert_equal_int(strncmp("S2", d.label.data, d.label.length), 0);
+        Departure& d0 = deps.departures[0];
+        assert_equal_string(d0.label, string_from_literal("S2"));
+        assert_equal_string(d0.product, string_from_literal("SBAHN"));
+        assert_equal_string(d0.destination, string_from_literal("Erding"));
+        assert_equal_string(d0.line_background_color, string_from_literal("#9bc04c"));
+        assert_equal_string(d0.departure_id, string_from_literal("c9b4b3875a8d2f53ad018b204899ffc0#1662174480000#de:09174:6840"));
+        assert_equal_string(d0.platform, string_from_literal("6"));
+
+        Departure& d1 = deps.departures[1];
+        assert_equal_string(d1.label, string_from_literal("S2"));
+        assert_equal_string(d1.product, string_from_literal("SBAHN"));
+        assert_equal_string(d1.destination, string_from_literal("Erding"));
+        assert_equal_string(d1.line_background_color, string_from_literal("#9bc04c"));
+        assert_equal_string(d1.departure_id, string_from_literal("88cd45142d5ee37ba77295e93bb3b88f#1662175920000#de:09174:6840"));
+        assert_equal_string(d1.platform, string_from_literal("6"));
+    }
+
+    return pass;
+}
+
+auto json_bug_again() -> testresult {
+    const char* json = R"JSON({
+  "servingLines" : [ {
+    "destination" : "Tandern, Adlerstraße",
+    "sev" : false,
+    "network" : "mvv",
+    "product" : "REGIONAL_BUS",
+    "lineNumber" : "707",
+    "divaId" : "19707"
+  }, {
+    "destination" : "Tandern, Adlerstraße",
+    "sev" : false,
+    "network" : "mvv",
+    "product" : "RUFTAXI",
+    "lineNumber" : "7070",
+    "divaId" : "16707"
+  } ],
+  "departures" : [ {
+    "departureTime" : 1671996780000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "delay" : 0,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "57749c348504ffe0de51b7cc9cb48c66#1671996780000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672000380000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "delay" : 0,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "7c8c797e8982f841c292f45b77df8e2c#1672000380000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672036380000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "15054e32f9768828b7a2ed8ba9d37a0a#1672036380000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672039980000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "e49700d23e4fdf250752e02c81c27507#1672039980000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672043580000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "4462969e1ce4b766d6f4534cc928f4fc#1672043580000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672047180000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "90a092fc041022ee713c851ca8a10245#1672047180000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672050780000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "11c9e9e2ff56f899101d3deedc659b93#1672050780000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672054380000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "607ce44954cccb9bc400b0a079b01f0d#1672054380000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672057980000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "855ed5734137dbc10d96ec9bcbd8c932#1672057980000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672061580000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "389a01d4bba3df19461fe5c0cd54406a#1672061580000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672065180000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "d72f91c1b28214f6906e4d117a1c2e31#1672065180000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672068780000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "e355774d343c72acbec55936a9b0042c#1672068780000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672072380000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "8f2ae7d4ae162e0fb816ed9a7b67de86#1672072380000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672075980000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "6e3948b1b3228643a7849703905b6e2f#1672075980000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672079580000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "08352cdbae115fd9811e4cd1d073907c#1672079580000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  } ]
+})JSON";
+
+    struct Departure {
+        String             product;
+        String             label;
+        String             destination;
+        bool               live;
+        f32                delay;
+        bool               cancelled;
+        String             line_background_color;
+        String             departure_id;
+        bool               sev;
+        String             platform;
+        s32                stop_position_number;
+        Array_List<String> info_messages;
+
+        void free() {
+            product.free();
+            label.free();
+            destination.free();
+            line_background_color.free();
+            departure_id.free();
+            platform.free();
+
+            for (auto& s: info_messages) {
+                s.free();
+            }
+
+            info_messages.deinit();
+        }
+    };
+
+    struct Serving_Line {
+        String destination;
+        bool   sev;
+        String network;
+        String product;
+        String line_number;
+        String diva_id;
+
+        void free() {
+            destination.free();
+            network.free();
+            product.free();
+            line_number.free();
+            diva_id.free();
+        }
+
+        void print() {
+            println("Serving Line:");
+            with_print_prefix("    ") {
+                println("destination : %s", destination.data);
+                println("sev         : %s", sev ? "yes" : "no");
+                println("network     : %s", network);
+                println("product     : %s", product);
+                println("line_number : %s", line_number);
+                println("diva_id     : %s", diva_id);
+            }
+        }
+    };
+
+    struct Departure_Infos {
+        Array_List<Serving_Line> serving_lines;
+        Array_List<Departure>    departures;
+
+        void free() {
+            for (auto& d : departures) {
+                d.free();
+            }
+            departures.deinit();
+
+            for (auto& s : serving_lines) {
+                s.free();
+            }
+            serving_lines.deinit();
+        }
+
+    };
+
+    using namespace json;
+    Pattern departure = object(
+        {
+            // {"departureTime",       custom(Json_Type::Number, (Data_Type)Custom_Data_Types::UNIX_TIME_IN_MS, offsetof(Departure, departure_time))},
+            {"product",             string  (offsetof(Departure, product))},
+            {"label",               string  (offsetof(Departure, label))},
+            {"destination",         string  (offsetof(Departure, destination))},
+            {"live",                boolean (offsetof(Departure, live))},
+            {"delay",               floating(offsetof(Departure, delay))},
+            {"cancelled",           boolean (offsetof(Departure, cancelled))},
+            {"lineBackgroundColor", string  (offsetof(Departure, line_background_color))},
+            {"departureId",         string  (offsetof(Departure, departure_id))},
+            {"sev",                 boolean (offsetof(Departure, sev))},
+            {"platform",            string  (offsetof(Departure, platform))},
+            {"stopPositionNumber",  integer (offsetof(Departure, stop_position_number))},
+            {"infoMessages",        list    ({string(0)}, {
+                        .array_list_offset = offsetof(Departure, info_messages),
+                        .element_size      = sizeof(Departure::info_messages[0]),
+                    })}
+        });
+    Pattern serving_line = object({
+            {"destination", string(offsetof(Serving_Line, destination))},
+            {"sev",         boolean(offsetof(Serving_Line, sev))},
+            {"network",     string(offsetof(Serving_Line, network))},
+            {"product",     string(offsetof(Serving_Line, product))},
+            {"lineNumber",  string(offsetof(Serving_Line, line_number))},
+            {"divaId",      string(offsetof(Serving_Line, diva_id))},
+        });
+    Pattern p = object({
+            {"departures", list(departure, {
+                        .array_list_offset    = offsetof(Departure_Infos, departures),
+                        .element_size         = sizeof(Departure_Infos::departures[0]),
+                    })},
+            {"servingLines", list(serving_line, {
+                        .array_list_offset    = offsetof(Departure_Infos, serving_lines),
+                        .element_size         = sizeof(Departure_Infos::serving_lines[0]),
+                    })}
+        });
+
+    Departure_Infos deps {};
+    deps.departures.allocator    = libc_allocator;
+    deps.serving_lines.allocator = libc_allocator;
+    Pattern_Match_Result res = pattern_match(json, p, &deps);
+
+    defer {deps.free();};
+
+    assert_equal_int(deps.serving_lines.count, 2);
+
+    {
+        Serving_Line& s = deps.serving_lines[0];
+        assert_equal_string(s.destination, string_from_literal("Tandern, Adlerstraße"));
+        // assert_equal_int(strncmp("ddb",    s.network.data, s.network.length), 0);
+        // assert_equal_int(strncmp("SBAHN",  s.product.data, s.product.length), 0);
+        // assert_equal_int(strncmp("S2",     s.line_number.data, s.line_number.length), 0);
+        // assert_equal_int(strncmp("92M02",  s.diva_id.data, s.diva_id.length), 0);
+        // assert_equal_int(s.sev, false);
+    } {
+        Serving_Line& s = deps.serving_lines[1];
+        assert_equal_string(s.destination, string_from_literal("Tandern, Adlerstraße"));
+        // assert_equal_int(strncmp("mvv",            s.network.data, s.network.length), 0);
+        // assert_equal_int(strncmp("REGIONAL_BUS",   s.product.data, s.product.length), 0);
+        // assert_equal_int(strncmp("771",            s.line_number.data, s.line_number.length), 0);
+        // assert_equal_int(strncmp("19771",          s.diva_id.data, s.diva_id.length), 0);
+        // assert_equal_int(s.sev, false);
     }
 
     return pass;
@@ -2086,7 +2477,8 @@ s32 main(s32, char**) {
             invoke_test(test_json_simple_object_new_syntax);
             invoke_test(test_json_mvg);
             invoke_test(test_json_bug);
-            invoke_test(test_json_config)
+            invoke_test(test_json_config);
+            invoke_test(json_bug_again);
 
             invoke_test(test_defer_runs_after_return);
             invoke_test(test_pool_allocator);

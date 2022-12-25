@@ -87,6 +87,8 @@
 #define MIN(a, b) ((a)<(b)?(a):(b))
 #define MAX(a, b) ((a)<(b)?(b):(a))
 
+#define string_from_literal(lit) (String{.data=(char*)lit, .length=strlen(lit)})
+
 #define array_length(arr)   (sizeof(arr) / sizeof(arr[0]))
 #define zero_out(thing)     memset(&(thing), 0, sizeof((thing)));
 #define deadbeef_out(thing) memset(&(thing), 0xdeadbeef, sizeof((thing)));
