@@ -71,46 +71,7 @@ namespace json {
         parser_hook             enter_hook;
         parser_hook             leave_hook;
 
-        void print() {
-            println("Pattern:");
-            // with_print_prefix("|  ") {
-            //     ::print("- type : ");
-            //     switch (type) {
-            //         case Json_Type::Bool:               raw_println("bool");          break;
-            //         case Json_Type::Invalid:            raw_println("invalid");       break;
-            //         case Json_Type::Null:               raw_println("null");          break;
-            //         case Json_Type::List:               raw_println("list");          break;
-            //         case Json_Type::Number:             raw_println("number");        break;
-            //         case Json_Type::Object:             raw_println("object");        break;
-            //         case Json_Type::Object_Member_Name: raw_println("object member"); break;
-            //         case Json_Type::String:             raw_println("string");        break;
-            //         default: raw_println("???");
-            //     }
-            //     if (type == Json_Type::Object_Member_Name) {
-            //         println("- key : %s", member.name);
-            //     } else if (type == Json_Type::List) {
-            //         println("- list_e_size : %u", list.element_size);
-            //         println("- list_offset : %u", list.array_list_offset);
-            //     } else {
-            //         println("- dest_type   : %d", value.destination_type);
-            //         println("- dest_offset : %u", value.destination_offset);
-            //     }
-            //     ::print("- children : [");
-            //     if (children.count == 0)
-            //         raw_println("]");
-            //     else {
-            //         with_print_prefix("   ") {
-            //             for (Pattern p : children) {
-            //                 raw_print("\n");
-            //                 p.print();
-            //             }
-            //         }
-            //         println("]");
-            //     }
-
-
-            // }
-        }
+        void print();
 
     };
 
@@ -118,7 +79,6 @@ namespace json {
         const char*   key;
         Pattern pattern;
     };
-
 
     struct Parser_Hooks {
         parser_hook enter_hook;
@@ -782,5 +742,46 @@ namespace json {
         write_pattern_to_file(out, pattern, user_data);
     }
 
+    void Pattern::print() {
+        switch (type) {
+            case Json_Type::Bool:               raw_print("bool");          break;
+            case Json_Type::Invalid:            raw_print("invalid");       break;
+            case Json_Type::Null:               raw_print("null");          break;
+            case Json_Type::List:               raw_print("list");          break;
+            case Json_Type::Number:             raw_print("number");        break;
+            case Json_Type::Object:             raw_print("object");        break;
+            case Json_Type::Object_Member_Name: raw_print("object member"); break;
+            case Json_Type::String:             raw_print("string");        break;
+            default: raw_println("???");
+        }
+        if (type == Json_Type::Object) {
+            if (object_members.size() == 0) {
+                println("{}");
+                return;
+            }
+
+            raw_println(" {");
+            with_print_prefix("|  ") {
+                for (Object_Member om : object_members){
+                    ::print("");
+                    raw_print("\"%s\" : ", om.key);
+                    om.pattern.print();
+                    raw_print("\n");
+                }
+            }
+            ::print("}");
+        } else if (type == Json_Type::List) {
+            raw_println(" [");
+            with_print_prefix("|  ") {
+                ::print("");
+                list.child_pattern->print();
+                raw_print("\n");
+            }
+            ::print("]");
+            raw_print(" (e_size : %u, al_off : %u)", list.element_size, list.array_list_offset);
+        } else {
+            raw_print(" (off : %u)", value.destination_offset);
+        }
+    }
 }
 #endif

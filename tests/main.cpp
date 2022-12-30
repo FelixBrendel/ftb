@@ -2094,7 +2094,7 @@ testresult test_json_bug() {
     return pass;
 }
 
-auto json_bug_again() -> testresult {
+auto test_json_bug_again() -> testresult {
     const char* json = R"JSON({
   "servingLines" : [ {
     "destination" : "Tandern, Adlerstraße",
@@ -2311,7 +2311,17 @@ auto json_bug_again() -> testresult {
   } ]
 })JSON";
 
+    struct Time {
+        s32 year;
+        u8  month;   // [1-12]
+        u8  day;     // [1-31]
+        u8  hour;    // [0-23]
+        u8  minute;  // [0-59]
+        f32 seconds; // [0-59.99…]
+    };
+
     struct Departure {
+        Time               departure_time;
         String             product;
         String             label;
         String             destination;
@@ -2439,19 +2449,19 @@ auto json_bug_again() -> testresult {
     {
         Serving_Line& s = deps.serving_lines[0];
         assert_equal_string(s.destination, string_from_literal("Tandern, Adlerstraße"));
-        // assert_equal_int(strncmp("ddb",    s.network.data, s.network.length), 0);
-        // assert_equal_int(strncmp("SBAHN",  s.product.data, s.product.length), 0);
-        // assert_equal_int(strncmp("S2",     s.line_number.data, s.line_number.length), 0);
-        // assert_equal_int(strncmp("92M02",  s.diva_id.data, s.diva_id.length), 0);
-        // assert_equal_int(s.sev, false);
+        assert_equal_int(s.sev, false);
+        assert_equal_string(s.network, string_from_literal("mvv"));
+        assert_equal_string(s.product, string_from_literal("REGIONAL_BUS"));
+        assert_equal_string(s.line_number, string_from_literal("707"));
+        assert_equal_string(s.diva_id, string_from_literal("19707"));
     } {
         Serving_Line& s = deps.serving_lines[1];
         assert_equal_string(s.destination, string_from_literal("Tandern, Adlerstraße"));
-        // assert_equal_int(strncmp("mvv",            s.network.data, s.network.length), 0);
-        // assert_equal_int(strncmp("REGIONAL_BUS",   s.product.data, s.product.length), 0);
-        // assert_equal_int(strncmp("771",            s.line_number.data, s.line_number.length), 0);
-        // assert_equal_int(strncmp("19771",          s.diva_id.data, s.diva_id.length), 0);
-        // assert_equal_int(s.sev, false);
+        assert_equal_int(s.sev, false);
+        assert_equal_string(s.network, string_from_literal("mvv"));
+        assert_equal_string(s.product, string_from_literal("RUFTAXI"));
+        assert_equal_string(s.line_number, string_from_literal("7070"));
+        assert_equal_string(s.diva_id, string_from_literal("16707"));
     }
 
     return pass;
@@ -2478,7 +2488,7 @@ s32 main(s32, char**) {
             invoke_test(test_json_mvg);
             invoke_test(test_json_bug);
             invoke_test(test_json_config);
-            invoke_test(json_bug_again);
+            invoke_test(test_json_bug_again);
 
             invoke_test(test_defer_runs_after_return);
             invoke_test(test_pool_allocator);
