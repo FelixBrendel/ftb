@@ -1618,7 +1618,7 @@ auto test_json_simple_object_new_syntax() -> testresult {
     Pattern p = json::object({
         {"int",    json::integer (offsetof(Test, i))},
         {"float",  json::floating(offsetof(Test, f))},
-        {"bool",   json::boolean (offsetof(Test, b))},
+        {"bool",   json::boolean_(offsetof(Test, b))},
         {"string", json::string  (offsetof(Test, s))},
     });
 
@@ -1833,8 +1833,8 @@ auto test_json_mvg() -> testresult {
                 {"divaId",        integer (offsetof(Location, divaId))},
                 {"place",         string  (offsetof(Location, place))},
                 {"name",          string  (offsetof(Location, name))},
-                {"has_live_data", boolean (offsetof(Location, has_live_data))},
-                {"has_zoom_data", boolean (offsetof(Location, has_zoom_data))},
+                {"has_live_data", boolean_(offsetof(Location, has_live_data))},
+                {"has_zoom_data", boolean_(offsetof(Location, has_zoom_data))},
                 {"aliases",       string  (offsetof(Location, aliases))},
                 {"tariffZones",   string  (offsetof(Location, tariffZones))},
             }, {
@@ -2004,18 +2004,18 @@ testresult test_json_bug() {
                 {"product",             string  (offsetof(Departure, product))},
                 {"label",               string  (offsetof(Departure, label))},
                 {"destination",         string  (offsetof(Departure, destination))},
-                {"live",                boolean (offsetof(Departure, live))},
+                {"live",                boolean_(offsetof(Departure, live))},
                 {"delay",               floating(offsetof(Departure, delay))},
-                {"cancelled",           boolean (offsetof(Departure, cancelled))},
+                {"cancelled",           boolean_(offsetof(Departure, cancelled))},
                 {"lineBackgroundColor", string  (offsetof(Departure, line_background_color))},
                 {"departureId",         string  (offsetof(Departure, departure_id))},
-                {"sev",                 boolean (offsetof(Departure, sev))},
+                {"sev",                 boolean_(offsetof(Departure, sev))},
                 {"platform",            string  (offsetof(Departure, platform))},
                 {"stopPositionNumber",  integer (offsetof(Departure, stop_position_number))},
         });
         Pattern serving_line = object({
                 {"destination", string( offsetof(Serving_Line, destination))},
-                {"sev",         boolean(offsetof(Serving_Line, sev))},
+                {"sev",         boolean_(offsetof(Serving_Line, sev))},
                 {"network",     string( offsetof(Serving_Line, network))},
                 {"product",     string( offsetof(Serving_Line, product))},
                 {"lineNumber",  string( offsetof(Serving_Line, line_number))},
@@ -2395,12 +2395,12 @@ auto json_bug_again() -> testresult {
             {"product",             string  (offsetof(Departure, product))},
             {"label",               string  (offsetof(Departure, label))},
             {"destination",         string  (offsetof(Departure, destination))},
-            {"live",                boolean (offsetof(Departure, live))},
+            {"live",                boolean_ (offsetof(Departure, live))},
             {"delay",               floating(offsetof(Departure, delay))},
-            {"cancelled",           boolean (offsetof(Departure, cancelled))},
+            {"cancelled",           boolean_ (offsetof(Departure, cancelled))},
             {"lineBackgroundColor", string  (offsetof(Departure, line_background_color))},
             {"departureId",         string  (offsetof(Departure, departure_id))},
-            {"sev",                 boolean (offsetof(Departure, sev))},
+            {"sev",                 boolean_ (offsetof(Departure, sev))},
             {"platform",            string  (offsetof(Departure, platform))},
             {"stopPositionNumber",  integer (offsetof(Departure, stop_position_number))},
             {"infoMessages",        list    ({string(0)}, {
@@ -2410,7 +2410,7 @@ auto json_bug_again() -> testresult {
         });
     Pattern serving_line = object({
             {"destination", string(offsetof(Serving_Line, destination))},
-            {"sev",         boolean(offsetof(Serving_Line, sev))},
+            {"sev",         boolean_(offsetof(Serving_Line, sev))},
             {"network",     string(offsetof(Serving_Line, network))},
             {"product",     string(offsetof(Serving_Line, product))},
             {"lineNumber",  string(offsetof(Serving_Line, line_number))},

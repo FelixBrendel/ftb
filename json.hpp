@@ -7,7 +7,7 @@ namespace json {
     enum struct Pattern_Match_Result {
          OK_CONTINUE,
          OK_DONE,
-         ERROR
+         MATCHING_ERROR
     };
 
     enum struct Json_Type {
@@ -135,7 +135,7 @@ namespace json {
                  List_Info list_info={0}, Parser_Hooks hooks={0});
     Pattern integer(u32 offset,  Parser_Hooks hooks={0});
     Pattern floating(u32 offset, Parser_Hooks hooks={0});
-    Pattern boolean(u32 offset,  Parser_Hooks hooks={0});
+    Pattern boolean_(u32 offset,  Parser_Hooks hooks={0});
     Pattern string(u32 offset,   Parser_Hooks hooks={0});
     Pattern custom(Json_Type source_type, Data_Type destination_type,
                    u32 destination_offset, Parser_Hooks hooks={0});
@@ -282,9 +282,9 @@ namespace json {
             Pattern_Match_Result sub_result =
                 pattern_match_object_member(string+eaten, members, user_data,
                                             &sub_eaten, allocator);
-            if (sub_result == Pattern_Match_Result::ERROR) {
+            if (sub_result == Pattern_Match_Result::MATCHING_ERROR) {
                 *out_eaten = 0;
-                return Pattern_Match_Result::ERROR;
+                return Pattern_Match_Result::MATCHING_ERROR;
             }
 
             eaten += sub_eaten;
@@ -359,8 +359,8 @@ namespace json {
 
             }
 
-            if (sub_result == Pattern_Match_Result::ERROR)
-                return Pattern_Match_Result::ERROR;
+            if (sub_result == Pattern_Match_Result::MATCHING_ERROR)
+                return Pattern_Match_Result::MATCHING_ERROR;
 
             eaten += eaten_sub_object;
         // }
@@ -377,9 +377,9 @@ namespace json {
                 pattern.leave_hook(user_data, {thing_at_point}, {string+eaten});
         }
 
-        if (enter_message == Pattern_Match_Result::ERROR ||
-            leave_message == Pattern_Match_Result::ERROR)
-            return Pattern_Match_Result::ERROR;
+        if (enter_message == Pattern_Match_Result::MATCHING_ERROR ||
+            leave_message == Pattern_Match_Result::MATCHING_ERROR)
+            return Pattern_Match_Result::MATCHING_ERROR;
 
         *out_eaten = eaten;
         if (enter_message == Pattern_Match_Result::OK_DONE ||
@@ -446,8 +446,8 @@ namespace json {
                 = pattern_match_value(string+eaten, child, user_data,
                                       &sub_eaten, allocator);
 
-            if (sub_result == Pattern_Match_Result::ERROR)
-                return Pattern_Match_Result::ERROR;
+            if (sub_result == Pattern_Match_Result::MATCHING_ERROR)
+                return Pattern_Match_Result::MATCHING_ERROR;
 
             if (sub_result == Pattern_Match_Result::OK_DONE) {
                 // skip rest of the list
@@ -523,8 +523,8 @@ namespace json {
             sub_result = pattern_match_value(string+eaten, pattern_todo, user_data,
                                              &value_lengh, allocator);
 
-            if (sub_result == Pattern_Match_Result::ERROR)
-                return Pattern_Match_Result::ERROR;
+            if (sub_result == Pattern_Match_Result::MATCHING_ERROR)
+                return Pattern_Match_Result::MATCHING_ERROR;
 
         }
 
@@ -610,7 +610,7 @@ namespace json {
         return p;
     }
 
-    Pattern boolean(u32 offset, Parser_Hooks hooks) {
+    Pattern boolean_(u32 offset, Parser_Hooks hooks) {
         Pattern p = Pattern {
             .type  = Json_Type::Bool,
             .value = {

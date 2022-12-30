@@ -273,7 +273,6 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
 
 #ifdef FTB_DEBUG
 #  ifdef FTB_WINDOWS
-#    pragma message("defining debug_break")
 #    define debug_break() __debugbreak()
 #  else
 #    define debug_break() raise(SIGTRAP)
@@ -614,7 +613,7 @@ auto print_va_args(static_string format, va_list* arg_list) -> s32;
 auto print_to_string(char** out, Allocator_Base* allocator, static_string format, ...) -> s32;
 auto print_to_file(FILE* file, static_string format, ...) -> s32;
 
-auto print_stacktrace(FILE* file) -> void;
+auto print_stacktrace(FILE* file = stderr) -> void;
 
 auto print(static_string format, ...) -> s32;
 auto println(static_string format, ...) -> s32;
@@ -2789,6 +2788,8 @@ auto print_stacktrace(FILE* file) -> void {
 
 #else // stacktace should be present
 #  if defined FTB_WINDOWS
+#    define VC_EXTRALEAN
+#    define WIN32_LEAN_AND_MEAN
 #    include <Windows.h>
 #    include <dbghelp.h>
 
