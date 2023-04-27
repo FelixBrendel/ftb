@@ -31,10 +31,11 @@
 #include <math.h>
 #include "./core.hpp"
 
-typedef s32 testresult;
-
-#define pass 1
-#define fail 0
+enum testresult {
+    fail = 0,
+    pass = 1,
+    skipped = 2
+};
 
 #define print_assert_equal_fail(variable, value, type, format)  \
     print("\n%s:%d: Assertion failed\n\tfor '" #variable "'"    \
@@ -105,17 +106,21 @@ typedef s32 testresult;
 #define assert_true(value)                      \
     assert_equal_int((value), true)
 
-#define invoke_test(name)                                       \
-    fputs("" #name ":", stdout);                                \
-    fflush(stdout);                                             \
-    if (name() == pass) {                                       \
-        for(size_t i = strlen(#name); i < 70; ++i)              \
-            fputs((i%3==1)? "." : " ", stdout);                 \
-        fputs(console_green "passed\n" console_normal, stdout); \
-    }                                                           \
-    else {                                                      \
-        result = false;                                         \
-        for(s32 i = -1; i < 70; ++i)                            \
-            fputs((i%3==1)? "." : " ", stdout);                 \
-        fputs(console_red "failed\n" console_normal, stdout);   \
-    }
+#define invoke_test(name)                                               \
+    one_statement(                                                      \
+        fputs("" #name ":", stdout);                                    \
+        fflush(stdout);                                                 \
+        auto this_result = name();                                           \
+        if (this_result == fail) {                                           \
+            result = fail;                                              \
+            for(s32 i = -1; i < 70; ++i)                                \
+                fputs((i%3==1)? "." : " ", stdout);                     \
+            fputs(console_red "failed\n" console_normal, stdout);       \
+        } else {                                                        \
+            for(size_t i = strlen(#name); i < 70; ++i)                  \
+                fputs((i%3==1)? "." : " ", stdout);                     \
+            if (this_result == pass)                                         \
+                fputs(console_green "passed\n" console_normal, stdout); \
+            else                                                        \
+                fputs(console_blue "skipped\n" console_normal, stdout); \
+        })

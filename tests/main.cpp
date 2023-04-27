@@ -7,7 +7,9 @@
 #define FTB_HASHMAP_IMPL
 #define FTB_SCHEDULER_IMPL
 #define FTB_MATH_IMPL
-#define FTB_SOA_SORT_IMPL
+#if not defined(FTB_NO_SIMD_TESTS)
+#  define FTB_SOA_SORT_IMPL
+#endif
 #define FTB_JSON_IMPL
 #define FTB_PARSING_IMPL
 
@@ -1110,6 +1112,9 @@ auto test_math() -> testresult {
 
 
 auto test_sort() -> testresult {
+#if defined(FTB_NO_SIMD_TESTS)
+    return skipped;
+#else
     u64 arr1[4] {
         4,1,3,2
     };
@@ -1203,6 +1208,7 @@ auto test_sort() -> testresult {
     }
 
     return pass;
+#endif
 }
 
 auto test_kd_tree() -> testresult {
@@ -1375,7 +1381,7 @@ auto test_bucket_list_leak() -> testresult {
 
     assert_equal_int(old_bucket, new_bucket);
 
-    return true;
+    return pass;
 }
 
 auto test_growable_pool_allocator() -> testresult {
