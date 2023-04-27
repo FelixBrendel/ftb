@@ -1212,6 +1212,9 @@ auto test_sort() -> testresult {
 }
 
 auto test_kd_tree() -> testresult {
+#if defined(FTB_NO_SIMD_TESTS)
+    return skipped;
+#else
     Array_List<V3> points;
     points.init_from({
         {0,0,0}, {1,1,1},
@@ -1313,6 +1316,7 @@ auto test_kd_tree() -> testresult {
         assert_equal_int(tree.get_count_in_sphere({0,0,0}, 2), 5);
     }
     return pass;
+#endif
 }
 
 auto test_bucket_list() -> testresult {
@@ -2502,10 +2506,10 @@ s32 main(s32, char**) {
             invoke_test(test_bucket_list);
             invoke_test(test_bucket_list_leak);
             invoke_test(test_bucket_queue);
-            invoke_test(test_kd_tree);
             invoke_test(test_math);
             invoke_test(test_hashmap);
             invoke_test(test_sort);
+            invoke_test(test_kd_tree);
             invoke_test(test_array_lists_adding_and_removing);
             invoke_test(test_array_lists_sorting);
             invoke_test(test_array_lists_sorted_insert_and_remove);
