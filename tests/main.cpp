@@ -1887,6 +1887,32 @@ auto test_json_mvg() -> testresult {
     return pass;
 }
 
+testresult test_json_extract_value_from_list() {
+    using namespace json;
+    const char* str = "{\"current_condition\":[{\"temp_C\":3}]}";
+    f32 result = 0;
+    Pattern p = object({{"current_condition", list(object({{"temp_C", floating(0)}}))}});
+
+    Pattern_Match_Result r = pattern_match(str, p, &result);
+    assert_equal_int(r, Pattern_Match_Result::OK_CONTINUE);
+    assert_equal_f32(result, 3.0);
+
+    return pass;
+}
+
+testresult test_json_parse_from_quoted_value() {
+    using namespace json;
+    const char* str = "{\"value\":\"3\"}";
+    f32 result = 0;
+    Pattern p = object({{"value",  floating(0)}});
+
+    Pattern_Match_Result r = pattern_match(str, p, &result);
+    assert_equal_int(r, Pattern_Match_Result::OK_CONTINUE);
+    assert_equal_f32(result, 3.0);
+
+    return pass;
+}
+
 testresult test_json_bug() {
     using namespace json;
 
@@ -2497,6 +2523,10 @@ s32 main(s32, char**) {
             invoke_test(test_json_simple_object_new_syntax);
             invoke_test(test_json_mvg);
             invoke_test(test_json_bug);
+            invoke_test(test_json_extract_value_from_list);
+            invoke_test(test_json_parse_from_quoted_value);
+
+
             invoke_test(test_json_config);
             invoke_test(test_json_bug_again);
 

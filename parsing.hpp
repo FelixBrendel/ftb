@@ -4,6 +4,7 @@
 enum struct Data_Type : u8 {
     String = 1 << 7,
     Integer,
+    Long,
     Float,
     Boolean,
     Maybe_Integer,
@@ -119,48 +120,35 @@ u32 read_string(const char* str, String* out_string) {
     return length;
 }
 
+u32 read_long(const char* str, s64* out_long) {
+    u32 quotes_chars = 0;
+
+    bool in_on_quotes = is_quotes_char(*str);
+    if (in_on_quotes)
+        quotes_chars = 1;
+
+    char* end;
+    s64 result = strtoll(str+quotes_chars, &end, 10);
+    *out_long = result;
+
+    if (in_on_quotes) {
+        panic_if(!is_quotes_char(end[0]),
+                 "Expected a quote here but got |%s|",
+                 end);
+
+        quotes_chars = 2;
+    }
+
+    return end-str + quotes_chars;
+}
+
 u32 read_int(const char* str, s32* out_int) {
-    u32 quotes_chars = 0;
-
-    bool in_on_quotes = is_quotes_char(*str);
-    if (in_on_quotes)
-        quotes_chars = 1;
-
-    char* end;
-    long result = strtol(str+quotes_chars, &end, 10);
-    *out_int = (s32)result;
-
-    if (in_on_quotes) {
-        panic_if(!is_quotes_char(end[0]),
-                 "Expected a quote here but got |%s|",
-                 end);
-
-        quotes_chars = 2;
-    }
-
-    return end-str + quotes_chars;
+    s64 l;
+    u32 read = read_long(str, &l);
+    *out_int = (s32)l;
+    return read;
 }
 
-u32 read_long(const char* str, s64* out_int) {
-    u32 quotes_chars = 0;
-
-    bool in_on_quotes = is_quotes_char(*str);
-    if (in_on_quotes)
-        quotes_chars = 1;
-
-    char* end;
-    *out_int = strtoll(str+quotes_chars, &end, 10);
-
-    if (in_on_quotes) {
-        panic_if(!is_quotes_char(end[0]),
-                 "Expected a quote here but got |%s|",
-                 end);
-
-        quotes_chars = 2;
-    }
-
-    return end-str + quotes_chars;
-}
 
 u32 read_float(const char* str, f32* out_float) {
     char* end;

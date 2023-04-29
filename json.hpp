@@ -94,6 +94,7 @@ namespace json {
     Pattern list(Pattern element_pattern,
                  List_Info list_info={0}, Parser_Hooks hooks={0});
     Pattern integer(u32 offset,  Parser_Hooks hooks={0});
+    Pattern longint(u32 offset,  Parser_Hooks hooks={0});
     Pattern floating(u32 offset, Parser_Hooks hooks={0});
     Pattern boolean_(u32 offset,  Parser_Hooks hooks={0});
     Pattern string(u32 offset,   Parser_Hooks hooks={0});
@@ -214,6 +215,7 @@ namespace json {
 
         switch (dtype) {
             case Data_Type::Integer: return read_int(source,  (s32*)destination);
+            case Data_Type::Long:    return read_long(source, (s64*)destination);
             case Data_Type::Boolean: return read_bool(source, (bool*)destination);
             case Data_Type::String:  return read_string(source, (String*)destination);
             case Data_Type::Float:   return read_float(source, (f32*)destination);
@@ -310,9 +312,21 @@ namespace json {
                 panic_if(pattern.type == Json_Type::Object_Member_Name,
                          "object member not valid here");
                 if (thing_at_point == pattern.type) {
-                    read_into((void*)(((u8*)user_data)+pattern.value.destination_offset),
+                    eaten += read_into((void*)(((u8*)user_data)+pattern.value.destination_offset),
                               pattern.value.destination_type,
                               string+eaten);
+                } else if (thing_at_point == Json_Type::String) {
+                    // NOTE(Felix): if types don't match, but in the supplied
+                    //   json we are looking at a string, then try to read the
+                    //   thing in the string
+                    if (identify_thing(string+eaten+1) == pattern.type) {
+                        ++eaten; // overstep quotation marks
+                        eaten += read_into((void*)(((u8*)user_data)+pattern.value.destination_offset),
+                                           pattern.value.destination_type,
+                                           string+eaten);
+                        ++eaten; // overstep quotation marks
+                    }
+
                 }
 
                 sub_result = Pattern_Match_Result::OK_CONTINUE;
@@ -556,6 +570,20 @@ namespace json {
         return p;
     }
 
+    Pattern longint(u32 offset, Parser_Hooks hooks) {
+        Pattern p = Pattern {
+            .type  = Json_Type::Number,
+            .value = {
+                .destination_type   = Data_Type::Long,
+                .destination_offset = offset
+            },
+            .enter_hook = hooks.enter_hook,
+            .leave_hook = hooks.leave_hook
+        };
+
+        return p;
+    }
+
     Pattern floating(u32 offset, Parser_Hooks hooks) {
         Pattern p = Pattern {
             .type  = Json_Type::Number,
@@ -646,6 +674,11 @@ namespace json {
         fprintf(out, "%d", *i);
     }
 
+    void write_long_to_file(FILE* out, u32 offset, void* data) {
+        s64* i = (s64*)(((byte*)data)+offset);
+        fprintf(out, "%lld", *i);
+    }
+
     void write_float_to_file(FILE* out, u32 offset, void* data) {
         float* f = (float*)(((byte*)data)+offset);
         fprintf(out, "%f", *f);
@@ -715,6 +748,8 @@ namespace json {
             case Json_Type::Number: {
                 if (pattern.value.destination_type == Data_Type::Integer) {
                     write_int_to_file(out, pattern.value.destination_offset, user_data);
+                } else if (pattern.value.destination_type == Data_Type::Long) {
+                    write_long_to_file(out, pattern.value.destination_offset, user_data);
                 } else {
                     write_float_to_file(out, pattern.value.destination_offset, user_data);
                 }
