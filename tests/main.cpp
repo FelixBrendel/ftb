@@ -1700,15 +1700,15 @@ auto test_json_config() -> testresult {
         {"config_version",     integer(offsetof(Tafel_Config, config_version))},
         {"db_client_id",       string (offsetof(Tafel_Config, db_client_id))},
         {"db_client_secret",   string (offsetof(Tafel_Config, db_client_secret))},
-        {"mvg_location_names", list(string(0), {
+        {"mvg_location_names", list({string(0)}, {
                 .array_list_offset = offsetof(Tafel_Config, mvg_locations),
                 .element_size      = sizeof(Tafel_Config::mvg_locations[0]),
                 })},
-        {"db_station_names",  list(string(0), {
+        {"db_station_names",  list({string(0)}, {
                 .array_list_offset = offsetof(Tafel_Config, db_stations),
                 .element_size      = sizeof(Tafel_Config::db_stations[0]),
                 })},
-        {"destination_blacklist", list(string(0), {
+        {"destination_blacklist", list({string(0)}, {
                 .array_list_offset = offsetof(Tafel_Config, destination_blacklist),
                 .element_size      = sizeof(Tafel_Config::destination_blacklist[0]),
                 })},
@@ -1891,7 +1891,7 @@ testresult test_json_extract_value_from_list() {
     using namespace json;
     const char* str = "{\"current_condition\":[{\"temp_C\":3}]}";
     f32 result = 0;
-    Pattern p = object({{"current_condition", list(object({{"temp_C", floating(0)}}))}});
+    Pattern p = object({{"current_condition", list({object({{"temp_C", floating(0)}})})}});
 
     Pattern_Match_Result r = pattern_match(str, p, &result);
     assert_equal_int(r, Pattern_Match_Result::OK_CONTINUE);
@@ -2463,11 +2463,11 @@ auto test_json_bug_again() -> testresult {
             {"divaId",      string(offsetof(Serving_Line, diva_id))},
         });
     Pattern p = object({
-            {"departures", list(departure, {
+            {"departures", list({departure}, {
                         .array_list_offset    = offsetof(Departure_Infos, departures),
                         .element_size         = sizeof(Departure_Infos::departures[0]),
                     })},
-            {"servingLines", list(serving_line, {
+            {"servingLines", list({serving_line}, {
                         .array_list_offset    = offsetof(Departure_Infos, serving_lines),
                         .element_size         = sizeof(Departure_Infos::serving_lines[0]),
                     })}
