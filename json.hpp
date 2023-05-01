@@ -518,6 +518,10 @@ namespace json {
 
 
     Pattern_Match_Result pattern_match(const char* string, Pattern pattern, void* user_data, Allocator_Base* allocator) {
+        if (!string) {
+            return Pattern_Match_Result::MATCHING_ERROR;
+        }
+
         if (!allocator)
             allocator = grab_current_allocator();
 
