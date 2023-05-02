@@ -878,6 +878,7 @@ struct Array_List {
 #ifdef FTB_INTERNAL_DEBUG
             if (length == 0) {
                 fprintf(stderr, "ERROR: Array_List was not initialized.\n");
+                print_stacktrace();
                 length = 8;
             }
 #endif
