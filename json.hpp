@@ -4,19 +4,6 @@
 #include <initializer_list>
 
 
-template <typename type>
-struct Array {
-    type* data;
-    u32   length;
-
-    template <u32 template_length>
-    Array(type init_data[template_length]) {
-        memcpy(data, init_data, sizeof(data));
-        length = template_length;
-    }
-};
-
-
 namespace json {
     enum struct Pattern_Match_Result {
          OK_CONTINUE,
@@ -66,11 +53,10 @@ namespace json {
     struct Pattern {
         Json_Type type;
 
-        // only active if type == object
-        // const Array<Pattern> object_members;
-        std::initializer_list<Object_Member> object_members;
         union {
             struct {
+                const Object_Member* members;
+                u32 member_count;
             } object;
             struct {
                 u32 element_size;
@@ -113,7 +99,7 @@ namespace json {
     Pattern integer(u32 offset,  Parser_Hooks hooks={0});
     Pattern longint(u32 offset,  Parser_Hooks hooks={0});
     Pattern floating(u32 offset, Parser_Hooks hooks={0});
-    Pattern boolean_(u32 offset,  Parser_Hooks hooks={0});
+    Pattern boolean_(u32 offset, Parser_Hooks hooks={0});
     Pattern string(u32 offset,   Parser_Hooks hooks={0});
     Pattern custom(Json_Type source_type, Data_Type destination_type,
                    u32 destination_offset, Parser_Hooks hooks={0});
@@ -207,7 +193,8 @@ namespace json {
                                             void* user_data, u32* out_eaten,
                                             Allocator_Base* allocator);
     Pattern_Match_Result pattern_match_object(const char* string,
-                                              Array_List<Object_Member> members,
+                                              const Object_Member* members,
+                                              u32 member_count,
                                               void* user_data, u32* out_eaten,
                                               Allocator_Base* allocator);
 
@@ -217,7 +204,8 @@ namespace json {
                                              Allocator_Base* allocator);
 
     Pattern_Match_Result pattern_match_object_member(const char* string,
-                                                     std::initializer_list<Object_Member> object_members,
+                                                     const Object_Member* object_members,
+                                                     u32 object_member_count,
                                                      void* user_data, u32* out_eaten,
                                                      Allocator_Base* allocator);
 
@@ -241,7 +229,8 @@ namespace json {
     }
 
     Pattern_Match_Result pattern_match_object(const char* string,
-                                              std::initializer_list<Object_Member> members,
+                                              const Object_Member* members,
+                                              u32 member_count,
                                               void* user_data, u32* out_eaten,
                                               Allocator_Base* allocator)
     {
@@ -259,8 +248,8 @@ namespace json {
 
             u32 sub_eaten = 0;
             Pattern_Match_Result sub_result =
-                pattern_match_object_member(string+eaten, members, user_data,
-                                            &sub_eaten, allocator);
+                pattern_match_object_member(string+eaten, members, member_count,
+                                            user_data, &sub_eaten, allocator);
             if (sub_result == Pattern_Match_Result::MATCHING_ERROR) {
                 *out_eaten = 0;
                 return Pattern_Match_Result::MATCHING_ERROR;
@@ -317,7 +306,8 @@ namespace json {
             // The only types that actually can contain children
             Pattern_Match_Result sub_result;
             if (thing_at_point == Json_Type::Object) {
-                sub_result = pattern_match_object(string+eaten, pattern.object_members,
+                sub_result = pattern_match_object(string+eaten, pattern.object.members,
+                                                  pattern.object.member_count,
                                                   user_data, &eaten_sub_object, allocator);
             } else if (thing_at_point == Json_Type::List) {
                 sub_result = pattern_match_list(string+eaten, pattern,
@@ -467,7 +457,8 @@ namespace json {
     }
 
     Pattern_Match_Result pattern_match_object_member(const char* string,
-                                                     std::initializer_list<Object_Member> members,
+                                                     const Object_Member* members,
+                                                     u32 member_count,
                                                      void* user_data, u32* out_eaten,
                                                      Allocator_Base* allocator)
     {
@@ -499,7 +490,9 @@ namespace json {
         // check for children patterns with that member name
         bool found_pattern_todo = false;
         Pattern pattern_todo;
-        for (Object_Member om : members) {
+        for (int i = 0; i < member_count; ++i) {
+            const Object_Member om = members[i];
+
             if (strlen(om.key) == member_name_len &&
                 strncmp(om.key, member_name, member_name_len) == 0)
             {
@@ -508,6 +501,7 @@ namespace json {
                 break;
             }
         }
+
         Pattern_Match_Result sub_result = Pattern_Match_Result::OK_CONTINUE;
         if (found_pattern_todo) {
             value_lengh = 0;
@@ -642,7 +636,11 @@ namespace json {
         if (members.size() == 0)
             return p;
 
-        p.object_members = members;
+        // TODO(Felix): this is dangerous?? what if the lifetiem of the
+        //   initializer list ends before the pattern is matched? then
+        //   p.object.members is a dangling pointer?
+        p.object.members      = members.begin();
+        p.object.member_count = members.size();
 
         return p;
     }
@@ -735,7 +733,7 @@ namespace json {
     }
 
 
-    void write_object_to_file(FILE* out, std::initializer_list<Object_Member> members, void* data)
+    void write_object_to_file(FILE* out, const Object_Member* members, u32 member_count, void* data)
     {
         auto print_one_key_value_pair = [&](Object_Member om) {
             fprintf(out, "\"%s\" : ", om.key);
@@ -744,11 +742,11 @@ namespace json {
 
         fprintf(out, "{");
 
-        if (members.size() != 0) {
-        }
 
-        u32 i = 0;
-        for (Object_Member om : members) {
+
+        for (u32 i = 0; i < member_count; ++i) {
+            const Object_Member om = members[i];
+
             if (i++ != 0) {
                 fprintf(out, ", ");
             }
@@ -786,7 +784,8 @@ namespace json {
                                    *pattern.list.child_pattern, user_data);
             } break;
             case Json_Type::Object: {
-                write_object_to_file(out, pattern.object_members, user_data);
+                write_object_to_file(out, pattern.object.members,
+                                     pattern.object.member_count, user_data);
             } break;
             default: panic("Don't know how to print json object with type %d",
                            pattern.type);
@@ -816,14 +815,15 @@ namespace json {
             default: raw_println("???");
         }
         if (type == Json_Type::Object) {
-            if (object_members.size() == 0) {
+            if (object.member_count == 0) {
                 println("{}");
                 return;
             }
 
             raw_println(" {");
             with_print_prefix("|  ") {
-                for (Object_Member om : object_members){
+                for (u32 i = 0; i < object.member_count; ++i) {
+                    Object_Member om = object.members[i];
                     ::print("");
                     raw_print("\"%s\" : ", om.key);
                     om.pattern.print();

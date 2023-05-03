@@ -18,8 +18,8 @@ time clang++ -rdynamic $CLANG_DEFS -D_DEBUG -D_PROFILING -fpermissive main.cpp -
 
 echo ""
 # time valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all ./ftb
-# valgrind ./ftb
-time ./ftb || exit 1
+valgrind ./ftb
+# time ./ftb || exit 1
 # time ./cpu_info
 
 popd > /dev/null
