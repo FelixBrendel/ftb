@@ -3,6 +3,20 @@
 #include "parsing.hpp"
 #include <initializer_list>
 
+
+template <typename type>
+struct Array {
+    type* data;
+    u32   length;
+
+    template <u32 template_length>
+    Array(type init_data[template_length]) {
+        memcpy(data, init_data, sizeof(data));
+        length = template_length;
+    }
+};
+
+
 namespace json {
     enum struct Pattern_Match_Result {
          OK_CONTINUE,
@@ -53,16 +67,15 @@ namespace json {
         Json_Type type;
 
         // only active if type == object
+        // const Array<Pattern> object_members;
         std::initializer_list<Object_Member> object_members;
-        // only active if type == list
-        std::initializer_list<Pattern>       list_child;
         union {
             struct {
             } object;
             struct {
                 u32 element_size;
                 u32 array_list_offset;
-                // Pattern* child_pattern;
+                const Pattern* child_pattern;
             } list;
             struct {
                 Data_Type   destination_type;
@@ -93,7 +106,9 @@ namespace json {
     };
 
     Pattern object(std::initializer_list<Object_Member> members, Parser_Hooks hooks={0});
-    Pattern list(std::initializer_list<Pattern> element_pattern,
+    Pattern list(Pattern&& element_pattern,
+                 List_Info list_info={0}, Parser_Hooks hooks={0});
+    Pattern list(const Pattern& element_pattern,
                  List_Info list_info={0}, Parser_Hooks hooks={0});
     Pattern integer(u32 offset,  Parser_Hooks hooks={0});
     Pattern longint(u32 offset,  Parser_Hooks hooks={0});
@@ -306,7 +321,7 @@ namespace json {
                                                   user_data, &eaten_sub_object, allocator);
             } else if (thing_at_point == Json_Type::List) {
                 sub_result = pattern_match_list(string+eaten, pattern,
-                                                *pattern.list_child.begin(),
+                                                *pattern.list.child_pattern,
                                                 user_data, &eaten_sub_object, allocator);
             } else {
                 // match simple values
@@ -632,26 +647,23 @@ namespace json {
         return p;
     }
 
-    Pattern list(std::initializer_list<Pattern> element_pattern,
+    Pattern list(Pattern&& element_pattern,
                  List_Info list_info,
                  Parser_Hooks hooks)
     {
-        panic_if (element_pattern.size() != 1,
-                  "You can only pass one pattern here, "
-                  "but we had to make it a std::initializer_list "
-                  "so that we can put it as a member of the "
-                  "pattern struct. (Because we can't put a Pattern "
-                  "in a Pattern unless we make it a pointer, but then, "
-                  "where does it have to be allocated? If it is on the "
-                  " stack at least we can't make the concise pattern syntax work.)");
+        return list((const Pattern&)element_pattern, list_info, hooks);
+    }
 
+    Pattern list(const Pattern& element_pattern,
+                 List_Info list_info, Parser_Hooks hooks)
+    {
 
         Pattern p = Pattern {
             .type = Json_Type::List,
-            .list_child = element_pattern,
             .list = {
                 .element_size      = list_info.element_size,
                 .array_list_offset = list_info.array_list_offset,
+                .child_pattern     = &element_pattern
             },
             .enter_hook = hooks.enter_hook,
             .leave_hook = hooks.leave_hook
@@ -771,7 +783,7 @@ namespace json {
             case Json_Type::List: {
                 write_list_to_file(out, pattern.list.array_list_offset,
                                    pattern.list.element_size,
-                                   *pattern.list_child.begin(), user_data);
+                                   *pattern.list.child_pattern, user_data);
             } break;
             case Json_Type::Object: {
                 write_object_to_file(out, pattern.object_members, user_data);
@@ -823,7 +835,7 @@ namespace json {
             raw_println(" [");
             with_print_prefix("|  ") {
                 ::print("");
-                Pattern c = *list_child.begin();
+                Pattern c = *list.child_pattern;
                 c.print();
                 raw_print("\n");
             }
