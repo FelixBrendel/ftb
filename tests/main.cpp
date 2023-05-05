@@ -74,7 +74,7 @@ auto print_dots(FILE* f) -> u32 {
     return print_to_file(f, "...");
 }
 
-auto test_printer() -> void {
+auto test_printer() -> testresult {
     u32 arr[]   = {1,2,3,4,1,1,3};
     f32 f_arr[] = {1.1,2.1,3.2};
 
@@ -85,9 +85,11 @@ auto test_printer() -> void {
     u64 u2 = -1;
 
     char* str;
-    print_to_string(&str, nullptr, " - %{dots[5]} %{->} <> %{->,2}\n", &u1, &arr, nullptr);
-    print("---> %{->char}", str);
+    auto alloc = grab_current_allocator();
+    print_to_string(&str, alloc, " - %{dots[5]} %{->} <> %{->,2}\n", &u1, &arr, nullptr);
+    defer { alloc->deallocate(str); };
 
+    print("---> %{->char}", str);
     print(" - %{dots[3]}\n");
     print(" - %{u32} %{u64}\n", u1, u2);
     print(" - %{u32} %{u32} %{u32}\n", 2, 5, 7);
@@ -102,13 +104,18 @@ auto test_printer() -> void {
     print(" - %{s32,3}\n", -1,200,-300);
     print(" - %{->} <> %{->,2}\n", &u1, &arr, nullptr);
 
-    print("%{->char}%{->char}%{->char}",
-          true   ? "general "     : "",
-          false  ? "validation "  : "",
-          false  ? "performance " : "");
+    println(" - %{->char}%{->char}%{->char}",
+            true   ? "general "     : "",
+            false  ? "validation "  : "",
+            false  ? "performance " : "");
+
+    with_print_prefix("|  ") {
+        print_str_lines("Hello\nline2\n3\n4", 2);
+    }
 
     // print("%{->char}%{->char}\n\n", "hallo","");
 
+    return pass;
 }
 
 auto test_hashmap() -> testresult {
@@ -2550,6 +2557,8 @@ s32 main(s32, char**) {
             invoke_test(test_typed_bucket_allocator);
             invoke_test(test_hooks);
             invoke_test(test_scheduler_animations);
+
+            // invoke_test(test_printer);
         }
     }
     return 0;

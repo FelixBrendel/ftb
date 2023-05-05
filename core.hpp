@@ -620,6 +620,8 @@ auto println(static_string format, ...) -> s32;
 auto raw_print(static_string format, ...) -> s32;
 auto raw_println(static_string format, ...) -> s32;
 
+auto print_str_lines(static_string str, u32 max_lines) -> s32;
+
 auto push_print_prefix(static_string) -> void;
 auto pop_print_prefix() -> void;
 
@@ -1846,6 +1848,37 @@ int println(static_string format, ...) {
     return num_printed_chars;
 }
 
+auto print_str_lines(static_string s, u32 max_lines) -> s32 {
+    s32 cursor = 0;
+    s32 lines = 0;
+    s32 printed = 0;
+
+    if (s) {
+        while (s[cursor]) {
+            if (s[cursor] == '\n') {
+                ++lines;
+
+                printed += println("%.*s", cursor, s);
+                s = s+cursor+1;
+                cursor = 0;
+
+                if (lines == max_lines)
+                    break;
+            }
+
+            ++cursor;
+        }
+        if (lines < max_lines)
+            printed += println("%.*s", cursor, s);
+
+        if (s[cursor]) {
+            printed += println("...");
+        }
+    }
+
+    return printed;
+}
+
 void push_print_prefix(static_string pfx) {
 
     if (prefix_stack_count == color_stack_allocated) {
@@ -1953,6 +1986,7 @@ auto print_str_line(FILE* f, char* str) -> s32 {
     }
     return print_to_file(f, "%.*s", length, str);
 }
+
 
 #ifdef FTB_USING_MATH
 auto print_v2(FILE* f, V2* v2) -> s32 {
