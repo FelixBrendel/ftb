@@ -1894,6 +1894,43 @@ auto test_json_mvg() -> testresult {
     return pass;
 }
 
+testresult test_json_object_as_hash_map() {
+    using namespace json;
+    const char* str = "{\"current_condition\":\"temp_C\", \"second\": \"zwei\"}";
+    Hash_Map<char*, char*> hm {};
+
+    Pattern p = object(0);
+
+    auto alloc = grab_current_allocator();
+    Pattern_Match_Result r = pattern_match(str, p, &hm, alloc);
+    assert_equal_int(r, Pattern_Match_Result::OK_CONTINUE);
+
+    u64 hash_1 = hm_hash("current_condition");
+    u64 hash_2 = hm_hash("second");
+    s32 idx_1 = hm.get_index_of_living_cell_if_it_exists((char*)"current_condition", hash_1);
+    s32 idx_2 = hm.get_index_of_living_cell_if_it_exists((char*)"second", hash_2);
+
+    assert_not_equal_int(idx_1, -1);
+    assert_not_equal_int(idx_2, -1);
+
+    assert_equal_string(string_from_literal("temp_C"),
+                        string_from_literal(hm.get_object((char*)"current_condition")));
+
+    assert_equal_string(string_from_literal("zwei"),
+                        string_from_literal(hm.get_object((char*)"second")));
+
+    assert_equal_int(2, hm.cell_count);
+
+    hm.for_each([&](char* key, char* value, u32 idx){
+        alloc->deallocate(key);
+        alloc->deallocate(value);
+    });
+
+    hm.deinit();
+
+    return pass;
+}
+
 testresult test_json_extract_value_from_list() {
     using namespace json;
     const char* str = "{\"current_condition\":[{\"temp_C\":3}]}";
@@ -2514,7 +2551,7 @@ s32 main(s32, char**) {
     testresult result;
 
     Leak_Detecting_Allocator ld;
-    ld.init();
+    ld.init(true);
     Bookkeeping_Allocator bk;
     bk.init();
     defer {
@@ -2532,6 +2569,7 @@ s32 main(s32, char**) {
             invoke_test(test_json_bug);
             invoke_test(test_json_extract_value_from_list);
             invoke_test(test_json_parse_from_quoted_value);
+            invoke_test(test_json_object_as_hash_map);
 
 
             invoke_test(test_json_config);

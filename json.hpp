@@ -1,6 +1,7 @@
 #pragma once
 #include "core.hpp"
 #include "parsing.hpp"
+#include "hashmap.hpp"
 #include <initializer_list>
 
 
@@ -16,6 +17,7 @@ namespace json {
 
         List,
         Object,
+        Object_As_Hash_Map,
         Object_Member_Name,
 
         String,
@@ -59,6 +61,9 @@ namespace json {
                 u32 member_count;
             } object;
             struct {
+                u32 hash_map_offset;
+            } object_as_hash_map;
+            struct {
                 u32 element_size;
                 u32 array_list_offset;
                 const Pattern* child_pattern;
@@ -92,6 +97,8 @@ namespace json {
     };
 
     Pattern object(std::initializer_list<Object_Member> members, Parser_Hooks hooks={0});
+    Pattern object(u32 hash_map_offset, Parser_Hooks hooks={0});
+
     Pattern list(Pattern&& element_pattern,
                  List_Info list_info={0}, Parser_Hooks hooks={0});
     Pattern list(const Pattern& element_pattern,
@@ -193,8 +200,7 @@ namespace json {
                                             void* user_data, u32* out_eaten,
                                             Allocator_Base* allocator);
     Pattern_Match_Result pattern_match_object(const char* string,
-                                              const Object_Member* members,
-                                              u32 member_count,
+                                              Pattern p,
                                               void* user_data, u32* out_eaten,
                                               Allocator_Base* allocator);
 
@@ -204,8 +210,7 @@ namespace json {
                                              Allocator_Base* allocator);
 
     Pattern_Match_Result pattern_match_object_member(const char* string,
-                                                     const Object_Member* object_members,
-                                                     u32 object_member_count,
+                                                     Pattern p,
                                                      void* user_data, u32* out_eaten,
                                                      Allocator_Base* allocator);
 
@@ -228,9 +233,9 @@ namespace json {
         }
     }
 
+
     Pattern_Match_Result pattern_match_object(const char* string,
-                                              const Object_Member* members,
-                                              u32 member_count,
+                                              Pattern p,
                                               void* user_data, u32* out_eaten,
                                               Allocator_Base* allocator)
     {
@@ -248,7 +253,7 @@ namespace json {
 
             u32 sub_eaten = 0;
             Pattern_Match_Result sub_result =
-                pattern_match_object_member(string+eaten, members, member_count,
+                pattern_match_object_member(string+eaten, p,
                                             user_data, &sub_eaten, allocator);
             if (sub_result == Pattern_Match_Result::MATCHING_ERROR) {
                 *out_eaten = 0;
@@ -305,9 +310,9 @@ namespace json {
         // if (pattern_todo.children.size() > 0) {
             // The only types that actually can contain children
             Pattern_Match_Result sub_result;
+            // TODO(Felix): make sure the pattern type matches the thing_at_point type
             if (thing_at_point == Json_Type::Object) {
-                sub_result = pattern_match_object(string+eaten, pattern.object.members,
-                                                  pattern.object.member_count,
+                sub_result = pattern_match_object(string+eaten, pattern,
                                                   user_data, &eaten_sub_object, allocator);
             } else if (thing_at_point == Json_Type::List) {
                 sub_result = pattern_match_list(string+eaten, pattern,
@@ -457,8 +462,7 @@ namespace json {
     }
 
     Pattern_Match_Result pattern_match_object_member(const char* string,
-                                                     const Object_Member* members,
-                                                     u32 member_count,
+                                                     Pattern p,
                                                      void* user_data, u32* out_eaten,
                                                      Allocator_Base* allocator)
     {
@@ -473,8 +477,8 @@ namespace json {
         *out_eaten = 0;
         u32 eaten = 0; // eat_string expects to start on the quote
 
-        u32 member_name_len = eat_string(string+eaten)-2; // subtract the "
-        const char* member_name     = string+eaten+1;
+        u32 member_name_len     = eat_string(string+eaten)-2; // subtract the "
+        const char* member_name = string+eaten+1;
         u32 value_lengh = 0;
 
         eaten += member_name_len+2; // overstep string and both "
@@ -487,38 +491,80 @@ namespace json {
 
         eaten += eat_whitespace(string+eaten);
 
-        // check for children patterns with that member name
-        bool found_pattern_todo = false;
-        Pattern pattern_todo;
-        for (int i = 0; i < member_count; ++i) {
-            const Object_Member om = members[i];
-
-            if (strlen(om.key) == member_name_len &&
-                strncmp(om.key, member_name, member_name_len) == 0)
-            {
-                found_pattern_todo = true;
-                pattern_todo = om.pattern;
-                break;
-            }
-        }
-
         Pattern_Match_Result sub_result = Pattern_Match_Result::OK_CONTINUE;
-        if (found_pattern_todo) {
-            value_lengh = 0;
-            sub_result = pattern_match_value(string+eaten, pattern_todo, user_data,
-                                             &value_lengh, allocator);
 
-            if (sub_result == Pattern_Match_Result::MATCHING_ERROR)
-                return Pattern_Match_Result::MATCHING_ERROR;
+        if (p.type == Json_Type::Object_As_Hash_Map) {
+            Json_Type thing = identify_thing(string);
+            panic_if(thing != Json_Type::String,
+                     "When reading into a hashmap, "
+                     "the values must be strings for now");
 
-        }
+            const char* value = string+eaten+1;
+            u32 value_len = eat_string(string+eaten)-2; // subtract the "
+            eaten += value_len+2; // overstep both "
 
-        if (value_lengh)
-            eaten += value_lengh;
-        else {
-            // NOTE(Felix): neither pattern nor mapping was done, so we need to
-            //   get the value length ourselved
-            eaten += eat_thing(string+eaten);
+            auto hm =
+                (Hash_Map<char*, char*>*)
+                (((u8*)user_data)+p.object_as_hash_map.hash_map_offset);
+
+            if (!hm->data)
+                hm->init(8, allocator);
+
+            char* allocated_member = heap_copy_limited_c_string(member_name, member_name_len, allocator);
+            u64 hash_val = hm_hash(allocated_member);
+            s32 existing_cell =
+                hm->get_index_of_living_cell_if_it_exists(allocated_member, hash_val);
+            if (existing_cell != -1) {
+                // we already have the member in there
+                allocator->deallocate(allocated_member);
+
+                // free the old content
+                allocator->deallocate(hm->data[existing_cell].object);
+
+                //write new content
+                hm->data[existing_cell].object =
+                        heap_copy_limited_c_string(value, value_len, allocator);
+            } else {
+                hm->set_object(
+                    allocated_member,
+                    heap_copy_limited_c_string(value,       value_len,       allocator),
+                    hash_val);
+            }
+
+        } else {
+            Pattern pattern_todo;
+            bool found_pattern_todo = false;
+            // check for children patterns with that member name
+            for (int i = 0; i < p.object.member_count; ++i) {
+                const Object_Member om = p.object.members[i];
+
+                if (strlen(om.key) == member_name_len &&
+                    strncmp(om.key, member_name, member_name_len) == 0)
+                {
+                    found_pattern_todo = true;
+                    pattern_todo = om.pattern;
+                    break;
+                }
+            }
+
+            if (found_pattern_todo) {
+                value_lengh = 0;
+                sub_result = pattern_match_value(string+eaten, pattern_todo, user_data,
+                                                 &value_lengh, allocator);
+
+                if (sub_result == Pattern_Match_Result::MATCHING_ERROR)
+                    return Pattern_Match_Result::MATCHING_ERROR;
+
+            }
+
+            if (value_lengh)
+                eaten += value_lengh;
+            else {
+                // NOTE(Felix): neither pattern nor mapping was done, so we need to
+                //   get the value length ourselved
+                eaten += eat_thing(string+eaten);
+            }
+
         }
 
         *out_eaten = eaten;
@@ -642,6 +688,16 @@ namespace json {
         p.object.members      = members.begin();
         p.object.member_count = members.size();
 
+        return p;
+    }
+
+    Pattern object(u32 hash_map_offset, Parser_Hooks hooks) {
+        Pattern p = Pattern {
+            .type = Json_Type::Object_As_Hash_Map,
+            .enter_hook = hooks.enter_hook,
+            .leave_hook = hooks.leave_hook
+        };
+        p.object_as_hash_map.hash_map_offset = hash_map_offset;
         return p;
     }
 

@@ -26,12 +26,12 @@ if defined FTB_NO_SIMD_TESTS (
 echo.
 echo clang:
 rem clang++ -g -std=c++17 alloctest.cpp -o %BINDIR_WIN%\clang_alloctest.exe || exit 1
-clang++ -g -std=c++17 printer_colors.cpp -o %BINDIR_WIN%\clang_printer_colors.exe || exit 1
-rem clang++ -g -fsanitize=undefined -std=c++17 %SRC% %CLANG_DEFS% -o %BINDIR_WIN%\clang_%EXE_WIN%  || exit 1
+rem clang++ -g -std=c++17 printer_colors.cpp -o %BINDIR_WIN%\clang_printer_colors.exe || exit 1
+clang++ -DFTB_STACKTRACE_INFO -g -fsanitize=undefined -std=c++17 %SRC% %CLANG_DEFS% -o %BINDIR_WIN%\clang_%EXE_WIN% -lDbghelp.lib  || exit 1
 echo.
 rem %BINDIR_WIN%\clang_alloctest.exe
-%BINDIR_WIN%\clang_printer_colors
-rem %BINDIR_WIN%\clang_%EXE_WIN%
+rem %BINDIR_WIN%\clang_printer_colors
+%BINDIR_WIN%\clang_%EXE_WIN%
 
 rem echo.
 rem echo g++:
