@@ -5,7 +5,7 @@
 int main() {
 #define test_color(code) \
     println("%{color<}%s%{>color}", code, #code);
-
+    printf("@%4.1f@\n", 2.56f);
     test_color(console_black);
     test_color(console_red);
     test_color(console_green);

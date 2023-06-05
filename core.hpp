@@ -87,6 +87,8 @@
 #define MIN(a, b) ((a)<(b)?(a):(b))
 #define MAX(a, b) ((a)<(b)?(b):(a))
 
+#define string_from_literal(lit) (String{.data=(char*)lit, .length=strlen(lit)})
+
 #define array_length(arr)   (sizeof(arr) / sizeof(arr[0]))
 #define zero_out(thing)     memset(&(thing), 0, sizeof((thing)));
 #define deadbeef_out(thing) memset(&(thing), 0xdeadbeef, sizeof((thing)));
@@ -271,7 +273,6 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
 
 #ifdef FTB_DEBUG
 #  ifdef FTB_WINDOWS
-#    pragma message("defining debug_break")
 #    define debug_break() __debugbreak()
 #  else
 #    define debug_break() raise(SIGTRAP)
@@ -416,6 +417,55 @@ extern Allocator_Base* libc_allocator;
 
 #define with_temp_allocator with_allocator(grab_temp_allocator())
 
+
+// ----------------------------------------------------------------------------
+//                              Maybe
+// ----------------------------------------------------------------------------
+struct Empty {};
+
+template <typename type>
+struct Maybe : type {
+    bool __exists;
+
+    void operator=(type v) {
+        memcpy(this, &v, sizeof(type));
+        __exists = true;
+    }
+
+    operator bool() const {
+        return __exists;
+    }
+};
+
+
+#define DEFINE_BASIC_TYPE_MAYBE(type)           \
+    template <>                                 \
+    struct Maybe<type> : Maybe<Empty> {         \
+        type value;                             \
+        void operator=(type v) {                \
+            value = v;                          \
+            __exists = true;                    \
+        }                                       \
+        type operator* () {                     \
+            return value;                       \
+        }                                       \
+    }                                           \
+
+DEFINE_BASIC_TYPE_MAYBE(bool);
+DEFINE_BASIC_TYPE_MAYBE(u8);
+DEFINE_BASIC_TYPE_MAYBE(u16);
+DEFINE_BASIC_TYPE_MAYBE(u32);
+DEFINE_BASIC_TYPE_MAYBE(u64);
+DEFINE_BASIC_TYPE_MAYBE(s8);
+DEFINE_BASIC_TYPE_MAYBE(s16);
+DEFINE_BASIC_TYPE_MAYBE(s32);
+DEFINE_BASIC_TYPE_MAYBE(s64);
+DEFINE_BASIC_TYPE_MAYBE(f32);
+DEFINE_BASIC_TYPE_MAYBE(f64);
+
+#undef DEFINE_BASIC_TYPE_MAYBE
+
+
 // ----------------------------------------------------------------------------
 //                              String
 // ----------------------------------------------------------------------------
@@ -563,12 +613,14 @@ auto print_va_args(static_string format, va_list* arg_list) -> s32;
 auto print_to_string(char** out, Allocator_Base* allocator, static_string format, ...) -> s32;
 auto print_to_file(FILE* file, static_string format, ...) -> s32;
 
-auto print_stacktrace(FILE* file) -> void;
+auto print_stacktrace(FILE* file = stderr) -> void;
 
 auto print(static_string format, ...) -> s32;
 auto println(static_string format, ...) -> s32;
 auto raw_print(static_string format, ...) -> s32;
 auto raw_println(static_string format, ...) -> s32;
+
+auto print_str_lines(static_string str, u32 max_lines) -> s32;
 
 auto push_print_prefix(static_string) -> void;
 auto pop_print_prefix() -> void;
@@ -828,6 +880,7 @@ struct Array_List {
 #ifdef FTB_INTERNAL_DEBUG
             if (length == 0) {
                 fprintf(stderr, "ERROR: Array_List was not initialized.\n");
+                print_stacktrace();
                 length = 8;
             }
 #endif
@@ -2267,6 +2320,37 @@ int println(static_string format, ...) {
     return num_printed_chars;
 }
 
+auto print_str_lines(static_string s, u32 max_lines) -> s32 {
+    s32 cursor = 0;
+    s32 lines = 0;
+    s32 printed = 0;
+
+    if (s) {
+        while (s[cursor]) {
+            if (s[cursor] == '\n') {
+                ++lines;
+
+                printed += println("%.*s", cursor, s);
+                s = s+cursor+1;
+                cursor = 0;
+
+                if (lines == max_lines)
+                    break;
+            }
+
+            ++cursor;
+        }
+        if (lines < max_lines)
+            printed += println("%.*s", cursor, s);
+
+        if (s[cursor]) {
+            printed += println("...");
+        }
+    }
+
+    return printed;
+}
+
 void push_print_prefix(static_string pfx) {
 
     if (prefix_stack_count == color_stack_allocated) {
@@ -2374,6 +2458,7 @@ auto print_str_line(FILE* f, char* str) -> s32 {
     }
     return print_to_file(f, "%.*s", length, str);
 }
+
 
 #ifdef FTB_USING_MATH
 auto print_v2(FILE* f, V2* v2) -> s32 {
@@ -2740,6 +2825,8 @@ auto print_stacktrace(FILE* file) -> void {
 
 #else // stacktace should be present
 #  if defined FTB_WINDOWS
+#    define VC_EXTRALEAN
+#    define WIN32_LEAN_AND_MEAN
 #    include <Windows.h>
 #    include <dbghelp.h>
 

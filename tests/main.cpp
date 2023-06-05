@@ -7,10 +7,15 @@
 #define FTB_HASHMAP_IMPL
 #define FTB_SCHEDULER_IMPL
 #define FTB_MATH_IMPL
-#define FTB_SOA_SORT_IMPL
+#if not defined(FTB_NO_SIMD_TESTS)
+#  define FTB_SOA_SORT_IMPL
+#endif
+#define FTB_JSON_IMPL
+#define FTB_PARSING_IMPL
 
 #include "../math.hpp"
 #include "../core.hpp"
+#include "../json.hpp"
 
 u32 hm_hash(u32 u);
 inline bool hm_objects_match(u32 a, u32 b);
@@ -69,7 +74,7 @@ auto print_dots(FILE* f) -> u32 {
     return print_to_file(f, "...");
 }
 
-auto test_printer() -> void {
+auto test_printer() -> testresult {
     u32 arr[]   = {1,2,3,4,1,1,3};
     f32 f_arr[] = {1.1,2.1,3.2};
 
@@ -80,9 +85,11 @@ auto test_printer() -> void {
     u64 u2 = -1;
 
     char* str;
-    print_to_string(&str, nullptr, " - %{dots[5]} %{->} <> %{->,2}\n", &u1, &arr, nullptr);
-    print("---> %{->char}", str);
+    auto alloc = grab_current_allocator();
+    print_to_string(&str, alloc, " - %{dots[5]} %{->} <> %{->,2}\n", &u1, &arr, nullptr);
+    defer { alloc->deallocate(str); };
 
+    print("---> %{->char}", str);
     print(" - %{dots[3]}\n");
     print(" - %{u32} %{u64}\n", u1, u2);
     print(" - %{u32} %{u32} %{u32}\n", 2, 5, 7);
@@ -97,13 +104,18 @@ auto test_printer() -> void {
     print(" - %{s32,3}\n", -1,200,-300);
     print(" - %{->} <> %{->,2}\n", &u1, &arr, nullptr);
 
-    print("%{->char}%{->char}%{->char}",
-          true   ? "general "     : "",
-          false  ? "validation "  : "",
-          false  ? "performance " : "");
+    println(" - %{->char}%{->char}%{->char}",
+            true   ? "general "     : "",
+            false  ? "validation "  : "",
+            false  ? "performance " : "");
+
+    with_print_prefix("|  ") {
+        print_str_lines("Hello\nline2\n3\n4", 2);
+    }
 
     // print("%{->char}%{->char}\n\n", "hallo","");
 
+    return pass;
 }
 
 auto test_hashmap() -> testresult {
@@ -1107,6 +1119,9 @@ auto test_math() -> testresult {
 
 
 auto test_sort() -> testresult {
+#if defined(FTB_NO_SIMD_TESTS)
+    return skipped;
+#else
     u64 arr1[4] {
         4,1,3,2
     };
@@ -1200,9 +1215,13 @@ auto test_sort() -> testresult {
     }
 
     return pass;
+#endif
 }
 
 auto test_kd_tree() -> testresult {
+#if defined(FTB_NO_SIMD_TESTS)
+    return skipped;
+#else
     Array_List<V3> points;
     points.init_from({
         {0,0,0}, {1,1,1},
@@ -1304,6 +1323,7 @@ auto test_kd_tree() -> testresult {
         assert_equal_int(tree.get_count_in_sphere({0,0,0}, 2), 5);
     }
     return pass;
+#endif
 }
 
 auto test_bucket_list() -> testresult {
@@ -1372,7 +1392,7 @@ auto test_bucket_list_leak() -> testresult {
 
     assert_equal_int(old_bucket, new_bucket);
 
-    return true;
+    return pass;
 }
 
 auto test_growable_pool_allocator() -> testresult {
@@ -1593,18 +1613,967 @@ auto test_defer_runs_after_return() -> testresult {
     return result;
 }
 
+
+auto test_json_simple_object_new_syntax() -> testresult {
+    using namespace json;
+    const char* json_object = R"JSON(
+        {
+          "int":    123,
+          "float":  123.123,
+          "bool":   true,
+          "string": "Hello"
+        }
+)JSON";
+
+    struct Test {
+        s32    i;
+        f32    f;
+        bool   b;
+        String s;
+    };
+
+    Pattern p = json::object({
+        {"int",    json::integer (offsetof(Test, i))},
+        {"float",  json::floating(offsetof(Test, f))},
+        {"bool",   json::boolean_(offsetof(Test, b))},
+        {"string", json::string  (offsetof(Test, s))},
+    });
+
+    Test t;
+    Pattern_Match_Result result = pattern_match(json_object, p, &t);
+
+
+    defer {
+        t.s.free();
+    };
+
+
+    assert_equal_int(result, Pattern_Match_Result::OK_CONTINUE);
+
+    assert_equal_int(t.i, 123);
+    assert_equal_f32(t.f, 123.123);
+    assert_equal_int(t.b, true);
+    assert_equal_int(strncmp("Hello", t.s.data, 5), 0);
+
+    return pass;
+}
+
+auto test_json_config() -> testresult {
+    using namespace json;
+
+    const char* json_str = R"JSON({
+    "config_version" : 1,
+    "db_client_id" : "bb3f296b73ffba5c09138aa612187290",
+    "db_client_secret" : "cd92b98cfd0e2ddf2e70f42bbe8cb744",
+    "mvg_location_names" : [
+        "Petershausen P+R",
+        "Petershausen",
+    ],
+    "db_station_names" : [
+        "Petershausen"
+    ],
+    "vehicle_type_blacklist" : [],
+    "destination_blacklist" : [],
+})JSON";
+
+    // TODO(Felix): use the custom Vehicle_Type here too
+    struct Tafel_Config {
+        int config_version;
+
+        String db_client_id;
+        String db_client_secret;
+
+        Array_List<String> mvg_locations;
+        Array_List<String> db_stations;
+        Array_List<String> destination_blacklist;
+        // Array_List<Vehicle_Type> vehicle_type_blacklist;
+
+        void free() {
+            db_client_id.free();
+            db_client_secret.free();
+
+            for (String s : mvg_locations)         s.free();
+            for (String s : db_stations)           s.free();
+            for (String s : destination_blacklist) s.free();
+
+            mvg_locations.deinit();
+            db_stations.deinit();
+            destination_blacklist.deinit();
+            // vehicle_type_blacklist.deinit();
+        }
+    };
+
+    Pattern p = object({
+        {"config_version",     integer(offsetof(Tafel_Config, config_version))},
+        {"db_client_id",       string (offsetof(Tafel_Config, db_client_id))},
+        {"db_client_secret",   string (offsetof(Tafel_Config, db_client_secret))},
+        {"mvg_location_names", list({string(0)}, {
+                .array_list_offset = offsetof(Tafel_Config, mvg_locations),
+                .element_size      = sizeof(Tafel_Config::mvg_locations[0]),
+                })},
+        {"db_station_names",  list({string(0)}, {
+                .array_list_offset = offsetof(Tafel_Config, db_stations),
+                .element_size      = sizeof(Tafel_Config::db_stations[0]),
+                })},
+        {"destination_blacklist", list({string(0)}, {
+                .array_list_offset = offsetof(Tafel_Config, destination_blacklist),
+                .element_size      = sizeof(Tafel_Config::destination_blacklist[0]),
+                })},
+        // {"vehicle_type_blacklist", list(
+                    // custom(Json_Type::String, (Data_Type)Custom_Data_Types::VEHICLE_TYPE, 0),
+            // {
+                // .array_list_offset = offsetof(Tafel_Config, vehicle_type_blacklist),
+                // .element_size      = sizeof(Tafel_Config::vehicle_type_blacklist[0]),
+            // })}
+    });
+
+
+    Tafel_Config config_result {};
+    Pattern_Match_Result match_result = pattern_match(json_str, p, &config_result);
+
+    defer {
+        config_result.free();
+    };
+
+    assert_equal_int(config_result.config_version, 1);
+    assert_equal_string(config_result.db_client_id,
+                        string_from_literal("bb3f296b73ffba5c09138aa612187290"));
+
+    assert_equal_string(config_result.db_client_secret,
+                        string_from_literal("cd92b98cfd0e2ddf2e70f42bbe8cb744"));
+
+    assert_equal_int(config_result.mvg_locations.count, 2);
+    assert_equal_string(config_result.mvg_locations[0],
+                        string_from_literal("Petershausen P+R"));
+    assert_equal_string(config_result.mvg_locations[1],
+                        string_from_literal("Petershausen"));
+
+    assert_equal_int(config_result.db_stations.count, 1);
+    assert_equal_string(config_result.db_stations[0],
+                        string_from_literal("Petershausen"));
+
+    return pass;
+}
+
+auto test_json_mvg() -> testresult {
+    const char* json_str =  R"JSON(
+        {
+           "locations" : [ {
+             "type" :  "station",
+             "latitude" : 48.4126,
+             "longitude" : 11.46992,
+             "id" :  "de:09174:6840",
+             "divaId" : 6840,
+             "place" :  "Petershausen 2",
+             "name" :  "Petershausen 1",
+             "hasLiveData" : false,
+             "hasZoomData" : false,
+             "products" : [  "BAHN",  "SBAHN",  "BUS" ],
+             "aliases" :  "Bahnhof Bf. DAH MMPE",
+             "tariffZones" :  "4|5",
+             "lines" : {
+               "tram" : [ ],
+               "nachttram" : [ ],
+               "sbahn" : [ ],
+               "ubahn" : [ ],
+               "bus" : [ ],
+               "nachtbus" : [ ],
+               "otherlines" : [ ]
+            }
+          }, {
+             "type" :  "station",
+             "latitude" : 48.41323,
+             "longitude" : 11.46913,
+             "id" :  "de:09174:7167 ",
+             "divaId" : 7167,
+             "place" :  "Petershausen",
+             "name" :  "Petershausen Bf. P+R-Platz",
+             "hasLiveData" : false,
+             "hasZoomData" : false,
+             "products" : [  "BUS " ],
+             "aliases" :  "DAH ",
+             "tariffZones" :  "4|5 ",
+             "lines" : {
+               "tram" : [ ],
+               "nachttram" : [ ],
+               "sbahn" : [ ],
+               "ubahn" : [ ],
+               "bus" : [ ],
+               "nachtbus" : [ ],
+               "otherlines" : [ ]
+            }
+            }]}
+)JSON";
+
+    using namespace json;
+
+    struct Location {
+        String             type;
+        f32                latitude;
+        f32                longitude;
+        String             id;
+        s32                divaId;
+        String             place;
+        String             name;
+        bool               has_live_data;
+        bool               has_zoom_data;
+        Array_List<String> products;
+        String             aliases;
+        String             tariffZones;
+
+        auto free() -> void {
+            type.free();
+            id.free();
+            place.free();
+            name.free();
+            aliases.free();
+            tariffZones.free();
+
+            for (auto p: products) {
+                p.free();
+            }
+            products.deinit();
+        }
+
+    };
+
+    using namespace json;
+    Pattern product =
+        object({{"products", list({string(0)}, {
+                            .array_list_offset = offsetof(Location, products),
+                            .element_size = sizeof(String)
+                        })},
+                {"type",          string  (offsetof(Location, type))},
+                {"latitude",      floating(offsetof(Location, latitude))},
+                {"longitude",     floating(offsetof(Location, longitude))},
+                {"id",            string  (offsetof(Location, id))},
+                {"divaId",        integer (offsetof(Location, divaId))},
+                {"place",         string  (offsetof(Location, place))},
+                {"name",          string  (offsetof(Location, name))},
+                {"has_live_data", boolean_(offsetof(Location, has_live_data))},
+                {"has_zoom_data", boolean_(offsetof(Location, has_zoom_data))},
+                {"aliases",       string  (offsetof(Location, aliases))},
+                {"tariffZones",   string  (offsetof(Location, tariffZones))},
+            }, {
+                // NOTE(Felix): stop after first location
+                .leave_hook = [](void*, Hook_Context, Parser_Context) -> Pattern_Match_Result {
+                    return Pattern_Match_Result::OK_DONE;
+                }
+            });
+
+    Pattern p = object({{"locations", list({product})},});
+
+    Location mvg_loc {};
+
+    auto result = json::pattern_match((char*)json_str, p, &mvg_loc);
+
+    defer {
+        mvg_loc.free();
+    };
+
+    assert_equal_int(result, json::Pattern_Match_Result::OK_CONTINUE);
+
+    assert_equal_int(strncmp("station", mvg_loc.type.data, mvg_loc.type.length), 0);
+    assert_equal_f32(mvg_loc.latitude, 48.412601f);
+    assert_equal_f32(mvg_loc.longitude, 11.469920f);
+    assert_equal_int(strncmp("de:09174:6840",    mvg_loc.id.data, mvg_loc.id.length), 0);
+    assert_equal_int(mvg_loc.divaId, 6840);
+    assert_equal_int(strncmp("Petershausen 2",   mvg_loc.place.data, mvg_loc.place.length), 0);
+    assert_equal_int(strncmp("Petershausen 1",   mvg_loc.name.data, mvg_loc.name.length), 0);
+    assert_equal_int(mvg_loc.has_live_data, false);
+    assert_equal_int(mvg_loc.has_zoom_data, false);
+
+    assert_equal_int(mvg_loc.products.count, 3);
+    assert_equal_int(strncmp("BAHN",  mvg_loc.products[0].data, mvg_loc.products[0].length), 0);
+    assert_equal_int(strncmp("SBAHN", mvg_loc.products[1].data, mvg_loc.products[1].length), 0);
+    assert_equal_int(strncmp("BUS",   mvg_loc.products[2].data, mvg_loc.products[2].length), 0);
+
+    assert_equal_int(strncmp("Bahnhof Bf. DAH MMPE",   mvg_loc.aliases.data, mvg_loc.aliases.length), 0);
+    assert_equal_int(strncmp("4|5",   mvg_loc.tariffZones.data, mvg_loc.tariffZones.length), 0);
+
+    return pass;
+}
+
+testresult test_json_object_as_hash_map() {
+    using namespace json;
+    const char* str = "{\"current_condition\":\"temp_C\", \"second\": \"zwei\"}";
+    Hash_Map<char*, char*> hm {};
+
+    Pattern p = object(0);
+
+    auto alloc = grab_current_allocator();
+    Pattern_Match_Result r = pattern_match(str, p, &hm, alloc);
+    assert_equal_int(r, Pattern_Match_Result::OK_CONTINUE);
+
+    u64 hash_1 = hm_hash("current_condition");
+    u64 hash_2 = hm_hash("second");
+    s32 idx_1 = hm.get_index_of_living_cell_if_it_exists((char*)"current_condition", hash_1);
+    s32 idx_2 = hm.get_index_of_living_cell_if_it_exists((char*)"second", hash_2);
+
+    assert_not_equal_int(idx_1, -1);
+    assert_not_equal_int(idx_2, -1);
+
+    assert_equal_string(string_from_literal("temp_C"),
+                        string_from_literal(hm.get_object((char*)"current_condition")));
+
+    assert_equal_string(string_from_literal("zwei"),
+                        string_from_literal(hm.get_object((char*)"second")));
+
+    assert_equal_int(2, hm.cell_count);
+
+    hm.for_each([&](char* key, char* value, u32 idx){
+        alloc->deallocate(key);
+        alloc->deallocate(value);
+    });
+
+    hm.deinit();
+
+    return pass;
+}
+
+testresult test_json_extract_value_from_list() {
+    using namespace json;
+    const char* str = "{\"current_condition\":[{\"temp_C\":3}]}";
+    f32 result = 0;
+    Pattern p = object({{"current_condition", list({object({{"temp_C", floating(0)}})})}});
+
+    Pattern_Match_Result r = pattern_match(str, p, &result);
+    assert_equal_int(r, Pattern_Match_Result::OK_CONTINUE);
+    assert_equal_f32(result, 3.0);
+
+    return pass;
+}
+
+testresult test_json_parse_from_quoted_value() {
+    using namespace json;
+    const char* str = "{\"value\":\"3\"}";
+    f32 result = 0;
+    Pattern p = object({{"value",  floating(0)}});
+
+    Pattern_Match_Result r = pattern_match(str, p, &result);
+    assert_equal_int(r, Pattern_Match_Result::OK_CONTINUE);
+    assert_equal_f32(result, 3.0);
+
+    return pass;
+}
+
+testresult test_json_bug() {
+    using namespace json;
+
+    struct Departure {
+        String             product;
+        String             label;
+        String             destination;
+        bool               live;
+        f32                delay;
+        bool               cancelled;
+        String             line_background_color;
+        String             departure_id;
+        bool               sev;
+        String             platform;
+        s32                stop_position_number;
+        Array_List<String> info_messages;
+
+        void free() {
+            product.free();
+            label.free();
+            destination.free();
+            line_background_color.free();
+            departure_id.free();
+            platform.free();
+
+            for (auto& s: info_messages) {
+                s.free();
+            }
+
+            info_messages.deinit();
+        }
+
+    };
+
+    struct Serving_Line {
+        String destination;
+        bool   sev;
+        String network;
+        String product;
+        String line_number;
+        String diva_id;
+
+        void free() {
+            destination.free();
+            network.free();
+            product.free();
+            line_number.free();
+            diva_id.free();
+        }
+    };
+
+    struct Departure_Infos {
+        Array_List<Serving_Line> serving_lines;
+        Array_List<Departure>    departures;
+
+        void free() {
+            for (auto& d : departures) {
+                d.free();
+            }
+            departures.deinit();
+
+            for (auto& s : serving_lines) {
+                s.free();
+            }
+            serving_lines.deinit();
+        }
+    };
+
+    const char* json_str =  R"JSON(
+       {
+         "servingLines" : [ {
+           "destination" : "Erding",
+           "sev" : false,
+           "network" : "ddb",
+           "product" : "SBAHN",
+           "lineNumber" : "S2",
+           "divaId" : "92M02"
+         }, {
+           "destination" : "Lohhof (S) Süd",
+           "sev" : false,
+           "network" : "mvv",
+           "product" : "REGIONAL_BUS",
+           "lineNumber" : "771",
+           "divaId" : "19771"
+         }, {
+           "destination" : "Petershausen",
+           "sev" : false,
+           "network" : "mvv",
+           "product" : "RUFTAXI",
+           "lineNumber" : "7280",
+           "divaId" : "18728"
+         } ],
+         "departures" : [ {
+           "departureTime" : 1662174480000,
+           "product" : "SBAHN",
+           "label" : "S2",
+           "destination" : "Erding",
+           "live" : false,
+           "delay" : 0,
+           "cancelled" : false,
+           "lineBackgroundColor" : "#9bc04c",
+           "departureId" : "c9b4b3875a8d2f53ad018b204899ffc0#1662174480000#de:09174:6840",
+           "sev" : false,
+           "platform" : "6",
+           "stopPositionNumber" : 0,
+           "infoMessages" : [ "Linie S2: Maskenpflicht nach gesetzl. Regelung; wir empfehlen eine FFP2-Maske Linie S2: Fahrradmitnahme begrenzt möglich Linie S2: Bei Fahrradmitnahme Sperrzeiten beachten Linie S2: nur 2. Kl." ]
+         }, {
+           "departureTime" : 1662175920000,
+           "product" : "SBAHN",
+           "label" : "S2",
+           "destination" : "Erding",
+           "live" : false,
+           "delay" : 0,
+           "cancelled" : false,
+           "lineBackgroundColor" : "#9bc04c",
+           "departureId" : "88cd45142d5ee37ba77295e93bb3b88f#1662175920000#de:09174:6840",
+           "sev" : false,
+           "platform" : "6",
+           "stopPositionNumber" : 0,
+           "infoMessages" : [ "Linie S2: Maskenpflicht nach gesetzl. Regelung; wir empfehlen eine FFP2-Maske Linie S2: Fahrradmitnahme begrenzt möglich Linie S2: Bei Fahrradmitnahme Sperrzeiten beachten Linie S2: nur 2. Kl." ]
+         } ]
+       }
+)JSON";
+        Pattern departure = object({
+                {"product",             string  (offsetof(Departure, product))},
+                {"label",               string  (offsetof(Departure, label))},
+                {"destination",         string  (offsetof(Departure, destination))},
+                {"live",                boolean_(offsetof(Departure, live))},
+                {"delay",               floating(offsetof(Departure, delay))},
+                {"cancelled",           boolean_(offsetof(Departure, cancelled))},
+                {"lineBackgroundColor", string  (offsetof(Departure, line_background_color))},
+                {"departureId",         string  (offsetof(Departure, departure_id))},
+                {"sev",                 boolean_(offsetof(Departure, sev))},
+                {"platform",            string  (offsetof(Departure, platform))},
+                {"stopPositionNumber",  integer (offsetof(Departure, stop_position_number))},
+        });
+        Pattern serving_line = object({
+                {"destination", string( offsetof(Serving_Line, destination))},
+                {"sev",         boolean_(offsetof(Serving_Line, sev))},
+                {"network",     string( offsetof(Serving_Line, network))},
+                {"product",     string( offsetof(Serving_Line, product))},
+                {"lineNumber",  string( offsetof(Serving_Line, line_number))},
+                {"divaId",      string( offsetof(Serving_Line, diva_id))},
+        });
+        Pattern p =
+            object({
+                    {"departures",
+                     list({departure},{
+                             .array_list_offset = offsetof(Departure_Infos, departures),
+                             .element_size      = sizeof(Departure)})},
+                    {"servingLines",
+                     list({serving_line},{
+                             .array_list_offset = offsetof(Departure_Infos, serving_lines),
+                             .element_size      = sizeof(Serving_Line),
+                         })}
+            });
+
+    Departure_Infos deps {};
+    Pattern_Match_Result res = pattern_match(json_str, p, &deps);
+
+    // write_pattern_to_file("out.json", p, &deps);
+
+    defer {
+        deps.free();
+    };
+    assert_equal_int(res, Pattern_Match_Result::OK_CONTINUE);
+
+
+    assert_equal_int(deps.serving_lines.count, 3);
+    {
+        Serving_Line& s = deps.serving_lines[0];
+        assert_equal_int(strncmp("Erding", s.destination.data, s.destination.length), 0);
+        assert_equal_int(strncmp("ddb",    s.network.data, s.network.length), 0);
+        assert_equal_int(strncmp("SBAHN",  s.product.data, s.product.length), 0);
+        assert_equal_int(strncmp("S2",     s.line_number.data, s.line_number.length), 0);
+        assert_equal_int(strncmp("92M02",  s.diva_id.data, s.diva_id.length), 0);
+        assert_equal_int(s.sev, false);
+    } {
+        Serving_Line& s = deps.serving_lines[1];
+        assert_equal_int(strncmp("Lohhof (S) Süd", s.destination.data, s.destination.length), 0);
+        assert_equal_int(strncmp("mvv",            s.network.data, s.network.length), 0);
+        assert_equal_int(strncmp("REGIONAL_BUS",   s.product.data, s.product.length), 0);
+        assert_equal_int(strncmp("771",            s.line_number.data, s.line_number.length), 0);
+        assert_equal_int(strncmp("19771",          s.diva_id.data, s.diva_id.length), 0);
+        assert_equal_int(s.sev, false);
+    } {
+        Serving_Line& s = deps.serving_lines[2];
+        assert_equal_int(strncmp("Petershausen", s.destination.data, s.destination.length), 0);
+        assert_equal_int(strncmp("mvv",          s.network.data, s.network.length), 0);
+        assert_equal_int(strncmp("RUFTAXI",      s.product.data, s.product.length), 0);
+        assert_equal_int(strncmp("7280",         s.line_number.data, s.line_number.length), 0);
+        assert_equal_int(strncmp("18728",        s.diva_id.data, s.diva_id.length), 0);
+        assert_equal_int(s.sev, false);
+    }
+
+    assert_equal_int(deps.departures.count, 2);
+    {
+        Departure& d0 = deps.departures[0];
+        assert_equal_string(d0.label, string_from_literal("S2"));
+        assert_equal_string(d0.product, string_from_literal("SBAHN"));
+        assert_equal_string(d0.destination, string_from_literal("Erding"));
+        assert_equal_string(d0.line_background_color, string_from_literal("#9bc04c"));
+        assert_equal_string(d0.departure_id, string_from_literal("c9b4b3875a8d2f53ad018b204899ffc0#1662174480000#de:09174:6840"));
+        assert_equal_string(d0.platform, string_from_literal("6"));
+
+        Departure& d1 = deps.departures[1];
+        assert_equal_string(d1.label, string_from_literal("S2"));
+        assert_equal_string(d1.product, string_from_literal("SBAHN"));
+        assert_equal_string(d1.destination, string_from_literal("Erding"));
+        assert_equal_string(d1.line_background_color, string_from_literal("#9bc04c"));
+        assert_equal_string(d1.departure_id, string_from_literal("88cd45142d5ee37ba77295e93bb3b88f#1662175920000#de:09174:6840"));
+        assert_equal_string(d1.platform, string_from_literal("6"));
+    }
+
+    return pass;
+}
+
+auto test_json_bug_again() -> testresult {
+    const char* json = R"JSON({
+  "servingLines" : [ {
+    "destination" : "Tandern, Adlerstraße",
+    "sev" : false,
+    "network" : "mvv",
+    "product" : "REGIONAL_BUS",
+    "lineNumber" : "707",
+    "divaId" : "19707"
+  }, {
+    "destination" : "Tandern, Adlerstraße",
+    "sev" : false,
+    "network" : "mvv",
+    "product" : "RUFTAXI",
+    "lineNumber" : "7070",
+    "divaId" : "16707"
+  } ],
+  "departures" : [ {
+    "departureTime" : 1671996780000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "delay" : 0,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "57749c348504ffe0de51b7cc9cb48c66#1671996780000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672000380000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "delay" : 0,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "7c8c797e8982f841c292f45b77df8e2c#1672000380000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672036380000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "15054e32f9768828b7a2ed8ba9d37a0a#1672036380000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672039980000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "e49700d23e4fdf250752e02c81c27507#1672039980000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672043580000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "4462969e1ce4b766d6f4534cc928f4fc#1672043580000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672047180000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "90a092fc041022ee713c851ca8a10245#1672047180000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672050780000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "11c9e9e2ff56f899101d3deedc659b93#1672050780000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672054380000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "607ce44954cccb9bc400b0a079b01f0d#1672054380000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672057980000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "855ed5734137dbc10d96ec9bcbd8c932#1672057980000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672061580000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "389a01d4bba3df19461fe5c0cd54406a#1672061580000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672065180000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "d72f91c1b28214f6906e4d117a1c2e31#1672065180000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672068780000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "e355774d343c72acbec55936a9b0042c#1672068780000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672072380000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "8f2ae7d4ae162e0fb816ed9a7b67de86#1672072380000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672075980000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "6e3948b1b3228643a7849703905b6e2f#1672075980000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  }, {
+    "departureTime" : 1672079580000,
+    "product" : "REGIONAL_BUS",
+    "label" : "707",
+    "destination" : "Tandern, Adlerstraße",
+    "live" : false,
+    "cancelled" : false,
+    "lineBackgroundColor" : "#0d5c70",
+    "departureId" : "08352cdbae115fd9811e4cd1d073907c#1672079580000#de:09174:7167",
+    "sev" : false,
+    "platform" : "",
+    "stopPositionNumber" : 0,
+    "infoMessages" : [ ]
+  } ]
+})JSON";
+
+    struct Time {
+        s32 year;
+        u8  month;   // [1-12]
+        u8  day;     // [1-31]
+        u8  hour;    // [0-23]
+        u8  minute;  // [0-59]
+        f32 seconds; // [0-59.99…]
+    };
+
+    struct Departure {
+        Time               departure_time;
+        String             product;
+        String             label;
+        String             destination;
+        bool               live;
+        f32                delay;
+        bool               cancelled;
+        String             line_background_color;
+        String             departure_id;
+        bool               sev;
+        String             platform;
+        s32                stop_position_number;
+        Array_List<String> info_messages;
+
+        void free() {
+            product.free();
+            label.free();
+            destination.free();
+            line_background_color.free();
+            departure_id.free();
+            platform.free();
+
+            for (auto& s: info_messages) {
+                s.free();
+            }
+
+            info_messages.deinit();
+        }
+    };
+
+    struct Serving_Line {
+        String destination;
+        bool   sev;
+        String network;
+        String product;
+        String line_number;
+        String diva_id;
+
+        void free() {
+            destination.free();
+            network.free();
+            product.free();
+            line_number.free();
+            diva_id.free();
+        }
+
+        void print() {
+            println("Serving Line:");
+            with_print_prefix("    ") {
+                println("destination : %s", destination.data);
+                println("sev         : %s", sev ? "yes" : "no");
+                println("network     : %s", network);
+                println("product     : %s", product);
+                println("line_number : %s", line_number);
+                println("diva_id     : %s", diva_id);
+            }
+        }
+    };
+
+    struct Departure_Infos {
+        Array_List<Serving_Line> serving_lines;
+        Array_List<Departure>    departures;
+
+        void free() {
+            for (auto& d : departures) {
+                d.free();
+            }
+            departures.deinit();
+
+            for (auto& s : serving_lines) {
+                s.free();
+            }
+            serving_lines.deinit();
+        }
+
+    };
+
+    using namespace json;
+    Pattern departure = object(
+        {
+            // {"departureTime",       custom(Json_Type::Number, (Data_Type)Custom_Data_Types::UNIX_TIME_IN_MS, offsetof(Departure, departure_time))},
+            {"product",             string  (offsetof(Departure, product))},
+            {"label",               string  (offsetof(Departure, label))},
+            {"destination",         string  (offsetof(Departure, destination))},
+            {"live",                boolean_ (offsetof(Departure, live))},
+            {"delay",               floating(offsetof(Departure, delay))},
+            {"cancelled",           boolean_ (offsetof(Departure, cancelled))},
+            {"lineBackgroundColor", string  (offsetof(Departure, line_background_color))},
+            {"departureId",         string  (offsetof(Departure, departure_id))},
+            {"sev",                 boolean_ (offsetof(Departure, sev))},
+            {"platform",            string  (offsetof(Departure, platform))},
+            {"stopPositionNumber",  integer (offsetof(Departure, stop_position_number))},
+            {"infoMessages",        list    ({string(0)}, {
+                        .array_list_offset = offsetof(Departure, info_messages),
+                        .element_size      = sizeof(Departure::info_messages[0]),
+                    })}
+        });
+    Pattern serving_line = object({
+            {"destination", string(offsetof(Serving_Line, destination))},
+            {"sev",         boolean_(offsetof(Serving_Line, sev))},
+            {"network",     string(offsetof(Serving_Line, network))},
+            {"product",     string(offsetof(Serving_Line, product))},
+            {"lineNumber",  string(offsetof(Serving_Line, line_number))},
+            {"divaId",      string(offsetof(Serving_Line, diva_id))},
+        });
+    Pattern p = object({
+            {"departures", list({departure}, {
+                        .array_list_offset    = offsetof(Departure_Infos, departures),
+                        .element_size         = sizeof(Departure_Infos::departures[0]),
+                    })},
+            {"servingLines", list({serving_line}, {
+                        .array_list_offset    = offsetof(Departure_Infos, serving_lines),
+                        .element_size         = sizeof(Departure_Infos::serving_lines[0]),
+                    })}
+        });
+
+    Departure_Infos deps {};
+    deps.departures.allocator    = libc_allocator;
+    deps.serving_lines.allocator = libc_allocator;
+    Pattern_Match_Result res = pattern_match(json, p, &deps);
+
+    defer {deps.free();};
+
+    assert_equal_int(deps.serving_lines.count, 2);
+
+    {
+        Serving_Line& s = deps.serving_lines[0];
+        assert_equal_string(s.destination, string_from_literal("Tandern, Adlerstraße"));
+        assert_equal_int(s.sev, false);
+        assert_equal_string(s.network, string_from_literal("mvv"));
+        assert_equal_string(s.product, string_from_literal("REGIONAL_BUS"));
+        assert_equal_string(s.line_number, string_from_literal("707"));
+        assert_equal_string(s.diva_id, string_from_literal("19707"));
+    } {
+        Serving_Line& s = deps.serving_lines[1];
+        assert_equal_string(s.destination, string_from_literal("Tandern, Adlerstraße"));
+        assert_equal_int(s.sev, false);
+        assert_equal_string(s.network, string_from_literal("mvv"));
+        assert_equal_string(s.product, string_from_literal("RUFTAXI"));
+        assert_equal_string(s.line_number, string_from_literal("7070"));
+        assert_equal_string(s.diva_id, string_from_literal("16707"));
+    }
+
+    return pass;
+}
+
 s32 main(s32, char**) {
     testresult result;
 
     Leak_Detecting_Allocator ld;
-    ld.init();
+    ld.init(true);
     Bookkeeping_Allocator bk;
     bk.init();
+    defer {
+        ld.deinit();
+    };
     with_allocator(bk) {
         defer { bk.print_statistics(); };
 
         with_allocator(ld) {
             defer { ld.print_leak_statistics(); };
+
+
+            invoke_test(test_json_simple_object_new_syntax);
+            invoke_test(test_json_mvg);
+            invoke_test(test_json_bug);
+            invoke_test(test_json_extract_value_from_list);
+            invoke_test(test_json_parse_from_quoted_value);
+            invoke_test(test_json_object_as_hash_map);
+
+
+            invoke_test(test_json_config);
+            invoke_test(test_json_bug_again);
 
             invoke_test(test_defer_runs_after_return);
             invoke_test(test_pool_allocator);
@@ -1612,10 +2581,10 @@ s32 main(s32, char**) {
             invoke_test(test_bucket_list);
             invoke_test(test_bucket_list_leak);
             invoke_test(test_bucket_queue);
-            invoke_test(test_kd_tree);
             invoke_test(test_math);
             invoke_test(test_hashmap);
             invoke_test(test_sort);
+            invoke_test(test_kd_tree);
             invoke_test(test_array_lists_adding_and_removing);
             invoke_test(test_array_lists_sorting);
             invoke_test(test_array_lists_sorted_insert_and_remove);
@@ -1626,6 +2595,8 @@ s32 main(s32, char**) {
             invoke_test(test_typed_bucket_allocator);
             invoke_test(test_hooks);
             invoke_test(test_scheduler_animations);
+
+            // invoke_test(test_printer);
         }
     }
     return 0;

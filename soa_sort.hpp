@@ -68,10 +68,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-//#include <intrin.h>
-#include <ammintrin.h>
-#include <immintrin.h>
-
 #include "core.hpp"
 
 typedef int (*cmpfun_r)(const void *, const void *, void *);
@@ -89,6 +85,10 @@ void soa_sort(Array_Description main, Array_Description* others, size_t other_co
 void sort(Array_Description main, size_t nel, cmpfun cmp);
 
 #else // implementations
+
+//#include <intrin.h>
+#include <ammintrin.h>
+#include <immintrin.h>
 
 auto ntz(u64 num) -> u64 {
     // return _tzcnt_u64(num);

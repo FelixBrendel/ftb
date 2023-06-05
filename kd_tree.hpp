@@ -45,8 +45,6 @@ struct Axis_Aligned_Box {
     }
 };
 
-struct Empty {};
-
 template<typename PayloadT = Empty>
 struct Kd_Tree {
     typedef s32 Kd_Node_Idx;

@@ -167,6 +167,7 @@ auto rad_to_deg(f32 rad) -> f32;
 auto deg_to_rad(f32 dec) -> f32;
 
 auto round_to_precision(f32 num, u32 decimals) ->  f32;
+auto round_to_int(f32 num) ->  s32;
 
 auto lerp(f32 from, f32 t, f32 to) -> f32;
 auto unlerp(f32 from, f32 val, f32 to) -> f32;
@@ -303,6 +304,10 @@ auto deg_to_rad(f32 deg) -> f32 {
 auto round_to_precision(f32 num, u32 decimals) ->  f32 {
     f32 factor = powf(10.0f, (f32)decimals);
     return roundf(num * factor) / factor;
+}
+
+auto round_to_int(f32 num) -> s32 {
+    return (s32)(num < 0 ? (num - 0.5f) : (num + 0.5f));
 }
 
 auto lerp(f32 from, f32 t, f32 to) -> f32 {
