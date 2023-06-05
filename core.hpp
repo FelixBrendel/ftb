@@ -1094,7 +1094,7 @@ struct String_Builder {
         Allocated_String ret {};
         ret.allocator = base_allocator;
 
-        u64 total_length = 0;
+        u32 total_length = 0;
 
         u32* lengths = (u32*)alloca(sizeof(*lengths) * list.length);
 
@@ -1294,7 +1294,7 @@ auto read_entire_file(const char* filename, Allocator_Base* allocator) -> File_R
             }
 
             /* Allocate our buffer to that size. */
-            ret.contents.data = allocator->allocate<char>(ret.contents.length+1);
+            ret.contents.data = allocator->allocate<char>((u32)ret.contents.length+1);
 
             /* Read the entire file into memory. */
             ret.contents.length = fread(ret.contents.data, sizeof(char),
@@ -1312,6 +1312,478 @@ auto read_entire_file(const char* filename, Allocator_Base* allocator) -> File_R
     ret.success = true;
     return ret;
 }
+
+
+
+// ----------------------------------------------------------------------------
+//                              allocator implementation
+// ----------------------------------------------------------------------------
+//
+// Allocator Stack
+//
+LibC_Allocator internal_libc_allocator = LibC_Allocator{
+    .base {
+        .type = Allocator_Type::LibC_Allocator,
+    }
+};
+
+unsigned char tempback_buffer[1024*1024*16]; // 16MB
+Linear_Allocator temp_linear_allocator = {
+    .base {
+        .type = Allocator_Type::Linear_Allocator,
+    },
+    .data   = tempback_buffer,
+    .length = sizeof(tempback_buffer)
+};
+
+Allocator_Base* libc_allocator =(Allocator_Base*)&internal_libc_allocator;
+Allocator_Base* temp_allocator = (Allocator_Base*)&temp_linear_allocator;
+Allocator_Base* global_allocator_stack = (Allocator_Base*)&internal_libc_allocator;
+
+//
+// Global Functions
+//
+inline Allocator_Base* grab_current_allocator() {
+    return global_allocator_stack;
+}
+
+void push_allocator(Allocator_Base* new_allocator) {
+    new_allocator->next_allocator = global_allocator_stack;
+    global_allocator_stack = new_allocator;
+}
+
+Allocator_Base* pop_allocator() {
+    if (!global_allocator_stack->next_allocator) {
+        panic("Attempting to pop the last allocator on the stack");
+    }
+
+    Allocator_Base* old_top = global_allocator_stack;
+    global_allocator_stack = global_allocator_stack->next_allocator;
+
+    return old_top;
+}
+
+
+inline void* allocate(u32 size_in_bytes, u32 alignment) {
+    return grab_current_allocator()->allocate(size_in_bytes, alignment);
+}
+
+
+inline void* allocate_0(u32 size_in_bytes, u32 alignment) {
+    return grab_current_allocator()->allocate_0(size_in_bytes, alignment);
+}
+
+inline void* resize(void* old, u32 size_in_bytes, u32 alignment) {
+    return grab_current_allocator()->resize(old, size_in_bytes, alignment);
+}
+
+void  deallocate(void* old) {
+    grab_current_allocator()->deallocate(old);
+}
+
+//
+// LibC Allocator functions
+//
+void* LibC_Allocator_allocate(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+    return malloc(size_in_bytes);
+}
+
+void* LibC_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+    return calloc(1, size_in_bytes);
+}
+
+void* LibC_Allocator_resize(Allocator_Base* base, void* old, u32 size_in_bytes, u32 align) {
+    return realloc(old, size_in_bytes);
+}
+
+void LibC_Allocator_deallocate(Allocator_Base* base, void* data) {
+    free(data);
+}
+
+void LibC_Allocator::init() {
+    base.type = Allocator_Type::LibC_Allocator;
+}
+
+//
+// Printing Allocator functions
+//
+void* Printing_Allocator_allocate(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+    void* res = base->next_allocator->allocate(size_in_bytes, align);
+    println("%{color<}[Printing Allocator]: Allocating %u (align %u) -> %p.%{>color}",
+            console_magenta, size_in_bytes, align, res);
+    return res;
+}
+
+void* Printing_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+    void* res = base->next_allocator->allocate_0(size_in_bytes, align);
+    println("%{color<}[Printing Allocator]: Allocating zeroed %u (align %u) -> %p.%{>color}",
+            console_magenta, size_in_bytes, align, res);
+    return res;
+}
+
+void* Printing_Allocator_resize(Allocator_Base* base, void* old, u32 size_in_bytes, u32 align) {
+    void* res = base->next_allocator->resize(old, size_in_bytes, align);
+    println("%{color<}[Printing Allocator]: Resizing %p to %u (align %u) -> %p.%{>color}",
+            console_magenta, old, size_in_bytes, align, res);
+    return res;
+}
+
+void Printing_Allocator_deallocate(Allocator_Base* base, void* data) {
+    println("%{color<}[Printing Allocator]: Deallocating %p.%{>color}",
+            console_magenta, data);
+    base->next_allocator->deallocate(data);
+}
+
+void Printing_Allocator::init(Allocator_Base* next_allocator) {
+    base.type = Allocator_Type::Printing_Allocator;
+    if (next_allocator)
+        base.next_allocator = next_allocator;
+    else
+        base.next_allocator = grab_current_allocator();
+}
+
+//
+// Leak Detecting Allocator functions
+//
+
+auto alloc_info_cmp = [](const Allocation_Info* a, const Allocation_Info* b) -> s32 {
+    return (s32)((u8*)a->prt - (u8*)b->prt);
+ };
+
+void Leak_Detecting_Allocator_add_ptr(Allocator_Base* base, void* ptr, u32 amount) {
+    Leak_Detecting_Allocator* ld = (Leak_Detecting_Allocator*)base;
+    Allocation_Info ai = {
+        .prt           = ptr,
+        .size_in_bytes = amount
+    };
+    ld->allocated_prts.sorted_insert(ai, alloc_info_cmp);
+}
+
+void Leak_Detecting_Allocator_remove_ptr(Allocator_Base* base, void* ptr) {
+    Leak_Detecting_Allocator* ld = (Leak_Detecting_Allocator*)base;
+
+    // Freeing nullptrs is a nop
+    if (!ptr)
+        return;
+
+    s32 idx = ld->allocated_prts.sorted_find(Allocation_Info{.prt = ptr}, alloc_info_cmp);
+
+    if (idx == -1) {
+        if (ld->panic_on_error) {
+            panic("Attempting to free %p which was not allocated!", ptr);
+        } else {
+            println("%{color<}[Leak Detecting Allocator WARNING]%{color<} "
+                    "Attempting to free %p which was not allocated!%{>color}%{>color}",
+                    console_magenta, console_red, ptr);
+        }
+    } else  {
+        ld->allocated_prts.sorted_remove_index(idx);
+    }
+}
+
+void* Leak_Detecting_Allocator_allocate(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+    void* res = base->next_allocator->allocate(size_in_bytes, align);
+    if (res)
+        Leak_Detecting_Allocator_add_ptr(base, res, size_in_bytes);
+    return res;
+}
+
+void* Leak_Detecting_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+    void* res = base->next_allocator->allocate_0(size_in_bytes, align);
+    if (res)
+        Leak_Detecting_Allocator_add_ptr(base, res, size_in_bytes);
+    return res;
+}
+
+void* Leak_Detecting_Allocator_resize(Allocator_Base* base, void* old, u32 size_in_bytes, u32 align) {
+    void* res = base->next_allocator->resize(old, size_in_bytes, align);
+    if (res) {
+        Leak_Detecting_Allocator_remove_ptr(base, old);
+        Leak_Detecting_Allocator_add_ptr(base, res, size_in_bytes);
+    } else {
+        Leak_Detecting_Allocator_remove_ptr(base, old);
+    }
+
+    return res;
+}
+
+void Leak_Detecting_Allocator_deallocate(Allocator_Base* base, void* data) {
+    Leak_Detecting_Allocator_remove_ptr(base, data);
+    base->next_allocator->deallocate(data);
+}
+
+void Leak_Detecting_Allocator::init(bool should_panic_on_error, Allocator_Base* next_allocator) {
+    base.type = Allocator_Type::Leak_Detecting_Allocator;
+    if (next_allocator)
+        base.next_allocator = next_allocator;
+    else
+        base.next_allocator = grab_current_allocator();
+
+    panic_on_error = should_panic_on_error;
+    allocated_prts.init(128, base.next_allocator);
+}
+
+void Leak_Detecting_Allocator::deinit() {
+    allocated_prts.deinit();
+}
+
+void Leak_Detecting_Allocator::deallocate_everyting_still_allocated() {
+    while (allocated_prts.count > 0) {
+        base.next_allocator->deallocate(allocated_prts[--allocated_prts.count].prt);
+    }
+}
+
+void Leak_Detecting_Allocator::print_leak_statistics() {
+    u64 total_leaked_bytes = 0;
+    println("%{color<}[Leak Detecting Allocator Statistics]", console_magenta);
+
+    with_print_prefix("  | ") {
+        for (Allocation_Info& ai : allocated_prts) {
+            total_leaked_bytes += ai.size_in_bytes;
+            println("Leaked %lu bytes at %p", ai.size_in_bytes, ai.prt);
+        }
+
+        println("");
+        if (total_leaked_bytes)
+            println("Totally leaked %lu bytes over %u allocations.",
+                    total_leaked_bytes, allocated_prts.count);
+        else
+            println("No memory was leaked.");
+    }
+    println("%{>color}");
+}
+
+//
+// Resettable Allocator functions
+//
+
+auto voidp_cmp = [](const void** a, const void** b){
+    return (s32)((unsigned char*)*a - (unsigned char*)*b);
+};
+
+void Resettable_Allocator_add_ptr(Allocator_Base* base, void* ptr) {
+    Resettable_Allocator* ra = (Resettable_Allocator*)base;
+    ra->allocated_prts.sorted_insert(ptr, voidp_cmp);
+}
+
+void Resettable_Allocator_remove_ptr(Allocator_Base* base, void* ptr) {
+    Resettable_Allocator* ra = (Resettable_Allocator*)base;
+    s32 idx = ra->allocated_prts.sorted_find(ptr, voidp_cmp);
+
+    if (idx != -1) {
+        // NOTE(Felix) ignore double frees
+        ra->allocated_prts.sorted_remove_index(idx);
+    }
+}
+
+void* Resettable_Allocator_allocate(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+    void* res = base->next_allocator->allocate(size_in_bytes, align);
+    if (res)
+        Resettable_Allocator_add_ptr(base, res);
+    return res;
+}
+
+void* Resettable_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+    void* res = base->next_allocator->allocate_0(size_in_bytes, align);
+    if (res)
+        Resettable_Allocator_add_ptr(base, res);
+    return res;
+}
+
+void* Resettable_Allocator_resize(Allocator_Base* base, void* old, u32 size_in_bytes, u32 align) {
+    void* res = base->next_allocator->resize(old, size_in_bytes, align);
+    if (res) {
+        Resettable_Allocator_add_ptr(base, res);
+    }
+    Resettable_Allocator_remove_ptr(base, old);
+
+    return res;
+}
+
+void Resettable_Allocator_deallocate(Allocator_Base* base, void* data) {
+    Resettable_Allocator_remove_ptr(base, data);
+    base->next_allocator->deallocate(data);
+}
+
+void Resettable_Allocator::init(Allocator_Base* next_allocator) {
+    base.type = Allocator_Type::Resettable_Allocator;
+    if (next_allocator)
+        base.next_allocator = next_allocator;
+    else
+        base.next_allocator = grab_current_allocator();
+
+    allocated_prts.init(128, base.next_allocator);
+}
+
+void Resettable_Allocator::deinit() {
+    allocated_prts.deinit();
+}
+
+void Resettable_Allocator::deallocate_everyting_still_allocated() {
+    while (allocated_prts.count > 0) {
+        base.next_allocator->deallocate(allocated_prts[--allocated_prts.count]);
+    }
+}
+
+
+//
+// Bookkeeping Allocator functions
+//
+void* Bookkeeping_Allocator_allocate(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+    void* res = base->next_allocator->allocate(size_in_bytes, align);
+    Bookkeeping_Allocator* bk = (Bookkeeping_Allocator*)base;
+    ++bk->num_allocate_calls;
+    return res;
+}
+
+void* Bookkeeping_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+    void* res = base->next_allocator->allocate_0(size_in_bytes, align);
+    Bookkeeping_Allocator* bk = (Bookkeeping_Allocator*)base;
+    ++bk->num_allocate_0_calls;
+    return res;
+}
+
+void* Bookkeeping_Allocator_resize(Allocator_Base* base, void* old, u32 size_in_bytes, u32 align) {
+    void* res = base->next_allocator->resize(old, size_in_bytes, align);
+    Bookkeeping_Allocator* bk = (Bookkeeping_Allocator*)base;
+    ++bk->num_resize_calls;
+    return res;
+}
+
+void Bookkeeping_Allocator_deallocate(Allocator_Base* base, void* data) {
+    Bookkeeping_Allocator* bk = (Bookkeeping_Allocator*)base;
+    ++bk->num_deallocate_calls;
+    base->next_allocator->deallocate(data);
+}
+
+void Bookkeeping_Allocator::init(Allocator_Base* next_allocator) {
+    base.type = Allocator_Type::Bookkeeping_Allocator;
+    if (next_allocator)
+        base.next_allocator = next_allocator;
+    else
+        base.next_allocator = grab_current_allocator();
+
+    num_allocate_calls   = 0;
+    num_allocate_0_calls = 0;
+    num_resize_calls     = 0;
+    num_deallocate_calls = 0;
+}
+
+
+void Bookkeeping_Allocator::print_statistics() {
+    println("%{color<}[Bookkeeping Allocator Statistics]", console_magenta);
+    with_print_prefix("  |") {
+        println("    allocate:  %u", num_allocate_calls);
+        println("  allocate_0:  %u", num_allocate_0_calls);
+        println("      resize:  %u", num_resize_calls);
+        println("  deallocate:  %u", num_deallocate_calls);
+    }
+    println("%{>color}");
+}
+
+//
+// Linear Allocator functions
+//
+void* Linear_Allocator_allocate(Allocator_Base* base, u32 amount, u32 align) {
+    Linear_Allocator* self = (Linear_Allocator*)base;
+    if (self->count + amount > self->length)
+        return nullptr;
+
+    void* ret = ((byte*)self->data)+self->count;
+    self->count += amount;
+
+    return ret;
+}
+
+void* Linear_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+    void* ret = Linear_Allocator_allocate(base, size_in_bytes, align);
+    if (ret) memset(ret, 0, size_in_bytes);
+    return ret;
+}
+
+void* Linear_Allocator_resize(Allocator_Base* base, void* old, u32 amount, u32 align) {
+    // NOTE(Felix): not supported by Linear_Allocator
+    return nullptr;
+}
+
+void Linear_Allocator_deallocate(Allocator_Base* base, void* data) {
+    // NOTE(Felix): not supported by Linear_Allocator
+    return;
+}
+
+void Linear_Allocator::init(u32 initial_size, Allocator_Base* next_allocator) {
+    base.type = Allocator_Type::Linear_Allocator;
+    if (next_allocator)
+        base.next_allocator = next_allocator;
+    else
+        base.next_allocator = grab_current_allocator();
+
+    length = initial_size;
+    count  = 0;
+    data = base.next_allocator->allocate(length, alignof(void*));
+}
+
+void Linear_Allocator::reset() {
+    count = 0;
+}
+
+void Linear_Allocator::deinit() {
+    base.next_allocator->deallocate(data);
+}
+
+
+struct Allocator_Functions {
+    void* (*allocate)(Allocator_Base*, u32 amount, u32 align);
+    void* (*allocate_0)(Allocator_Base*, u32 amount, u32 align);
+    void* (*resize)(Allocator_Base*, void* old, u32 amount, u32 align);
+    void  (*deallocate)(Allocator_Base*, void* old);
+};
+
+Allocator_Functions allocator_function_table[((int)Allocator_Type::Allocator_Type_Max_Enum -
+                                              ALLOCATOR_TYPES_ENUM_START)] =
+{
+#define ALLOCATOR(name)                         \
+    {                                           \
+        .allocate   = name ## _allocate,        \
+        .allocate_0 = name ## _allocate_0,      \
+        .resize     = name ## _resize,          \
+        .deallocate = name ## _deallocate,      \
+    },
+
+    ALLOCATORS
+#undef ALLOCATOR
+};
+
+//
+// Base Allocator functions
+//
+void* Allocator_Base::allocate(u32 size_in_bytes, u32 alignment) {
+    if ((int)type >= ALLOCATOR_TYPES_ENUM_START) {
+        return allocator_function_table[(int)type-ALLOCATOR_TYPES_ENUM_START].allocate(this, size_in_bytes, alignment);
+    }
+    return nullptr;
+}
+
+void* Allocator_Base::allocate_0(u32 size_in_bytes, u32 alignment) {
+    if ((int)type >= ALLOCATOR_TYPES_ENUM_START) {
+        return allocator_function_table[(int)type-ALLOCATOR_TYPES_ENUM_START].allocate_0(this, size_in_bytes, alignment);
+    }
+    return nullptr;
+}
+
+void* Allocator_Base::resize(void* old, u32 size_in_bytes, u32 alignment) {
+    if ((int)type >= ALLOCATOR_TYPES_ENUM_START) {
+        return allocator_function_table[(int)type-ALLOCATOR_TYPES_ENUM_START].resize(this, old, size_in_bytes, alignment);
+    }
+    return nullptr;
+}
+
+void Allocator_Base::deallocate(void* old) {
+    if ((int)type >= ALLOCATOR_TYPES_ENUM_START) {
+        allocator_function_table[(int)type-ALLOCATOR_TYPES_ENUM_START].deallocate(this, old);
+    }
+}
+
 
 
 // ----------------------------------------------------------------------------
@@ -2049,7 +2521,7 @@ String String::from(const char* str, Allocator_Base* allocator) {
         allocator = grab_current_allocator();
 
     r.length = strlen(str);
-    r.data  = allocator->allocate<char>(r.length+1);
+    r.data  = allocator->allocate<char>((u32)r.length+1);
     strcpy(r.data, str);
 
     return r;
@@ -2086,7 +2558,7 @@ Allocated_String Allocated_String::from(const char* str, Allocator_Base* allocat
 
     r.allocator = allocator;
     r.length = strlen(str);
-    r.data  = allocator->allocate<char>(r.length+1);
+    r.data  = allocator->allocate<char>((u32)r.length+1);
     strcpy(r.data, str);
 
     return r;
@@ -2121,7 +2593,7 @@ char* heap_copy_limited_c_string(const char* str, u32 len, Allocator_Base* alloc
 }
 
 char* heap_copy_c_string(const char* str, Allocator_Base* allocator) {
-    u32 len = strlen(str);
+    u32 len = (u32)strlen(str);
     return heap_copy_limited_c_string(str, len, allocator);
 }
 
@@ -2254,476 +2726,6 @@ bool strncpy_utf8_0(char* dest, const char* src, u64 dest_size) {
     return copied_all;
 }
 
-
-
-// ----------------------------------------------------------------------------
-//                              allocator implementation
-// ----------------------------------------------------------------------------
-//
-// Allocator Stack
-//
-LibC_Allocator internal_libc_allocator = LibC_Allocator{
-    .base {
-        .type = Allocator_Type::LibC_Allocator,
-    }
-};
-
-unsigned char tempback_buffer[1024*1024*16]; // 16MB
-Linear_Allocator temp_linear_allocator = {
-    .base {
-        .type = Allocator_Type::Linear_Allocator,
-    },
-    .data   = tempback_buffer,
-    .length = sizeof(tempback_buffer)
-};
-
-Allocator_Base* libc_allocator =(Allocator_Base*)&internal_libc_allocator;
-Allocator_Base* temp_allocator = (Allocator_Base*)&temp_linear_allocator;
-Allocator_Base* global_allocator_stack = (Allocator_Base*)&internal_libc_allocator;
-
-//
-// Global Functions
-//
-inline Allocator_Base* grab_current_allocator() {
-    return global_allocator_stack;
-}
-
-void push_allocator(Allocator_Base* new_allocator) {
-    new_allocator->next_allocator = global_allocator_stack;
-    global_allocator_stack = new_allocator;
-}
-
-Allocator_Base* pop_allocator() {
-    if (!global_allocator_stack->next_allocator) {
-        panic("Attempting to pop the last allocator on the stack");
-    }
-
-    Allocator_Base* old_top = global_allocator_stack;
-    global_allocator_stack = global_allocator_stack->next_allocator;
-
-    return old_top;
-}
-
-
-inline void* allocate(u32 size_in_bytes, u32 alignment) {
-    return grab_current_allocator()->allocate(size_in_bytes, alignment);
-}
-
-
-inline void* allocate_0(u32 size_in_bytes, u32 alignment) {
-    return grab_current_allocator()->allocate_0(size_in_bytes, alignment);
-}
-
-inline void* resize(void* old, u32 size_in_bytes, u32 alignment) {
-    return grab_current_allocator()->resize(old, size_in_bytes, alignment);
-}
-
-void  deallocate(void* old) {
-    grab_current_allocator()->deallocate(old);
-}
-
-//
-// LibC Allocator functions
-//
-void* LibC_Allocator_allocate(Allocator_Base* base, u32 size_in_bytes, u32 align) {
-    return malloc(size_in_bytes);
-}
-
-void* LibC_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 align) {
-    return calloc(1, size_in_bytes);
-}
-
-void* LibC_Allocator_resize(Allocator_Base* base, void* old, u32 size_in_bytes, u32 align) {
-    return realloc(old, size_in_bytes);
-}
-
-void LibC_Allocator_deallocate(Allocator_Base* base, void* data) {
-    free(data);
-}
-
-void LibC_Allocator::init() {
-    base.type = Allocator_Type::LibC_Allocator;
-}
-
-//
-// Printing Allocator functions
-//
-void* Printing_Allocator_allocate(Allocator_Base* base, u32 size_in_bytes, u32 align) {
-    void* res = base->next_allocator->allocate(size_in_bytes, align);
-    println("%{color<}[Printing Allocator]: Allocating %u (align %u) -> %p.%{>color}",
-            console_magenta, size_in_bytes, align, res);
-    return res;
-}
-
-void* Printing_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 align) {
-    void* res = base->next_allocator->allocate_0(size_in_bytes, align);
-    println("%{color<}[Printing Allocator]: Allocating zeroed %u (align %u) -> %p.%{>color}",
-            console_magenta, size_in_bytes, align, res);
-    return res;
-}
-
-void* Printing_Allocator_resize(Allocator_Base* base, void* old, u32 size_in_bytes, u32 align) {
-    void* res = base->next_allocator->resize(old, size_in_bytes, align);
-    println("%{color<}[Printing Allocator]: Resizing %p to %u (align %u) -> %p.%{>color}",
-            console_magenta, old, size_in_bytes, align, res);
-    return res;
-}
-
-void Printing_Allocator_deallocate(Allocator_Base* base, void* data) {
-    println("%{color<}[Printing Allocator]: Deallocating %p.%{>color}",
-            console_magenta, data);
-    base->next_allocator->deallocate(data);
-}
-
-void Printing_Allocator::init(Allocator_Base* next_allocator) {
-    base.type = Allocator_Type::Printing_Allocator;
-    if (next_allocator)
-        base.next_allocator = next_allocator;
-    else
-        base.next_allocator = grab_current_allocator();
-}
-
-//
-// Leak Detecting Allocator functions
-//
-
-auto alloc_info_cmp = [](const Allocation_Info* a, const Allocation_Info* b) -> s32 {
-    return (s32)((u8*)a->prt - (u8*)b->prt);
- };
-
-void Leak_Detecting_Allocator_add_ptr(Allocator_Base* base, void* ptr, u32 amount) {
-    Leak_Detecting_Allocator* ld = (Leak_Detecting_Allocator*)base;
-    Allocation_Info ai = {
-        .prt           = ptr,
-        .size_in_bytes = amount
-    };
-    ld->allocated_prts.sorted_insert(ai, alloc_info_cmp);
-}
-
-void Leak_Detecting_Allocator_remove_ptr(Allocator_Base* base, void* ptr) {
-    Leak_Detecting_Allocator* ld = (Leak_Detecting_Allocator*)base;
-
-    // Freeing nullptrs is a nop
-    if (!ptr)
-        return;
-
-    s32 idx = ld->allocated_prts.sorted_find(Allocation_Info{.prt = ptr}, alloc_info_cmp);
-
-    if (idx == -1) {
-        if (ld->panic_on_error) {
-            panic("Attempting to free %p which was not allocated!", ptr);
-        } else {
-            println("%{color<}[Leak Detecting Allocator WARNING]%{color<} "
-                    "Attempting to free %p which was not allocated!%{>color}%{>color}",
-                    console_magenta, console_red, ptr);
-        }
-    } else  {
-        ld->allocated_prts.sorted_remove_index(idx);
-    }
-}
-
-void* Leak_Detecting_Allocator_allocate(Allocator_Base* base, u32 size_in_bytes, u32 align) {
-    void* res = base->next_allocator->allocate(size_in_bytes, align);
-    if (res)
-        Leak_Detecting_Allocator_add_ptr(base, res, size_in_bytes);
-    return res;
-}
-
-void* Leak_Detecting_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 align) {
-    void* res = base->next_allocator->allocate_0(size_in_bytes, align);
-    if (res)
-        Leak_Detecting_Allocator_add_ptr(base, res, size_in_bytes);
-    return res;
-}
-
-void* Leak_Detecting_Allocator_resize(Allocator_Base* base, void* old, u32 size_in_bytes, u32 align) {
-    void* res = base->next_allocator->resize(old, size_in_bytes, align);
-    if (res) {
-        Leak_Detecting_Allocator_remove_ptr(base, old);
-        Leak_Detecting_Allocator_add_ptr(base, res, size_in_bytes);
-    } else {
-        Leak_Detecting_Allocator_remove_ptr(base, old);
-    }
-
-    return res;
-}
-
-void Leak_Detecting_Allocator_deallocate(Allocator_Base* base, void* data) {
-    Leak_Detecting_Allocator_remove_ptr(base, data);
-    base->next_allocator->deallocate(data);
-}
-
-void Leak_Detecting_Allocator::init(bool should_panic_on_error, Allocator_Base* next_allocator) {
-    base.type = Allocator_Type::Leak_Detecting_Allocator;
-    if (next_allocator)
-        base.next_allocator = next_allocator;
-    else
-        base.next_allocator = grab_current_allocator();
-
-    panic_on_error = should_panic_on_error;
-    allocated_prts.init(128, base.next_allocator);
-}
-
-void Leak_Detecting_Allocator::deinit() {
-    allocated_prts.deinit();
-}
-
-void Leak_Detecting_Allocator::deallocate_everyting_still_allocated() {
-    while (allocated_prts.count > 0) {
-        base.next_allocator->deallocate(allocated_prts[--allocated_prts.count].prt);
-    }
-}
-
-void Leak_Detecting_Allocator::print_leak_statistics() {
-    u64 total_leaked_bytes = 0;
-    println("%{color<}[Leak Detecting Allocator Statistics]", console_magenta);
-
-    with_print_prefix("  | ") {
-        for (Allocation_Info& ai : allocated_prts) {
-            total_leaked_bytes += ai.size_in_bytes;
-            println("Leaked %lu bytes at %p", ai.size_in_bytes, ai.prt);
-        }
-
-        println("");
-        if (total_leaked_bytes)
-            println("Totally leaked %lu bytes over %u allocations.",
-                    total_leaked_bytes, allocated_prts.count);
-        else
-            println("No memory was leaked.");
-    }
-    println("%{>color}");
-}
-
-//
-// Resettable Allocator functions
-//
-
-auto voidp_cmp = [](const void** a, const void** b){
-    return (s32)((unsigned char*)*a - (unsigned char*)*b);
-};
-
-void Resettable_Allocator_add_ptr(Allocator_Base* base, void* ptr) {
-    Resettable_Allocator* ra = (Resettable_Allocator*)base;
-    ra->allocated_prts.sorted_insert(ptr, voidp_cmp);
-}
-
-void Resettable_Allocator_remove_ptr(Allocator_Base* base, void* ptr) {
-    Resettable_Allocator* ra = (Resettable_Allocator*)base;
-    s32 idx = ra->allocated_prts.sorted_find(ptr, voidp_cmp);
-
-    if (idx != -1) {
-        // NOTE(Felix) ignore double frees
-        ra->allocated_prts.sorted_remove_index(idx);
-    }
-}
-
-void* Resettable_Allocator_allocate(Allocator_Base* base, u32 size_in_bytes, u32 align) {
-    void* res = base->next_allocator->allocate(size_in_bytes, align);
-    if (res)
-        Resettable_Allocator_add_ptr(base, res);
-    return res;
-}
-
-void* Resettable_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 align) {
-    void* res = base->next_allocator->allocate_0(size_in_bytes, align);
-    if (res)
-        Resettable_Allocator_add_ptr(base, res);
-    return res;
-}
-
-void* Resettable_Allocator_resize(Allocator_Base* base, void* old, u32 size_in_bytes, u32 align) {
-    void* res = base->next_allocator->resize(old, size_in_bytes, align);
-    if (res) {
-        Resettable_Allocator_add_ptr(base, res);
-    }
-    Resettable_Allocator_remove_ptr(base, old);
-
-    return res;
-}
-
-void Resettable_Allocator_deallocate(Allocator_Base* base, void* data) {
-    Resettable_Allocator_remove_ptr(base, data);
-    base->next_allocator->deallocate(data);
-}
-
-void Resettable_Allocator::init(Allocator_Base* next_allocator) {
-    base.type = Allocator_Type::Resettable_Allocator;
-    if (next_allocator)
-        base.next_allocator = next_allocator;
-    else
-        base.next_allocator = grab_current_allocator();
-
-    allocated_prts.init(128, base.next_allocator);
-}
-
-void Resettable_Allocator::deinit() {
-    allocated_prts.deinit();
-}
-
-void Resettable_Allocator::deallocate_everyting_still_allocated() {
-    while (allocated_prts.count > 0) {
-        base.next_allocator->deallocate(allocated_prts[--allocated_prts.count]);
-    }
-}
-
-
-//
-// Bookkeeping Allocator functions
-//
-void* Bookkeeping_Allocator_allocate(Allocator_Base* base, u32 size_in_bytes, u32 align) {
-    void* res = base->next_allocator->allocate(size_in_bytes, align);
-    Bookkeeping_Allocator* bk = (Bookkeeping_Allocator*)base;
-    ++bk->num_allocate_calls;
-    return res;
-}
-
-void* Bookkeeping_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 align) {
-    void* res = base->next_allocator->allocate_0(size_in_bytes, align);
-    Bookkeeping_Allocator* bk = (Bookkeeping_Allocator*)base;
-    ++bk->num_allocate_0_calls;
-    return res;
-}
-
-void* Bookkeeping_Allocator_resize(Allocator_Base* base, void* old, u32 size_in_bytes, u32 align) {
-    void* res = base->next_allocator->resize(old, size_in_bytes, align);
-    Bookkeeping_Allocator* bk = (Bookkeeping_Allocator*)base;
-    ++bk->num_resize_calls;
-    return res;
-}
-
-void Bookkeeping_Allocator_deallocate(Allocator_Base* base, void* data) {
-    Bookkeeping_Allocator* bk = (Bookkeeping_Allocator*)base;
-    ++bk->num_deallocate_calls;
-    base->next_allocator->deallocate(data);
-}
-
-void Bookkeeping_Allocator::init(Allocator_Base* next_allocator) {
-    base.type = Allocator_Type::Bookkeeping_Allocator;
-    if (next_allocator)
-        base.next_allocator = next_allocator;
-    else
-        base.next_allocator = grab_current_allocator();
-
-    num_allocate_calls   = 0;
-    num_allocate_0_calls = 0;
-    num_resize_calls     = 0;
-    num_deallocate_calls = 0;
-}
-
-
-void Bookkeeping_Allocator::print_statistics() {
-    println("%{color<}[Bookkeeping Allocator Statistics]", console_magenta);
-    with_print_prefix("  |") {
-        println("    allocate:  %u", num_allocate_calls);
-        println("  allocate_0:  %u", num_allocate_0_calls);
-        println("      resize:  %u", num_resize_calls);
-        println("  deallocate:  %u", num_deallocate_calls);
-    }
-    println("%{>color}");
-}
-
-//
-// Linear Allocator functions
-//
-void* Linear_Allocator_allocate(Allocator_Base* base, u32 amount, u32 align) {
-    Linear_Allocator* self = (Linear_Allocator*)base;
-    if (self->count + amount > self->length)
-        return nullptr;
-
-    void* ret = ((byte*)self->data)+self->count;
-    self->count += amount;
-
-    return ret;
-}
-
-void* Linear_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 align) {
-    void* ret = Linear_Allocator_allocate(base, size_in_bytes, align);
-    if (ret) memset(ret, 0, size_in_bytes);
-    return ret;
-}
-
-void* Linear_Allocator_resize(Allocator_Base* base, void* old, u32 amount, u32 align) {
-    // NOTE(Felix): not supported by Linear_Allocator
-    return nullptr;
-}
-
-void Linear_Allocator_deallocate(Allocator_Base* base, void* data) {
-    // NOTE(Felix): not supported by Linear_Allocator
-    return;
-}
-
-void Linear_Allocator::init(u32 initial_size, Allocator_Base* next_allocator) {
-    base.type = Allocator_Type::Linear_Allocator;
-    if (next_allocator)
-        base.next_allocator = next_allocator;
-    else
-        base.next_allocator = grab_current_allocator();
-
-    length = initial_size;
-    count  = 0;
-    data = base.next_allocator->allocate(length, alignof(void*));
-}
-
-void Linear_Allocator::reset() {
-    count = 0;
-}
-
-void Linear_Allocator::deinit() {
-    base.next_allocator->deallocate(data);
-}
-
-
-struct Allocator_Functions {
-    void* (*allocate)(Allocator_Base*, u32 amount, u32 align);
-    void* (*allocate_0)(Allocator_Base*, u32 amount, u32 align);
-    void* (*resize)(Allocator_Base*, void* old, u32 amount, u32 align);
-    void  (*deallocate)(Allocator_Base*, void* old);
-};
-
-Allocator_Functions allocator_function_table[((int)Allocator_Type::Allocator_Type_Max_Enum -
-                                              ALLOCATOR_TYPES_ENUM_START)] =
-{
-#define ALLOCATOR(name)                         \
-    {                                           \
-        .allocate   = name ## _allocate,        \
-        .allocate_0 = name ## _allocate_0,      \
-        .resize     = name ## _resize,          \
-        .deallocate = name ## _deallocate,      \
-    },
-
-    ALLOCATORS
-#undef ALLOCATOR
-};
-
-//
-// Base Allocator functions
-//
-void* Allocator_Base::allocate(u32 size_in_bytes, u32 alignment) {
-    if ((int)type >= ALLOCATOR_TYPES_ENUM_START) {
-        return allocator_function_table[(int)type-ALLOCATOR_TYPES_ENUM_START].allocate(this, size_in_bytes, alignment);
-    }
-    return nullptr;
-}
-
-void* Allocator_Base::allocate_0(u32 size_in_bytes, u32 alignment) {
-    if ((int)type >= ALLOCATOR_TYPES_ENUM_START) {
-        return allocator_function_table[(int)type-ALLOCATOR_TYPES_ENUM_START].allocate_0(this, size_in_bytes, alignment);
-    }
-    return nullptr;
-}
-
-void* Allocator_Base::resize(void* old, u32 size_in_bytes, u32 alignment) {
-    if ((int)type >= ALLOCATOR_TYPES_ENUM_START) {
-        return allocator_function_table[(int)type-ALLOCATOR_TYPES_ENUM_START].resize(this, old, size_in_bytes, alignment);
-    }
-    return nullptr;
-}
-
-void Allocator_Base::deallocate(void* old) {
-    if ((int)type >= ALLOCATOR_TYPES_ENUM_START) {
-        allocator_function_table[(int)type-ALLOCATOR_TYPES_ENUM_START].deallocate(this, old);
-    }
-}
 
 
 // ----------------------------------------------------------------------------
