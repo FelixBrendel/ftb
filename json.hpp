@@ -286,6 +286,12 @@ namespace json {
         return Pattern_Match_Result::OK_CONTINUE;
     }
 
+    bool pattern_types_compatible(Json_Type type_in_pattern, Json_Type type_in_string) {
+        return type_in_pattern == type_in_string
+            || (type_in_string == Json_Type::Object && type_in_pattern == Json_Type::Object_As_Hash_Map)
+            || (type_in_string == Json_Type::Number && type_in_pattern == Json_Type::String);
+    }
+
     Pattern_Match_Result pattern_match_value(const char* string,
                                              Pattern pattern,
                                              void* user_data, u32* out_eaten,
@@ -310,7 +316,13 @@ namespace json {
         // if (pattern_todo.children.size() > 0) {
             // The only types that actually can contain children
             Pattern_Match_Result sub_result;
-            // TODO(Felix): make sure the pattern type matches the thing_at_point type
+
+            // NOTE(Felix): make sure the pattern type matches the thing_at_point type
+            panic_if(!pattern_types_compatible(pattern.type, thing_at_point), "Attempting to match objects of incompatible types.\n"
+                     "Pattern type: %d\n"
+                     "Actual  type: %d\n"
+                     "At: %s", pattern.type, thing_at_point, string+eaten);
+
             if (thing_at_point == Json_Type::Object) {
                 sub_result = pattern_match_object(string+eaten, pattern,
                                                   user_data, &eaten_sub_object, allocator);
@@ -338,7 +350,15 @@ namespace json {
                                            string+eaten);
                         ++eaten; // overstep quotation marks
                     }
-
+                } else if (pattern.value.destination_type == Data_Type::String &&
+                           thing_at_point == Json_Type::Number)
+                {
+                    // NOTE(Felix): if we're on a number but should read into a string
+                    u32 str_len = eat_number(string+eaten);
+                    String* str = (String*)(((u8*)user_data)+pattern.value.destination_offset);
+                    str->data   = heap_copy_limited_c_string(string+eaten, str_len);
+                    str->length = str_len;
+                    eaten += str_len;
                 }
 
                 sub_result = Pattern_Match_Result::OK_CONTINUE;
