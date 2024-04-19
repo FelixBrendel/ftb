@@ -403,7 +403,8 @@ struct Allocator_Base {
 };
 
 Allocator_Base* grab_current_allocator();
-void push_allocator(Allocator_Base*);
+// NOTE(Felix): returns the newly pushed ones, needed for the in_scratch_bffer macro
+Allocator_Base* push_allocator(Allocator_Base*);
 Allocator_Base* pop_allocator();
 
 Allocator_Base* grab_temp_allocator();
@@ -414,6 +415,12 @@ extern Allocator_Base* libc_allocator;
 #define with_allocator(alloc_base_ptr)                              \
     MPP_BEFORE(0, push_allocator((Allocator_Base*)&alloc_base_ptr)) \
     MPP_DEFER(1,  pop_allocator();)
+
+
+#define in_scratch_buffer                                               \
+    if (Linear_Allocator LABEL(prev_temp_alloc, __LINE__) = *(Linear_Allocator*)push_allocator(grab_temp_allocator())) {} else \
+    if (defer {*(Linear_Allocator*)pop_allocator() = LABEL(prev_temp_alloc, __LINE__);}) {} else
+
 
 #define with_temp_allocator with_allocator(grab_temp_allocator())
 
@@ -613,8 +620,6 @@ auto print_va_args(static_string format, va_list* arg_list) -> s32;
 auto print_to_string(char** out, Allocator_Base* allocator, static_string format, ...) -> s32;
 auto print_to_file(FILE* file, static_string format, ...) -> s32;
 
-auto print_stacktrace(FILE* file = stderr) -> void;
-
 auto print(static_string format, ...) -> s32;
 auto println(static_string format, ...) -> s32;
 auto raw_print(static_string format, ...) -> s32;
@@ -627,6 +632,8 @@ auto pop_print_prefix() -> void;
 
 auto init_printer(Allocator_Base* allocator = nullptr) -> void;
 auto deinit_printer() -> void;
+
+auto print_stacktrace(FILE* file = stderr) -> void;
 
 #define with_print_prefix(pfx)                  \
     MPP_BEFORE(1, push_print_prefix(pfx);)      \
@@ -813,18 +820,62 @@ struct Array_List {
         count = 0;
     }
 
-    bool contains_linear_search(type elem) {
+    void unordered_remove(type elem) {
+        s32 idx = find_idx(elem);
+        if (idx == -1)
+            return;
+
+        data[idx] = data[--count];
+    }
+
+    s32 find_idx(type elem) {
         for (u32 i = 0; i < count; ++i) {
             if (data[i] == elem)
-                return true;
+                return i;
         }
-        return false;
+        return -1;
+    }
+
+    bool contains_linear_search(type elem) {
+        return find_idx(elem) != -1;
     }
 
     bool contains_binary_search(type elem) {
         return sorted_find(elem) != -1;
     }
 
+    template <typename other_t>
+    static type contains_all_converter_fun(other_t other) {
+        return (type)other;
+    }
+
+    template <typename other_t>
+    bool contains_all(Array_List<other_t>  desired_items,
+                      Array_List<other_t>* out_missing_items = nullptr,
+                      type (*key)(other_t other) = contains_all_converter_fun)
+    {
+        bool found_all = true;
+
+        for (auto& desired_elem : desired_items) {
+            bool found = false;
+
+            for (auto& own_elem : *this) {
+                if (own_elem == key(desired_elem)) {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                if (out_missing_items) {
+                    found_all = false;
+                    out_missing_items->append(desired_items);
+                } else
+                    return false;
+            }
+        }
+        return found_all;
+    }
 
     Array_List<type> clone(Allocator_Base* base_allocator = nullptr) {
         Array_List<type> ret;
@@ -858,7 +909,7 @@ struct Array_List {
     void remove_index(u32 index) {
 #ifdef FTB_INTERNAL_DEBUG
         if (index >= count) {
-            fprintf(stderr, "ERROR: removing index that is not in use\n");
+            panic("ERROR: removing index that is not in use\n")
         }
 #endif
         data[index] = data[--count];
@@ -867,7 +918,7 @@ struct Array_List {
     void sorted_remove_index(u32 index) {
 #ifdef FTB_INTERNAL_DEBUG
         if (index >= count) {
-            fprintf(stderr, "ERROR: removing index that is not in use\n");
+            panic("ERROR: removing index that is not in use\n")
         }
 #endif
         memmove(data+index, data+index+1, (count-index-1) * sizeof(type));
@@ -879,8 +930,7 @@ struct Array_List {
         if (count == length) {
 #ifdef FTB_INTERNAL_DEBUG
             if (length == 0) {
-                fprintf(stderr, "ERROR: Array_List was not initialized.\n");
-                print_stacktrace();
+                panic("ERROR: Array_List was not initialized.\n");
                 length = 8;
             }
 #endif
@@ -922,7 +972,8 @@ struct Array_List {
     type& operator[](u32 index) {
 #ifdef FTB_DEBUG
         if (index >= length) {
-            fprintf(stderr, "ERROR: Array_List access out of bounds (not even allocated).\n");
+            panic("ERROR: Array_List access out of bounds (%d/%d) (not even allocated).\n",
+                  index, length);
             debug_break();
         }
 #endif
@@ -933,7 +984,7 @@ struct Array_List {
     type& last_element() {
 #ifdef FTB_INTERNAL_DEBUG
         if (count == 0) {
-            fprintf(stderr, "ERROR: Array_List was empty but last_element was called.\n");
+            panic("ERROR: Array_List was empty but last_element was called.\n");
         }
 #endif
         return data[count-1];
@@ -941,15 +992,15 @@ struct Array_List {
 
     typedef s32 (*compare_function_t)(const type*, const type*);
     typedef s32 (*void_compare_function_t)(const void*, const void*);
-    typedef s32 (*pointer_compare_function_t)(const void**, const void**);
+    // typedef s32 (*pointer_compare_function_t)(void**, void**);
     void sort(compare_function_t comparer) {
         qsort(data, count, sizeof(type),
               (void_compare_function_t)comparer);
     }
-    void sort(pointer_compare_function_t comparer) {
-        qsort(data, count, sizeof(type),
-              (void_compare_function_t)comparer);
-    }
+    // void sort(pointer_compare_function_t comparer) {
+        // qsort(data, count, sizeof(type),
+              // (void_compare_function_t)comparer);
+    // }
 
     void sorted_insert(type element, compare_function_t compare) {
         assure_available(1);
@@ -974,10 +1025,10 @@ struct Array_List {
         data[insertion_idx] = element;
     }
 
-    void sorted_insert(type elem, pointer_compare_function_t compare_fun)
-    {
-        return sorted_insert(elem, (compare_function_t)compare_fun);
-    }
+    // void sorted_insert(type elem, pointer_compare_function_t compare_fun)
+    // {
+        // return sorted_insert(elem, (compare_function_t)compare_fun);
+    // }
 
 
     s32 sorted_find(type elem,
@@ -1007,13 +1058,13 @@ struct Array_List {
         return middle;
     }
 
-    s32 sorted_find(type elem,
-                    pointer_compare_function_t compare_fun,
-                    s32 left=-1, s32 right=-1)
-    {
-        return sorted_find(elem, (compare_function_t)compare_fun,
-                           left, right);
-    }
+    // s32 sorted_find(type elem,
+    //                 pointer_compare_function_t compare_fun,
+    //                 s32 left=-1, s32 right=-1)
+    // {
+    //     return sorted_find(elem, (compare_function_t)compare_fun,
+    //                        left, right);
+    // }
 
     bool is_sorted(compare_function_t compare_fun) {
         for (s32 i = 1; i < count; ++i) {
@@ -1023,9 +1074,9 @@ struct Array_List {
         return true;
     }
 
-    bool is_sorted(pointer_compare_function_t compare_fun) {
-        return is_sorted((compare_function_t)compare_fun);
-    }
+    // bool is_sorted(pointer_compare_function_t compare_fun) {
+    //     return is_sorted((compare_function_t)compare_fun);
+    // }
 };
 
 
@@ -1251,6 +1302,31 @@ struct String_Split {
 };
 
 // ----------------------------------------------------------------------------
+//                               Stacktraces
+// ----------------------------------------------------------------------------
+struct Stacktrace_Entry {
+    Allocated_String function;
+    Allocated_String file;
+    s32              line;
+};
+
+struct Stacktrace {
+    Array_List<Stacktrace_Entry> entries;
+
+    void print() {
+        for (u32 i = 1; i < entries.count; ++i) {
+            auto e = entries[i];
+            println("  %s:%d (%s)",
+                    e.file.data,
+                    e.line,
+                    e.function.data);
+        }
+    }
+};
+
+auto get_stacktrace(Allocator_Base* allocator = nullptr, s32 skip_bottom_n = 6) -> Stacktrace;
+
+// ----------------------------------------------------------------------------
 //                              specific allocators
 // ----------------------------------------------------------------------------
 struct LibC_Allocator {
@@ -1308,6 +1384,9 @@ struct Linear_Allocator {
     void*          data;
     u32            count;
     u32            length;
+    void*          last_alloc;
+
+    operator bool () {return false;} // NOTE(Felix): used for in_scratch_buffer
 
     void init(u32 initial_size, Allocator_Base* next_allocator = nullptr);
 
@@ -1396,13 +1475,18 @@ Allocator_Base* global_allocator_stack = (Allocator_Base*)&internal_libc_allocat
 //
 // Global Functions
 //
-inline Allocator_Base* grab_current_allocator() {
+Allocator_Base* grab_current_allocator() {
     return global_allocator_stack;
 }
 
-void push_allocator(Allocator_Base* new_allocator) {
+Allocator_Base* grab_temp_allocator() {
+    return temp_allocator;
+}
+
+Allocator_Base* push_allocator(Allocator_Base* new_allocator) {
     new_allocator->next_allocator = global_allocator_stack;
     global_allocator_stack = new_allocator;
+    return new_allocator;
 }
 
 Allocator_Base* pop_allocator() {
@@ -1610,7 +1694,7 @@ void Leak_Detecting_Allocator::print_leak_statistics() {
 // Resettable Allocator functions
 //
 
-auto voidp_cmp = [](const void** a, const void** b){
+auto voidp_cmp = [](void* const * a, void* const * b){
     return (s32)((unsigned char*)*a - (unsigned char*)*b);
 };
 
@@ -1739,11 +1823,21 @@ void Bookkeeping_Allocator::print_statistics() {
 //
 void* Linear_Allocator_allocate(Allocator_Base* base, u32 amount, u32 align) {
     Linear_Allocator* self = (Linear_Allocator*)base;
-    if (self->count + amount > self->length)
+
+    u32 overshot_align_to_8  = self->count % 8;
+    u32 bytes_missing_to_align_8 = (overshot_align_to_8 != 0) * (8 - overshot_align_to_8);
+
+    // NOTE(Felix): prev_block | maybe padding | 8 bytes size of next block | next block
+    if (self->count + bytes_missing_to_align_8 + 8 + amount > self->length)
         return nullptr;
+
+    self->count += bytes_missing_to_align_8;
+    *((u64*)(((byte*)self->data)+self->count)) = amount;
+    self->count += 8;
 
     void* ret = ((byte*)self->data)+self->count;
     self->count += amount;
+    self->last_alloc = ret;
 
     return ret;
 }
@@ -1755,13 +1849,49 @@ void* Linear_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 a
 }
 
 void* Linear_Allocator_resize(Allocator_Base* base, void* old, u32 amount, u32 align) {
-    // NOTE(Felix): not supported by Linear_Allocator
-    return nullptr;
+    Linear_Allocator* self = (Linear_Allocator*)base;
+
+    // size was written onto the 8 bytes preceding the actual memory
+    u64* old_size_ptr = (((u64*)old)-1);
+
+    // check if we can get away with a resize
+    if (old == self->last_alloc) {
+        u64 new_count = ((byte*)old + amount) - (byte*)(self->data);
+        if (new_count < self->length) {
+            *old_size_ptr = amount;
+            self->count = new_count;
+            return old;
+        } else {
+            // Can't resize, allocated size is not big enough..
+            return nullptr;
+        }
+    } else {
+        // we actually have to alloc again and copy.
+        void* new_block = Linear_Allocator_allocate(base, amount, align);
+        memcpy(new_block, old, *old_size_ptr);
+        return new_block;
+    }
 }
 
 void Linear_Allocator_deallocate(Allocator_Base* base, void* data) {
-    // NOTE(Felix): not supported by Linear_Allocator
-    return;
+    Linear_Allocator* self = (Linear_Allocator*)base;
+    if (data == self->last_alloc) {
+        // NOTE(Felix): self->last_alloc, even though we freed it.. It shouldn't
+        // be freed again, no should it be reallocated. But both of them would
+        // be harmless.. This means though that we can't ever deallocate two
+        // consecutive things (take 2 things off the stack), because we don't
+        // know where the previous allocation was. If we wanted to remember
+        // that, additionally to the allocation size, we would have to store the
+        // addres of the last allocation before that, basically like stackframes
+        // have a pointer to the previous stackframe
+
+        u64* old_size_ptr = (((u64*)data)-1);
+        u64 new_count = ((byte*)old_size_ptr) - (byte*)(self->data);
+        self->count = new_count;
+    } else {
+        // NOTE(Felix): nothing we can do if the to-be-freed block is not at the
+        // end of the stack..
+    }
 }
 
 void Linear_Allocator::init(u32 initial_size, Allocator_Base* next_allocator) {
@@ -1771,8 +1901,9 @@ void Linear_Allocator::init(u32 initial_size, Allocator_Base* next_allocator) {
     else
         base.next_allocator = grab_current_allocator();
 
-    length = initial_size;
-    count  = 0;
+    length      = initial_size;
+    count       = 0;
+    last_alloc  = 0;
     data = base.next_allocator->allocate(length, alignof(void*));
 }
 
@@ -2340,7 +2471,7 @@ auto print_str_lines(static_string s, u32 max_lines) -> s32 {
 
             ++cursor;
         }
-        if (lines < max_lines)
+        if (lines < (int)max_lines)
             printed += println("%.*s", cursor, s);
 
         if (s[cursor]) {
@@ -2814,7 +2945,7 @@ bool strncpy_utf8_0(char* dest, const char* src, u64 dest_size) {
 
 
 // ----------------------------------------------------------------------------
-//                              stacktrace impl
+//                              Stacktrace impl
 // ----------------------------------------------------------------------------
 
 #ifndef FTB_STACKTRACE_INFO
@@ -2823,6 +2954,11 @@ auto print_stacktrace(FILE* file) -> void {
     fprintf(file, "No stacktrace info available (recompile with FTB_STACKTRACE_INFO defined)\n");
 }
 
+auto get_stacktrace(Allocator_Base* allocator, s32 skip_bottom_n) -> Stacktrace {
+    return {};
+}
+
+
 #else // stacktace should be present
 #  if defined FTB_WINDOWS
 #    define VC_EXTRALEAN
@@ -2830,27 +2966,51 @@ auto print_stacktrace(FILE* file) -> void {
 #    include <Windows.h>
 #    include <dbghelp.h>
 
-auto print_stacktrace(FILE* file) -> void {
-    fprintf(file, "Stacktrace: \n");
-    unsigned int   i;
-    void         * stack[ 100 ];
-    HANDLE         process;
-    SYMBOL_INFO  * symbol;
+auto get_stacktrace(Allocator_Base* allocator, s32 skip_bottom_n) -> Stacktrace {
+    Stacktrace result = {};
+    result.entries.init(16, allocator);
+
+
+    const u32 max_stacktrace_depth = 100;
+    const u32 max_symbol_length    = 255;
+
     // NOTE(Felix): Just always use LibC's allocator here
-    symbol               = ( SYMBOL_INFO * )calloc( sizeof( SYMBOL_INFO ) + 256 * sizeof( char ), 1 );
+    SYMBOL_INFO* symbol = (SYMBOL_INFO*)calloc(sizeof(*symbol) + (max_symbol_length+1 * sizeof(char)), 1);
     defer { free(symbol); };
-    symbol->MaxNameLen   = 255;
+
+    symbol->MaxNameLen   = max_symbol_length;
     symbol->SizeOfStruct = sizeof( SYMBOL_INFO );
 
-    unsigned short frames;
-    frames = CaptureStackBackTrace( 1, 100, stack, NULL );
+    void* stack[max_stacktrace_depth];
+    u16 num_frames = CaptureStackBackTrace(1, max_stacktrace_depth, stack, NULL);
 
-    process = GetCurrentProcess();
-    SymInitialize( process, NULL, TRUE );
+    HANDLE  process = GetCurrentProcess();
+    SymInitialize(process, NULL, TRUE);
 
-    for( i = 0; i < frames; i++ ) {
-        SymFromAddr( process, ( DWORD64 )( stack[ i ] ), 0, symbol );
-        fprintf(file, "  %3i: %s\n", frames - i - 1, symbol->Name);
+    for(int i = 0; i < num_frames - skip_bottom_n; i++ ) {
+        Stacktrace_Entry entry;
+
+        SymFromAddr(process, (DWORD64)(stack[i]), 0, symbol);
+        entry.function = Allocated_String::from(symbol->Name, allocator);
+
+        IMAGEHLP_LINE64 line_info;
+        DWORD line_displacement = 0;
+        if (SymGetLineFromAddr64(process, (DWORD64)stack[i], &line_displacement, &line_info)) {
+            entry.file = Allocated_String::from(line_info.FileName, allocator);
+            entry.line = line_info.LineNumber;
+        }
+
+        result.entries.append(entry);
+    }
+
+    return result;
+}
+
+auto print_stacktrace(FILE* file) -> void {
+    in_scratch_buffer {
+        fprintf(file, "Stacktrace: \n");
+        auto st = get_stacktrace(grab_current_allocator(), 3);
+        st.print();
     }
 }
 
@@ -2886,6 +3046,10 @@ auto print_stacktrace(FILE* file) -> void {
    }
 }
 
+auto get_stacktrace(Allocator_Base* allocator, s32 skip_bottom_n) -> Stacktrace {
+    return {};
+}
+
 #    else // linux, but not using gdb
 #      include <execinfo.h>
 
@@ -2903,6 +3067,10 @@ auto print_stacktrace(FILE* file) -> void {
         fprintf(file, "  %3lu: %s\n", size - i - 1, strings[i]);
     fputs("", file);
     free(strings);
+}
+
+auto get_stacktrace(Allocator_Base* allocator, s32 skip_bottom_n) -> Stacktrace {
+    return {};
 }
 
 #    endif // FTB_STACKTRACE_USE_GDB

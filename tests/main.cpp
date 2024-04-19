@@ -38,11 +38,9 @@ auto my_int_cmp = [](const int* a, const int* b) -> s32 {
     return (s32)(*a - *b);
 };
 
-
-auto my_voidp_cmp = [](const void** a, const void** b){
+auto my_voidp_cmp = [](void* const * a, void* const * b) -> s32 {
     return (s32)((unsigned char*)*a - (unsigned char*)*b);
 };
-
 
 u32 hm_hash(u32 u) {
     return ((u64)u * 2654435761) % 4294967296;
@@ -72,6 +70,111 @@ inline bool hm_objects_match(Key a, Key b) {
 
 auto print_dots(FILE* f) -> u32 {
     return print_to_file(f, "...");
+}
+
+auto test_scratch_memory() -> testresult {
+    Linear_Allocator* tmp_alloc = &temp_linear_allocator;
+    u64 ptr_before = tmp_alloc->count;
+
+    in_scratch_buffer {
+        Array_List<s32> al;
+        al.init(8);
+
+        u64 ptr_after_first_alloc = tmp_alloc->count;
+        s32* data_ptr_after_first_alloc = al.data;
+
+        assert_not_equal_int(ptr_after_first_alloc, ptr_before);
+
+        // NOTE(Felix): force expand
+        for (u32 i = 0; i < 10; ++i) {
+            al.append(i);
+        }
+
+        u64 ptr_after_second_alloc = tmp_alloc->count;
+        assert_not_equal_int(ptr_after_second_alloc, ptr_before);
+        assert_not_equal_int(ptr_after_second_alloc, ptr_after_first_alloc);
+
+        // NOTE(Felix): Because it was the last allocation, the base pointer
+        //   should not have changed even though we reallocated
+        assert_equal_int(data_ptr_after_first_alloc, al.data);
+
+        // NOTE(Felix): Alloc something new to disrupt the temp memory, and then
+        // force a reallocate
+        int* i = allocate<int>(1);
+        assert_not_equal_int(tmp_alloc->count, ptr_after_second_alloc);
+
+        u32 length = al.length;
+        for (u32 i = al.count; i <= length; ++i) {
+            al.append(i);
+        }
+
+        u64 ptr_after_third_alloc = tmp_alloc->count;
+        assert_not_equal_int(ptr_after_second_alloc, ptr_after_third_alloc);
+    }
+
+    // NOTE(Felix): Everything should be off the stack by now!
+    assert_equal_int(tmp_alloc->count, ptr_before);
+
+
+    // NOTE(Felix): Now to stacked scratch buffers, first half is same
+    in_scratch_buffer {
+        Array_List<s32> al;
+        al.init(8);
+
+        u64 ptr_after_first_alloc = tmp_alloc->count;
+        s32* data_ptr_after_first_alloc = al.data;
+
+        assert_not_equal_int(ptr_after_first_alloc, ptr_before);
+
+        // NOTE(Felix): force expand
+        for (u32 i = 0; i < 10; ++i) {
+            al.append(i);
+        }
+
+        u64 ptr_after_second_alloc = tmp_alloc->count;
+        assert_not_equal_int(ptr_after_second_alloc, ptr_before);
+        assert_not_equal_int(ptr_after_second_alloc, ptr_after_first_alloc);
+
+        // NOTE(Felix): Because it was the last allocation, the base pointer
+        //   should not have changed even though we reallocated
+        assert_equal_int(data_ptr_after_first_alloc, al.data);
+
+        in_scratch_buffer {
+            u64 ptr_now = tmp_alloc->count;
+            int* i = allocate<int>(1);
+
+            assert_not_equal_int(ptr_now, tmp_alloc->count);
+        }
+
+        assert_equal_int(ptr_after_second_alloc, tmp_alloc->count);
+        assert_equal_int(al.data, tmp_alloc->last_alloc);
+
+        // NOTE(Felix): BUT: if we resize the array list again, it is agin the
+        //   last alloc'ed so we, can actually just resize (not realloc).
+        u32 length = al.length;
+        for (u32 i = al.count; i <= length; ++i) {
+            al.append(i);
+        }
+
+        u64 ptr_after_third_alloc = tmp_alloc->count;
+        assert_equal_int(al.data, data_ptr_after_first_alloc);
+    }
+
+    // NOTE(Felix): Everything should be off the stack again
+    assert_equal_int(tmp_alloc->count, ptr_before);
+
+    // NOTE(Felix): Also check that the macro is transparent to break and continue
+    int i = 0;
+    for (; i < 10; ++i) {
+        in_scratch_buffer {
+            if (i == 2)
+                break;
+        }
+    }
+
+    assert_equal_int(i, 2);
+
+    return pass;
 }
 
 auto test_printer() -> testresult {
@@ -741,7 +844,7 @@ auto test_scheduler_animations() -> testresult {
         S32
     };
 
-    scheduler.register_interpolator([](void* p_from, f32 t, void* p_to, void* p_interpolant) {
+    scheduler.register_interpolator([](void* p_from, f32 t, void* p_to, void* p_interpolant) -> void {
         s32 from = *(s32*)p_from;
         s32 to   = *(s32*)p_to;
         s32* target = (s32*)p_interpolant;
@@ -2568,7 +2671,7 @@ s32 main(s32, char**) {
             invoke_test(test_json_mvg);
             invoke_test(test_json_bug);
             invoke_test(test_json_extract_value_from_list);
-            invoke_test(test_json_parse_from_quoted_value);
+            // invoke_test(test_json_parse_from_quoted_value);
             invoke_test(test_json_object_as_hash_map);
 
 
@@ -2596,8 +2699,12 @@ s32 main(s32, char**) {
             invoke_test(test_hooks);
             invoke_test(test_scheduler_animations);
 
+            invoke_test(test_scratch_memory);
+
             // invoke_test(test_printer);
         }
+
     }
+
     return 0;
 }

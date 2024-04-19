@@ -267,7 +267,8 @@ struct Typed_Bucket_Allocator {
 
     template <typename lambda>
     void for_each(lambda p) {
-        auto voidp_cmp = [](const void** a, const void** b) -> s32 {
+
+        auto voidp_cmp = [](type* const * a, type* const * b) -> s32 {
             return (s32)((byte*)*a - (byte*)*b);
         };
 
