@@ -281,6 +281,9 @@ struct Typed_Bucket_Allocator {
     }
 
     type* allocate() {
+        if (!back_list.buckets)
+            init();
+        
         type* ret;
 
         if (free_list.count)
