@@ -213,9 +213,8 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
 
 #define panic(...)                                              \
     do {                                                        \
-        ::print_to_file(stderr, "%{color<}[ PANIC ]%{>color}",  \
+        ::print_to_file(stderr, "%{color<}[ PANIC ]%{>color} ", \
                         console_red);                           \
-        print_source_code_location(stderr);                     \
         ::print_to_file(stderr, "%{color<}", console_red);      \
         ::print_to_file(stderr, __VA_ARGS__);                   \
         ::print_to_file(stderr, "%{>color}\n");                 \
@@ -791,7 +790,7 @@ struct Array_List {
     }
 
     void init_from(std::initializer_list<type> l, Allocator_Base* base_allocator = nullptr) {
-        length = l.size() > 1 ? l.size() : 1; // alloc at least one
+        length = (u32)(l.size() > 1 ? l.size() : 1); // alloc at least one
         init(length, base_allocator);
 
         count = 0;
@@ -849,9 +848,14 @@ struct Array_List {
         return (type)other;
     }
 
+    typedef s32 (*compare_function_t)(const type*, const type*);
+    typedef s32 (*void_compare_function_t)(const void*, const void*);
+    typedef s32 (*direct_compare_function_t)(const type, const type);
+
     template <typename other_t>
-    bool contains_all(Array_List<other_t>  desired_items,
-                      Array_List<other_t>* out_missing_items = nullptr,
+    bool contains_all(Array_List<other_t>        desired_items,
+                      direct_compare_function_t  compare_fun,
+                      Array_List<other_t>*       out_missing_items = nullptr,
                       type (*key)(other_t other) = contains_all_converter_fun)
     {
         bool found_all = true;
@@ -860,7 +864,7 @@ struct Array_List {
             bool found = false;
 
             for (auto& own_elem : *this) {
-                if (own_elem == key(desired_elem)) {
+                if (compare_fun(own_elem, key(desired_elem)) == 0) {
                     found = true;
                     break;
                 }
@@ -869,7 +873,7 @@ struct Array_List {
             if (!found) {
                 if (out_missing_items) {
                     found_all = false;
-                    out_missing_items->append(desired_items);
+                    out_missing_items->append(desired_elem);
                 } else
                     return false;
             }
@@ -943,15 +947,20 @@ struct Array_List {
     }
 
     void assure_allocated(u32 allocated_elements) {
+        // NOTE(Felix): This method can be used to initialize an Array_List
+        if (!allocator) {
+            allocator = grab_current_allocator();
+        }
         if (length < allocated_elements) {
             if (allocated_elements > 1024) {
                 length = allocated_elements;
             } else {
                 // NOTE(Felix): find smallest power of two that is larger than
                 // 'allocated_elements'
-                for (u32 i = 9; i >= 1; --i) {
-                    if  (allocated_elements > 1U << i) {
-                        length = 1 << (i+1);
+                for (u32 i = 0; i < 32; ++i) {
+                    u32 pot = (1u << i);
+                    if (pot >= allocated_elements) {
+                        length = pot;
                         break;
                     }
                 }
@@ -960,9 +969,13 @@ struct Array_List {
         }
     }
 
-
     void assure_available(u32 available_elements) {
         assure_allocated(available_elements+count);
+    }
+
+    void reserve(u32 additional_elements) {
+        assure_allocated(additional_elements+count);
+        count += additional_elements;
     }
 
     operator bool() const {
@@ -990,8 +1003,6 @@ struct Array_List {
         return data[count-1];
     }
 
-    typedef s32 (*compare_function_t)(const type*, const type*);
-    typedef s32 (*void_compare_function_t)(const void*, const void*);
     // typedef s32 (*pointer_compare_function_t)(void**, void**);
     void sort(compare_function_t comparer) {
         qsort(data, count, sizeof(type),
@@ -1851,6 +1862,8 @@ void* Linear_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 a
 void* Linear_Allocator_resize(Allocator_Base* base, void* old, u32 amount, u32 align) {
     Linear_Allocator* self = (Linear_Allocator*)base;
 
+    assert(old); // NOTE(Felix): Don't support resizing nullptr yet
+
     // size was written onto the 8 bytes preceding the actual memory
     u64* old_size_ptr = (((u64*)old)-1);
 
@@ -1859,7 +1872,7 @@ void* Linear_Allocator_resize(Allocator_Base* base, void* old, u32 amount, u32 a
         u64 new_count = ((byte*)old + amount) - (byte*)(self->data);
         if (new_count < self->length) {
             *old_size_ptr = amount;
-            self->count = new_count;
+            self->count = (u32)new_count;
             return old;
         } else {
             // Can't resize, allocated size is not big enough..
@@ -1887,7 +1900,7 @@ void Linear_Allocator_deallocate(Allocator_Base* base, void* data) {
 
         u64* old_size_ptr = (((u64*)data)-1);
         u64 new_count = ((byte*)old_size_ptr) - (byte*)(self->data);
-        self->count = new_count;
+        self->count = (u32)new_count;
     } else {
         // NOTE(Felix): nothing we can do if the to-be-freed block is not at the
         // end of the stack..

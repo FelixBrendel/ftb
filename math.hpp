@@ -31,9 +31,7 @@
 #include <float.h>
 #include "core.hpp"
 
-
 #define FTB_USING_MATH
-
 
 extern f32 pi;
 extern f32 two_pi;
@@ -173,6 +171,7 @@ auto lerp(f32 from, f32 t, f32 to) -> f32;
 auto unlerp(f32 from, f32 val, f32 to) -> f32;
 auto remap(f32 from_a, f32 val, f32 to_a, f32 from_b, f32 to_b) -> f32;
 
+auto clamp(u32 from, u32 x, u32 to) -> u32;
 auto clamp(f32 from, f32 x, f32 to) -> f32;
 auto clamp01(f32 x) -> f32;
 auto clamped_lerp(f32 from, f32 t, f32 to) -> f32;
@@ -320,6 +319,11 @@ auto unlerp(f32 from, f32 val, f32 to) -> f32 {
 
 auto remap(f32 from_a, f32 val, f32 to_a, f32 from_b, f32 to_b) -> f32 {
     return lerp(from_b, unlerp(from_a, val, to_a), to_b);
+}
+
+auto clamp(u32 from, u32 x, u32 to) -> u32 {
+    u32 t = x < from ? from : x;
+    return t > to ? to : t;
 }
 
 auto clamp(f32 from, f32 x, f32 to) -> f32 {
