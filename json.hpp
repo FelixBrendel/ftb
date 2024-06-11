@@ -34,11 +34,31 @@ namespace json {
         const char* member_name;
     };
 
-    struct Parser_Context {
-        const char* position_in_string;
+    enum struct Parser_Context_Type {
+        Root,
+        Object_Member,
+        List_Entry,
+    };
+    struct Parser_Context_Stack_Entry {
+        Parser_Context_Stack_Entry* previous;
+        Parser_Context_Type         parent_type;
+        union {
+            struct {
+                String member_name;
+            } object;
+            struct {
+                s32 index;
+            } list_entry;
+        } parent;
     };
 
-    typedef Pattern_Match_Result (*parser_hook)(void* user_data,
+    struct Parser_Context {
+        Parser_Context_Stack_Entry  context_stack;
+        const char*                 position_in_string;
+    };
+
+    typedef Pattern_Match_Result (*parser_hook)(void* matched_obj,
+                                                void* callback_data,
                                                 Hook_Context h_context,
                                                 Parser_Context p_context);
 
@@ -50,7 +70,15 @@ namespace json {
         u32         destination_offset;
     };
 
+
+    struct Parser_Hooks {
+        void* callback_data;
+        parser_hook enter_hook;
+        parser_hook leave_hook;
+    };
+
     struct Object_Member;
+    struct Fallback_Pattern;
 
     struct Pattern {
         Json_Type type;
@@ -59,6 +87,7 @@ namespace json {
             struct {
                 const Object_Member* members;
                 u32 member_count;
+                const Fallback_Pattern* fallback_pattern; // pattern used for wildcard matches
             } object;
             struct {
                 u32 hash_map_offset;
@@ -74,21 +103,23 @@ namespace json {
             } value;
         };
 
-        parser_hook             enter_hook;
-        parser_hook             leave_hook;
+        Parser_Hooks parser_hooks;
+        // parser_hook             enter_hook;
+        // parser_hook             leave_hook;
 
         void print();
 
     };
 
-    struct Object_Member {
-        const char*   key;
+    struct Fallback_Pattern {
         Pattern pattern;
+        u32 element_size;
+        u32 array_list_offset;
     };
 
-    struct Parser_Hooks {
-        parser_hook enter_hook;
-        parser_hook leave_hook;
+    struct Object_Member {
+        const char*  key;
+        Pattern      pattern;
     };
 
     struct List_Info {
@@ -96,7 +127,7 @@ namespace json {
         u32 element_size;
     };
 
-    Pattern object(std::initializer_list<Object_Member> members, Parser_Hooks hooks={0});
+    Pattern object(std::initializer_list<Object_Member> members, Fallback_Pattern&& fallback_pattern={}, Parser_Hooks hooks={0});
     Pattern object(u32 hash_map_offset, Parser_Hooks hooks={0});
 
     Pattern list(Pattern&& element_pattern,
@@ -112,7 +143,7 @@ namespace json {
                    u32 destination_offset, Parser_Hooks hooks={0});
 
     // Pattern member_value(const char* key, Json_Type source_type, Data_Type destination_type, u32 destination_offset);
-    Pattern_Match_Result pattern_match(const char* string, Pattern pattern, void* user_data, Allocator_Base* allocator = nullptr);
+    Pattern_Match_Result pattern_match(const char* string, Pattern pattern, void* obj_to_match_into, void* callback_data = nullptr, Allocator_Base* allocator = nullptr);
     void write_pattern_to_file(const char* path, Pattern pattern, void* user_data);
     void register_custom_reader_function(Data_Type dt, reader_function fun);
 }
@@ -194,24 +225,29 @@ namespace json {
         }
     }
 
-    Pattern_Match_Result pattern_match_list(const char* string,
+    Pattern_Match_Result pattern_match_list(Parser_Context ctx,
                                             Pattern list_pattern,
                                             Pattern child,
-                                            void* user_data, u32* out_eaten,
+                                            void* matched_obj, // ptr to arraylist
+                                            void* callback_data, u32* out_eaten,
                                             Allocator_Base* allocator);
-    Pattern_Match_Result pattern_match_object(const char* string,
+
+    Pattern_Match_Result pattern_match_object(Parser_Context ctx,
                                               Pattern p,
-                                              void* user_data, u32* out_eaten,
+                                              void* matched_obj,
+                                              void* callback_data, u32* out_eaten,
                                               Allocator_Base* allocator);
 
-    Pattern_Match_Result pattern_match_value(const char* string,
+    Pattern_Match_Result pattern_match_value(Parser_Context ctx,
                                              Pattern pattern,
-                                             void* user_data, u32* out_eaten,
+                                             void* matched_obj,
+                                             void* callback_data, u32* out_eaten,
                                              Allocator_Base* allocator);
 
-    Pattern_Match_Result pattern_match_object_member(const char* string,
+    Pattern_Match_Result pattern_match_object_member(Parser_Context ctx,
                                                      Pattern p,
-                                                     void* user_data, u32* out_eaten,
+                                                     void* matched_obj,
+                                                     void* callback_data, u32* out_eaten,
                                                      Allocator_Base* allocator);
 
     u32 read_into(void* destination, Data_Type dtype, const char* source) {
@@ -234,13 +270,13 @@ namespace json {
     }
 
 
-    Pattern_Match_Result pattern_match_object(const char* string,
-                                              Pattern p,
-                                              void* user_data, u32* out_eaten,
-                                              Allocator_Base* allocator)
+    Pattern_Match_Result pattern_match_object(Parser_Context ctx, Pattern p,
+                                              void* matched_obj, void* callback_data,
+                                              u32* out_eaten, Allocator_Base* allocator)
     {
         // NOTE(Felix): expecting `string` to start on {, this function will eat
         //   just past the closing }
+        const char* string = ctx.position_in_string;
         *out_eaten = 0;
         u32 eaten = 1; // overstep {
 
@@ -252,9 +288,12 @@ namespace json {
                      string+eaten);
 
             u32 sub_eaten = 0;
+            Parser_Context call_ctx = ctx;
+            call_ctx.position_in_string = string+eaten;
             Pattern_Match_Result sub_result =
-                pattern_match_object_member(string+eaten, p,
-                                            user_data, &sub_eaten, allocator);
+                pattern_match_object_member(call_ctx, p,
+                                            matched_obj, callback_data,
+                                            &sub_eaten, allocator);
             if (sub_result == Pattern_Match_Result::MATCHING_ERROR) {
                 *out_eaten = 0;
                 return Pattern_Match_Result::MATCHING_ERROR;
@@ -292,11 +331,12 @@ namespace json {
             || (type_in_string == Json_Type::Number && type_in_pattern == Json_Type::String);
     }
 
-    Pattern_Match_Result pattern_match_value(const char* string,
-                                             Pattern pattern,
-                                             void* user_data, u32* out_eaten,
-                                             Allocator_Base* allocator)
+    Pattern_Match_Result pattern_match_value(Parser_Context ctx, Pattern pattern,
+                                             void* matched_obj, void* callback_data,
+                                             u32* out_eaten, Allocator_Base* allocator)
     {
+        const char* string = ctx.position_in_string;
+
         *out_eaten = 0;
         u32 eaten = 0;
         eaten += eat_whitespace(string);
@@ -305,10 +345,14 @@ namespace json {
 
         Pattern_Match_Result enter_message = Pattern_Match_Result::OK_CONTINUE;
         Pattern_Match_Result leave_message = Pattern_Match_Result::OK_CONTINUE;
+        Parser_Context call_ctx = ctx;
+        call_ctx.position_in_string = {string+eaten};
+
         // maybe run enter hook
-        if (pattern.enter_hook) {
+        if (pattern.parser_hooks.enter_hook) {
             enter_message =
-                pattern.enter_hook(user_data, {thing_at_point}, {string+eaten});
+                pattern.parser_hooks.enter_hook(matched_obj, callback_data,
+                                                {thing_at_point}, call_ctx);
         }
 
         // if children were registered for this pattern
@@ -324,19 +368,22 @@ namespace json {
                      "At: %s", pattern.type, thing_at_point, string+eaten);
 
             if (thing_at_point == Json_Type::Object) {
-                sub_result = pattern_match_object(string+eaten, pattern,
-                                                  user_data, &eaten_sub_object, allocator);
+                sub_result = pattern_match_object(call_ctx, pattern,
+                                                  matched_obj, callback_data,
+                                                  &eaten_sub_object, allocator);
             } else if (thing_at_point == Json_Type::List) {
-                sub_result = pattern_match_list(string+eaten, pattern,
+                sub_result = pattern_match_list(call_ctx, pattern,
                                                 *pattern.list.child_pattern,
-                                                user_data, &eaten_sub_object, allocator);
+                                                ((u8*)matched_obj) + pattern.list.array_list_offset,
+                                                callback_data,
+                                                &eaten_sub_object, allocator);
             } else {
                 // match simple values
 
                 panic_if(pattern.type == Json_Type::Object_Member_Name,
                          "object member not valid here");
                 if (thing_at_point == pattern.type) {
-                    eaten += read_into((void*)(((u8*)user_data)+pattern.value.destination_offset),
+                    eaten += read_into((void*)(((u8*)matched_obj)+pattern.value.destination_offset),
                               pattern.value.destination_type,
                               string+eaten);
                 } else if (thing_at_point == Json_Type::String) {
@@ -345,7 +392,7 @@ namespace json {
                     //   thing in the string
                     if (identify_thing(string+eaten+1) == pattern.type) {
                         ++eaten; // overstep quotation marks
-                        eaten += read_into((void*)(((u8*)user_data)+pattern.value.destination_offset),
+                        eaten += read_into((void*)(((u8*)matched_obj)+pattern.value.destination_offset),
                                            pattern.value.destination_type,
                                            string+eaten);
                         ++eaten; // overstep quotation marks
@@ -355,7 +402,7 @@ namespace json {
                 {
                     // NOTE(Felix): if we're on a number but should read into a string
                     u32 str_len = eat_number(string+eaten);
-                    String* str = (String*)(((u8*)user_data)+pattern.value.destination_offset);
+                    String* str = (String*)(((u8*)matched_obj)+pattern.value.destination_offset);
                     str->data   = heap_copy_limited_c_string(string+eaten, str_len);
                     str->length = str_len;
                     eaten += str_len;
@@ -377,10 +424,12 @@ namespace json {
             eaten += eat_thing(string+eaten);
         }
 
+        call_ctx.position_in_string = string+eaten;
+
         // maybe run leave hook
-        if (pattern.leave_hook) {
+        if (pattern.parser_hooks.leave_hook) {
             leave_message =
-                pattern.leave_hook(user_data, {thing_at_point}, {string+eaten});
+                pattern.parser_hooks.leave_hook(matched_obj, callback_data, {thing_at_point}, call_ctx);
         }
 
         if (enter_message == Pattern_Match_Result::MATCHING_ERROR ||
@@ -397,7 +446,7 @@ namespace json {
 
     void* realloc_zero(void* pBuffer, size_t oldSize, size_t newSize, Allocator_Base* allocator) {
         // source: https://stackoverflow.com/questions/2141277/how-to-zero-out-new-memory-after-realloc
-        void* pNew = allocator->resize(pBuffer, newSize, 8);
+        void* pNew = allocator->resize(pBuffer, (u32)newSize, 8);
         if (newSize > oldSize && pNew) {
             size_t diff = newSize - oldSize;
             void* pStart = ((char*)pNew) + oldSize;
@@ -406,51 +455,75 @@ namespace json {
         return pNew;
     }
 
-    Pattern_Match_Result pattern_match_list(const char* string,
-                                            Pattern list_pattern,
+
+    void* list_assure_free_slot(void* list_ptr, u32 elem_size, Allocator_Base* allocator) {
+        if (elem_size == 0)
+            return list_ptr;
+
+        // if we should actually manage a list
+        // make sure the list is long enough
+
+        Array_List<byte>* list = (Array_List<byte>*)((u8*)list_ptr);
+
+        u32 old_allocated = list->length;
+        if (list->count == list->length) {
+            if (list->length == 0)
+                list->length = 4;
+            else
+                list->length *= 2;
+            // NOTE(Felix): we need to zero out the newly allocated
+            //   part, since it could contain lists itself to which we
+            //   can only write sensibly if the memory is 0 as otherwise
+            //   it will look as there are already lists present with
+            //   garbage length and data pointers
+            list->data = (byte*)realloc_zero(list->data, old_allocated * elem_size, list->length  * elem_size, allocator);
+            list->allocator = allocator;
+        }
+
+        void* result = ((u8*)list->data)+(list->count*elem_size);
+        ++(list->count);
+
+        return result;
+    }
+
+    Pattern_Match_Result pattern_match_list(Parser_Context ctx, Pattern list_pattern,
                                             Pattern child,
-                                            void* user_data, u32* out_eaten,
-                                            Allocator_Base* allocator)
+                                            void* matched_obj, void* callback_data,
+                                            u32* out_eaten, Allocator_Base* allocator)
     {
         // NOTE(Felix): expecting `string` to start on [, this function will eat
         //   just past the closing ]
+        const char* string = ctx.position_in_string;
 
-        void* base_user_data = user_data;
+        // void* base_user_data = user_data;
         *out_eaten = 0;
         u32 eaten = 1; // overstep [
         eaten += eat_whitespace(string+eaten);
-
+        void* target_element_ptr = matched_obj;
+        s32 matching_list_index = 0;
         while (string[eaten] != ']') {
             u32 sub_eaten = 0;
 
-            // if we should manage a list
-            if (list_pattern.list.element_size) {
-                // make sure the list is long enough
-                u32    elem_size = list_pattern.list.element_size;
-                Array_List<byte>* list = (Array_List<byte>*)((u8*)base_user_data+list_pattern.list.array_list_offset);
+            target_element_ptr = list_assure_free_slot(matched_obj,
+                                                       list_pattern.list.element_size,
+                                                       allocator);
 
-                u32 old_allocated = list->length;
-                if (list->count == list->length) {
-                    if (list->length == 0)
-                        list->length = 4;
-                    else
-                        list->length *= 2;
-                    // NOTE(Felix): we need to zero out the newly allocated
-                    //   part, since it could contain lists itself to which we
-                    //   can only write sensibly if the memory is 0 as otherwise
-                    //   it will look as there are already lists present with
-                    //   garbage length and data pointers
-                    list->data = (byte*)realloc_zero(list->data, old_allocated * elem_size, list->length  * elem_size, allocator);
-                    list->allocator = allocator;
-                }
-
-                user_data = ((u8*)list->data)+(list->count*elem_size);
-                ++(list->count);
-            }
+            Parser_Context call_ctx {
+                .context_stack = {
+                    .previous    = &ctx.context_stack,
+                    .parent_type = Parser_Context_Type::List_Entry,
+                    .parent {
+                        .list_entry  = {
+                            .index  = matching_list_index,
+                        }
+                    }
+                },
+                .position_in_string = string+eaten,
+            };
 
             Pattern_Match_Result sub_result
-                = pattern_match_value(string+eaten, child, user_data,
-                                      &sub_eaten, allocator);
+                = pattern_match_value(call_ctx, child, target_element_ptr,
+                                      callback_data, &sub_eaten, allocator);
 
             if (sub_result == Pattern_Match_Result::MATCHING_ERROR)
                 return Pattern_Match_Result::MATCHING_ERROR;
@@ -474,6 +547,8 @@ namespace json {
                 ++eaten; // overstep ,
                 eaten += eat_whitespace(string+eaten);
             }
+
+            matching_list_index++;
         }
 
         ++eaten; // overstep ]
@@ -481,11 +556,11 @@ namespace json {
         return Pattern_Match_Result::OK_CONTINUE;
     }
 
-    Pattern_Match_Result pattern_match_object_member(const char* string,
-                                                     Pattern p,
-                                                     void* user_data, u32* out_eaten,
-                                                     Allocator_Base* allocator)
+    Pattern_Match_Result pattern_match_object_member(Parser_Context ctx, Pattern p,
+                                                     void* matched_obj, void* callback_data,
+                                                     u32* out_eaten, Allocator_Base* allocator)
     {
+        const char* string = ctx.position_in_string;
         // NOTE(Felix): expecting `string` to start on ", this function will eat
         //   just past the last char of the value associated to the member. All
         //   patterns should be Object_Member_Name, since this is the only
@@ -514,6 +589,7 @@ namespace json {
         Pattern_Match_Result sub_result = Pattern_Match_Result::OK_CONTINUE;
 
         if (p.type == Json_Type::Object_As_Hash_Map) {
+            panic("NYI/To Be Deleted");
             Json_Type thing = identify_thing(string);
             panic_if(thing != Json_Type::String,
                      "When reading into a hashmap, "
@@ -525,7 +601,7 @@ namespace json {
 
             auto hm =
                 (Hash_Map<char*, char*>*)
-                (((u8*)user_data)+p.object_as_hash_map.hash_map_offset);
+                (((u8*)matched_obj)+p.object_as_hash_map.hash_map_offset);
 
             if (!hm->data)
                 hm->init(8, allocator);
@@ -552,30 +628,62 @@ namespace json {
             }
 
         } else {
-            Pattern pattern_todo;
+            Object_Member pattern_todo;
             bool found_pattern_todo = false;
             // check for children patterns with that member name
-            for (int i = 0; i < p.object.member_count; ++i) {
+            for (u32 i = 0; i < p.object.member_count; ++i) {
                 const Object_Member om = p.object.members[i];
-
                 if (strlen(om.key) == member_name_len &&
                     strncmp(om.key, member_name, member_name_len) == 0)
                 {
                     found_pattern_todo = true;
-                    pattern_todo = om.pattern;
+                    pattern_todo = om;
                     break;
                 }
             }
 
+            Parser_Context call_ctx {
+                .context_stack = {
+                    .previous    = &ctx.context_stack,
+                    .parent_type = Parser_Context_Type::Object_Member,
+                    .parent {
+                        .object  = {
+                            .member_name  = String {
+                                // HACK(Felix): casting const away
+                                (char*)member_name,
+                                member_name_len},
+                        }
+                    }
+                },
+                .position_in_string = string+eaten,
+            };
+
+            value_lengh = 0;
             if (found_pattern_todo) {
-                value_lengh = 0;
-                sub_result = pattern_match_value(string+eaten, pattern_todo, user_data,
+
+                sub_result = pattern_match_value(call_ctx, pattern_todo.pattern,
+                                                 matched_obj, callback_data,
+                                                 &value_lengh, allocator);
+
+
+                if (sub_result == Pattern_Match_Result::MATCHING_ERROR)
+                    return Pattern_Match_Result::MATCHING_ERROR;
+
+            } else if (p.object.fallback_pattern) {
+                void* target = list_assure_free_slot(
+                    ((u8*)matched_obj)+(p.object.fallback_pattern->array_list_offset),
+                    p.object.fallback_pattern->element_size,
+                    allocator);
+
+                sub_result = pattern_match_value(call_ctx, p.object.fallback_pattern->pattern,
+                                                 target, callback_data,
                                                  &value_lengh, allocator);
 
                 if (sub_result == Pattern_Match_Result::MATCHING_ERROR)
                     return Pattern_Match_Result::MATCHING_ERROR;
 
             }
+
 
             if (value_lengh)
                 eaten += value_lengh;
@@ -592,7 +700,9 @@ namespace json {
     }
 
 
-    Pattern_Match_Result pattern_match(const char* string, Pattern pattern, void* user_data, Allocator_Base* allocator) {
+    Pattern_Match_Result pattern_match(const char* string, Pattern pattern,
+                                       void* matched_obj, void* callback_data,
+                                       Allocator_Base* allocator) {
         if (!string) {
             return Pattern_Match_Result::MATCHING_ERROR;
         }
@@ -602,9 +712,13 @@ namespace json {
 
         u32 eaten = 0;
 
-        return pattern_match_value(string, pattern, user_data, &eaten, allocator);
+        Parser_Context call_ctx {
+            .position_in_string = string,
+        };
+        return pattern_match_value(call_ctx, pattern,
+                                   matched_obj, callback_data,
+                                   &eaten, allocator);
     }
-
 
     // Pattern member_value(const char* key, Json_Type source_type, Data_Type destination_type, u32 destination_offset) {
     //     Pattern p = Pattern {
@@ -631,8 +745,7 @@ namespace json {
                 .destination_type   = Data_Type::String,
                 .destination_offset = offset
             },
-            .enter_hook = hooks.enter_hook,
-            .leave_hook = hooks.leave_hook
+            .parser_hooks = hooks
         };
         return p;
     }
@@ -644,8 +757,7 @@ namespace json {
                 .destination_type   = Data_Type::Integer,
                 .destination_offset = offset
             },
-            .enter_hook = hooks.enter_hook,
-            .leave_hook = hooks.leave_hook
+            .parser_hooks = hooks
         };
 
         return p;
@@ -658,8 +770,7 @@ namespace json {
                 .destination_type   = Data_Type::Long,
                 .destination_offset = offset
             },
-            .enter_hook = hooks.enter_hook,
-            .leave_hook = hooks.leave_hook
+            .parser_hooks = hooks
         };
 
         return p;
@@ -672,8 +783,7 @@ namespace json {
                 .destination_type   = Data_Type::Float,
                 .destination_offset = offset
             },
-            .enter_hook = hooks.enter_hook,
-            .leave_hook = hooks.leave_hook
+            .parser_hooks = hooks
         };
 
         return p;
@@ -686,17 +796,15 @@ namespace json {
                 .destination_type   = Data_Type::Boolean,
                 .destination_offset = offset
             },
-            .enter_hook = hooks.enter_hook,
-            .leave_hook = hooks.leave_hook
+            .parser_hooks = hooks
         };
         return p;
     }
 
-    Pattern object(std::initializer_list<Object_Member> members, Parser_Hooks hooks) {
+    Pattern object(std::initializer_list<Object_Member> members, Fallback_Pattern&& fallback_pattern, Parser_Hooks hooks) {
         Pattern p = Pattern {
             .type = Json_Type::Object,
-            .enter_hook = hooks.enter_hook,
-            .leave_hook = hooks.leave_hook
+            .parser_hooks = hooks
         };
 
         if (members.size() == 0)
@@ -706,7 +814,16 @@ namespace json {
         //   initializer list ends before the pattern is matched? then
         //   p.object.members is a dangling pointer?
         p.object.members      = members.begin();
-        p.object.member_count = members.size();
+        p.object.member_count = (u32)members.size();
+
+        // assert(fallback_pattern.size() <= 1);
+        // u64 fb_size = fallback_pattern.size();
+        // if (fb_size == 1) {
+        //     const Fallback_Pattern* fb = fallback_pattern.begin();
+        if (fallback_pattern.pattern.type != Json_Type::Invalid) {
+            p.object.fallback_pattern = &fallback_pattern;
+        }
+        // }
 
         return p;
     }
@@ -714,8 +831,7 @@ namespace json {
     Pattern object(u32 hash_map_offset, Parser_Hooks hooks) {
         Pattern p = Pattern {
             .type = Json_Type::Object_As_Hash_Map,
-            .enter_hook = hooks.enter_hook,
-            .leave_hook = hooks.leave_hook
+            .parser_hooks = hooks
         };
         p.object_as_hash_map.hash_map_offset = hash_map_offset;
         return p;
@@ -739,8 +855,7 @@ namespace json {
                 .array_list_offset = list_info.array_list_offset,
                 .child_pattern     = &element_pattern
             },
-            .enter_hook = hooks.enter_hook,
-            .leave_hook = hooks.leave_hook
+            .parser_hooks = hooks
         };
 
 
@@ -756,8 +871,7 @@ namespace json {
                 .destination_type = destination_type,
                 .destination_offset = destination_offset
             },
-            .enter_hook = hooks.enter_hook,
-            .leave_hook = hooks.leave_hook
+            .parser_hooks = hooks
         };
 
         return p;

@@ -913,7 +913,7 @@ struct Array_List {
     void remove_index(u32 index) {
 #ifdef FTB_INTERNAL_DEBUG
         if (index >= count) {
-            panic("ERROR: removing index that is not in use\n")
+            panic("ERROR: removing index that is not in use\n");
         }
 #endif
         data[index] = data[--count];
@@ -922,7 +922,7 @@ struct Array_List {
     void sorted_remove_index(u32 index) {
 #ifdef FTB_INTERNAL_DEBUG
         if (index >= count) {
-            panic("ERROR: removing index that is not in use\n")
+            panic("ERROR: removing index that is not in use\n");
         }
 #endif
         memmove(data+index, data+index+1, (count-index-1) * sizeof(type));

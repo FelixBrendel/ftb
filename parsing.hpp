@@ -139,7 +139,7 @@ u32 read_long(const char* str, s64* out_long) {
         quotes_chars = 2;
     }
 
-    return end-str + quotes_chars;
+    return (u32)(end-str + quotes_chars);
 }
 
 u32 read_int(const char* str, s32* out_int) {
@@ -153,7 +153,7 @@ u32 read_int(const char* str, s32* out_int) {
 u32 read_float(const char* str, f32* out_float) {
     char* end;
     *out_float = strtof(str, &end);
-    return end-str;
+    return (u32)(end-str);
 }
 
 u32 read_bool(const char* str, bool* out_bool) {

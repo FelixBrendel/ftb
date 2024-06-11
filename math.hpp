@@ -36,78 +36,87 @@
 extern f32 pi;
 extern f32 two_pi;
 
-union V2 {
+template<typename type>
+union Gen_V2 {
     struct {
-        f32 x, y;
+        type x, y;
     };
     struct {
-        f32 u, v;
+        type u, v;
     };
-    f32 elements[2];
+    type elements[2];
 
-    inline f32 &operator[](const int &index) {
+    inline type &operator[](const int &index) {
         return elements[index];
     }
 };
 
-union V3 {
+template<typename type>
+union Gen_V3 {
     struct {
-        f32 x, y, z;
+        type x, y, z;
     };
     struct {
-        f32 r, g, b;
+        type r, g, b;
     };
     struct {
-        V2 xy;
-        f32 _padding_1;
+        Gen_V2<type> xy;
+        type _padding_1;
     };
     struct {
-        f32 _padding_2;
-        V2 yz;
+        type _padding_2;
+        Gen_V2<type> yz;
     };
-    f32 elements[3];
+    type elements[3];
 
-    inline f32 &operator[](const int &index) {
+    inline type &operator[](const int &index) {
         return elements[index];
     }
 };
 
-union V4 {
+template<typename type>
+union Gen_V4 {
     struct {
-        f32 x, y, z, w;
+        type x, y, z, w;
     };
     struct {
-        f32 r, g, b, a;
+        type r, g, b, a;
     };
     struct {
-        V2 xy;
-        V2 zw;
+        Gen_V2<type> xy;
+        Gen_V2<type> zw;
     };
     struct {
-        f32 _padding_1;
-        V2 yz;
-        f32 _padding_2;
+        type _padding_1;
+        Gen_V2<type> yz;
+        type _padding_2;
     };
     struct {
-        V3 xyz;
-        f32 _padding_3;
+        Gen_V3<type> xyz;
+        type _padding_3;
     };
     struct {
-        V3 rgb;
-        f32 _padding_4;
+        Gen_V3<type> rgb;
+        type _padding_4;
     };
     struct {
-        f32 _padding_5;
-        V3 yzw;
+        type _padding_5;
+        Gen_V3<type> yzw;
     };
-    f32 elements[4];
+    type elements[4];
 
-    inline f32 &operator[](const int &index) {
+    inline type &operator[](const int &index) {
         return elements[index];
     }
 };
 
+typedef Gen_V2<f32> V2;
+typedef Gen_V3<f32> V3;
+typedef Gen_V4<f32> V4;
 typedef V4 Quat;
+typedef Gen_V2<s32> IV2;
+typedef Gen_V3<s32> IV3;
+typedef Gen_V4<s32> IV4;
 
 // NOTE(Felix): All matrics are column-major, since glsl shaders expect it that
 //   way, so we can just memcpy the matrices. This also includes the _00, _01

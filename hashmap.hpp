@@ -45,7 +45,7 @@ bool hm_objects_match(void* a, void* b);
 
 #else // implementations
 
-u32 hm_hash(const char* str) {
+static u32 hm_hash(const char* str) {
     u32 value = str[0] << 7;
     s32 i = 0;
     while (str[i]) {
@@ -54,7 +54,7 @@ u32 hm_hash(const char* str) {
     return value ^ i;
 }
 
-u32 hm_hash(char* str) {
+static u32 hm_hash(char* str) {
     u32 value = str[0] << 7;
     s32 i = 0;
     while (str[i]) {
@@ -63,19 +63,19 @@ u32 hm_hash(char* str) {
     return value ^ i;
 }
 
-u32 hm_hash(void* ptr) {
+static u32 hm_hash(void* ptr) {
     return ((u64)ptr * 2654435761) % 4294967296;
 }
 
-inline bool hm_objects_match(const char* a, const char* b) {
+static inline bool hm_objects_match(const char* a, const char* b) {
     return strcmp(a, b) == 0;
 }
 
-inline bool hm_objects_match(char* a, char* b) {
+static inline bool hm_objects_match(char* a, char* b) {
     return strcmp(a, b) == 0;
 }
 
-inline bool hm_objects_match(void* a, void* b) {
+static inline bool hm_objects_match(void* a, void* b) {
     return a == b;
 }
 #endif //FTB_HASHMAP_IMPL

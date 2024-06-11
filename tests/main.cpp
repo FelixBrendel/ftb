@@ -4,6 +4,7 @@
 #include <string.h>
 
 #define FTB_CORE_IMPL
+
 #define FTB_HASHMAP_IMPL
 #define FTB_SCHEDULER_IMPL
 #define FTB_MATH_IMPL
@@ -1761,6 +1762,119 @@ auto test_json_simple_object_new_syntax() -> testresult {
     return pass;
 }
 
+
+auto test_json_wildcard_match_and_parser_context() -> testresult {
+    using namespace json;
+    const char* json_str = R"JSON({
+    "list"         : ["my", "list", "contents", "is", "just", "strings"],
+    "123"          : {"value" : 5},
+    "wildcard"     : {"value" : 4},
+    "other things" : {"value" : 3},
+    "list_pefix"   : {"value" : 2},
+    "postfix_list" : {"value" : 1},
+})JSON";
+
+    struct Wildcard_Obj {
+        String key;
+        s32    value;
+    };
+
+    struct List_Entry {
+        s32    idx;
+        String value;
+    };
+
+    struct Match_Target {
+        Array_List<List_Entry>   list;
+        Array_List<Wildcard_Obj> objs;
+    };
+
+    Parser_Hooks string_list_hooks = {};
+    string_list_hooks.leave_hook = [](void* matched_obj, void* callback_data,
+                                      Hook_Context h_context, Parser_Context p_context)
+        -> Pattern_Match_Result
+    {
+        List_Entry* entry = (List_Entry*)matched_obj;
+        panic_if(p_context.context_stack.parent_type != Parser_Context_Type::List_Entry,
+                 "p_context.context_stack.parent_type != Parser_Context_Type::List_Entry");
+        entry->idx = p_context.context_stack.parent.list_entry.index;
+        return Pattern_Match_Result::OK_CONTINUE;
+    };
+
+    Parser_Hooks wildcard_list_hooks = {};
+    wildcard_list_hooks.leave_hook = [](void* matched_obj, void* callback_data,
+                                      Hook_Context h_context, Parser_Context p_context)
+        -> Pattern_Match_Result
+    {
+        Wildcard_Obj* entry = (Wildcard_Obj*)matched_obj;
+        panic_if(p_context.context_stack.parent_type != Parser_Context_Type::Object_Member,
+                 "p_context.context_stack.parent_type != Parser_Context_Type::Object_Member");
+
+        panic_if(p_context.context_stack.previous->parent_type != Parser_Context_Type::Object_Member,
+                 "p_context.context_stack.previous->parent_type != Parser_Context_Type::Object_Member");
+        entry->key = p_context.context_stack.previous->parent.object.member_name;
+        return Pattern_Match_Result::OK_CONTINUE;
+    };
+
+    Pattern json_pattern =
+        object({{
+                    "list", list({
+                            string(offsetof(List_Entry, value), string_list_hooks)
+                        }, {
+                            .array_list_offset = offsetof(Match_Target, list),
+                            .element_size      = sizeof(Match_Target::list[0])
+                        })
+                }},
+            {(Fallback_Pattern){
+                .pattern = object({{
+                            "value", integer(offsetof(Wildcard_Obj, value), wildcard_list_hooks)
+                        }}),
+                .element_size      = sizeof(Match_Target::objs[0]),
+                .array_list_offset = offsetof(Match_Target, objs),
+            }}
+            );
+
+    Match_Target target {};
+
+    Pattern_Match_Result match_result = pattern_match(json_str, json_pattern, &target);
+    assert_equal_int(target.list.count, 6);
+    assert_equal_string(target.list[0].value, string_from_literal("my"));
+    assert_equal_string(target.list[1].value, string_from_literal("list"));
+    assert_equal_string(target.list[2].value, string_from_literal("contents"));
+    assert_equal_string(target.list[3].value, string_from_literal("is"));
+    assert_equal_string(target.list[4].value, string_from_literal("just"));
+    assert_equal_string(target.list[5].value, string_from_literal("strings"));
+
+    assert_equal_int(target.list[0].idx, 0);
+    assert_equal_int(target.list[1].idx, 1);
+    assert_equal_int(target.list[2].idx, 2);
+    assert_equal_int(target.list[3].idx, 3);
+    assert_equal_int(target.list[4].idx, 4);
+    assert_equal_int(target.list[5].idx, 5);
+
+    assert_equal_int(target.objs.count, 5);
+
+    assert_equal_int(target.objs[0].value, 5);
+    assert_equal_int(target.objs[1].value, 4);
+    assert_equal_int(target.objs[2].value, 3);
+    assert_equal_int(target.objs[3].value, 2);
+    assert_equal_int(target.objs[4].value, 1);
+
+    assert_equal_string(target.objs[0].key, string_from_literal("123"));
+    assert_equal_string(target.objs[1].key, string_from_literal("wildcard"));
+    assert_equal_string(target.objs[2].key, string_from_literal("other things"));
+    assert_equal_string(target.objs[3].key, string_from_literal("list_pefix"));
+    assert_equal_string(target.objs[4].key, string_from_literal("postfix_list"));
+
+    for (auto elem : target.list) {
+        elem.value.free();
+    }
+    target.list.deinit();
+
+
+    return pass;
+}
+
 auto test_json_config() -> testresult {
     using namespace json;
 
@@ -1822,6 +1936,12 @@ auto test_json_config() -> testresult {
                 .array_list_offset = offsetof(Tafel_Config, destination_blacklist),
                 .element_size      = sizeof(Tafel_Config::destination_blacklist[0]),
                 })},
+        // {nullptr, list({string(0)}, {
+        //             .array_list_offset = offsetof(Tafel_Config, destination_blacklist),
+        //             .element_size      = sizeof(Tafel_Config::destination_blacklist[0]),
+        //         }
+
+        //         )},
         // {"vehicle_type_blacklist", list(
                     // custom(Json_Type::String, (Data_Type)Custom_Data_Types::VEHICLE_TYPE, 0),
             // {
@@ -1957,9 +2077,9 @@ auto test_json_mvg() -> testresult {
                 {"has_zoom_data", boolean_(offsetof(Location, has_zoom_data))},
                 {"aliases",       string  (offsetof(Location, aliases))},
                 {"tariffZones",   string  (offsetof(Location, tariffZones))},
-            }, {
+            }, {}, {
                 // NOTE(Felix): stop after first location
-                .leave_hook = [](void*, Hook_Context, Parser_Context) -> Pattern_Match_Result {
+                .leave_hook = [](void* match, void* callback_data, Hook_Context, Parser_Context) -> Pattern_Match_Result {
                     return Pattern_Match_Result::OK_DONE;
                 }
             });
@@ -2672,8 +2792,8 @@ s32 main(s32, char**) {
             invoke_test(test_json_bug);
             invoke_test(test_json_extract_value_from_list);
             // invoke_test(test_json_parse_from_quoted_value);
-            invoke_test(test_json_object_as_hash_map);
-
+            // invoke_test(test_json_object_as_hash_map);
+            invoke_test(test_json_wildcard_match_and_parser_context);
 
             invoke_test(test_json_config);
             invoke_test(test_json_bug_again);
