@@ -23,6 +23,7 @@ u32 read_long(const char* str, s64* out_int);
 u32 read_bool(const char* str, bool* out_bool);
 u32 read_float(const char* str, f32* out_float);
 
+u32 eat_line(const char* str);
 u32 eat_whitespace(const char* str);
 u32 eat_string(const char* str);
 u32 eat_number(const char* str);
@@ -46,6 +47,15 @@ bool is_alpha_char(const char c) {
 inline bool is_whitespace(const char c) {
     return c == ' '  || c == '\n' ||
         c == '\r' || c == '\t';
+}
+
+u32 eat_line(const char* str) {
+    u32 eaten = 0;
+    while (*str != '\n') {
+        ++str;
+        ++eaten;
+    }
+    return eaten;
 }
 
 u32 eat_whitespace(const char* str) {
@@ -148,7 +158,6 @@ u32 read_int(const char* str, s32* out_int) {
     *out_int = (s32)l;
     return read;
 }
-
 
 u32 read_float(const char* str, f32* out_float) {
     char* end;

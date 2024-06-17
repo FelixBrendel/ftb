@@ -1829,8 +1829,8 @@ auto test_json_wildcard_match_and_parser_context() -> testresult {
                 .pattern = object({{
                             "value", integer(offsetof(Wildcard_Obj, value), wildcard_list_hooks)
                         }}),
-                .element_size      = sizeof(Match_Target::objs[0]),
                 .array_list_offset = offsetof(Match_Target, objs),
+                .element_size      = sizeof(Match_Target::objs[0]),
             }}
             );
 

@@ -85,9 +85,9 @@ namespace json {
 
         union {
             struct {
-                const Object_Member* members;
+                Object_Member* members;
                 u32 member_count;
-                const Fallback_Pattern* fallback_pattern; // pattern used for wildcard matches
+                Fallback_Pattern* fallback_pattern; // pattern used for wildcard matches
             } object;
             struct {
                 u32 hash_map_offset;
@@ -95,7 +95,7 @@ namespace json {
             struct {
                 u32 element_size;
                 u32 array_list_offset;
-                const Pattern* child_pattern;
+                Pattern* child_pattern;
             } list;
             struct {
                 Data_Type   destination_type;
@@ -104,8 +104,6 @@ namespace json {
         };
 
         Parser_Hooks parser_hooks;
-        // parser_hook             enter_hook;
-        // parser_hook             leave_hook;
 
         void print();
 
@@ -113,8 +111,8 @@ namespace json {
 
     struct Fallback_Pattern {
         Pattern pattern;
-        u32 element_size;
         u32 array_list_offset;
+        u32 element_size;
     };
 
     struct Object_Member {
@@ -127,7 +125,7 @@ namespace json {
         u32 element_size;
     };
 
-    Pattern object(std::initializer_list<Object_Member> members, Fallback_Pattern&& fallback_pattern={}, Parser_Hooks hooks={0});
+    Pattern object(std::initializer_list<Object_Member> members, Fallback_Pattern fallback_pattern={}, Parser_Hooks hooks={0});
     Pattern object(u32 hash_map_offset, Parser_Hooks hooks={0});
 
     Pattern list(Pattern&& element_pattern,
@@ -801,29 +799,30 @@ namespace json {
         return p;
     }
 
-    Pattern object(std::initializer_list<Object_Member> members, Fallback_Pattern&& fallback_pattern, Parser_Hooks hooks) {
+    Pattern object(std::initializer_list<Object_Member> members, Fallback_Pattern fallback_pattern, Parser_Hooks hooks) {
         Pattern p = Pattern {
             .type = Json_Type::Object,
             .parser_hooks = hooks
         };
 
-        if (members.size() == 0)
-            return p;
+        Allocator_Base* temp = grab_temp_allocator();
 
-        // TODO(Felix): this is dangerous?? what if the lifetiem of the
-        //   initializer list ends before the pattern is matched? then
-        //   p.object.members is a dangling pointer?
-        p.object.members      = members.begin();
         p.object.member_count = (u32)members.size();
 
-        // assert(fallback_pattern.size() <= 1);
-        // u64 fb_size = fallback_pattern.size();
-        // if (fb_size == 1) {
-        //     const Fallback_Pattern* fb = fallback_pattern.begin();
-        if (fallback_pattern.pattern.type != Json_Type::Invalid) {
-            p.object.fallback_pattern = &fallback_pattern;
+        if (p.object.member_count != 0) {
+            p.object.members      = temp->allocate<Object_Member>(p.object.member_count);
+
+            const Object_Member* it = members.begin();
+            for (u64 i = 0; i < p.object.member_count; ++i) {
+                p.object.members[i] = *it;
+                ++it;
+            }
         }
-        // }
+
+        if (fallback_pattern.pattern.type != Json_Type::Invalid) {
+            p.object.fallback_pattern  = temp->allocate<Fallback_Pattern>(1);
+            *p.object.fallback_pattern = fallback_pattern;
+        }
 
         return p;
     }
@@ -847,13 +846,16 @@ namespace json {
     Pattern list(const Pattern& element_pattern,
                  List_Info list_info, Parser_Hooks hooks)
     {
+        Allocator_Base* temp = grab_temp_allocator();
+        Pattern* child = temp->allocate<Pattern>(1);
+        *child = element_pattern;
 
         Pattern p = Pattern {
             .type = Json_Type::List,
             .list = {
                 .element_size      = list_info.element_size,
                 .array_list_offset = list_info.array_list_offset,
-                .child_pattern     = &element_pattern
+                .child_pattern     = child
             },
             .parser_hooks = hooks
         };

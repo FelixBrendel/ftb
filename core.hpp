@@ -407,7 +407,8 @@ Allocator_Base* push_allocator(Allocator_Base*);
 Allocator_Base* pop_allocator();
 
 Allocator_Base* grab_temp_allocator();
-void reset_temp_allocator();
+u64  get_temp_allocator_depth();
+void reset_temp_allocator(u64 depth);
 
 extern Allocator_Base* libc_allocator;
 
@@ -1393,8 +1394,8 @@ struct Bookkeeping_Allocator {
 struct Linear_Allocator {
     Allocator_Base base;
     void*          data;
-    u32            count;
-    u32            length;
+    u64            count;
+    u64            length;
     void*          last_alloc;
 
     operator bool () {return false;} // NOTE(Felix): used for in_scratch_buffer
@@ -1492,6 +1493,14 @@ Allocator_Base* grab_current_allocator() {
 
 Allocator_Base* grab_temp_allocator() {
     return temp_allocator;
+}
+
+u64 get_temp_allocator_depth() {
+    return ((Linear_Allocator*)&temp_allocator)->count;
+}
+
+void reset_temp_allocator(u64 depth) {
+    ((Linear_Allocator*)&temp_allocator)->count = depth;
 }
 
 Allocator_Base* push_allocator(Allocator_Base* new_allocator) {
@@ -1917,7 +1926,7 @@ void Linear_Allocator::init(u32 initial_size, Allocator_Base* next_allocator) {
     length      = initial_size;
     count       = 0;
     last_alloc  = 0;
-    data = base.next_allocator->allocate(length, alignof(void*));
+    data = base.next_allocator->allocate((u32)length, alignof(void*));
 }
 
 void Linear_Allocator::reset() {
