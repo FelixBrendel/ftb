@@ -222,6 +222,25 @@ auto test_printer() -> testresult {
     return pass;
 }
 
+auto test_math_matrix_compose() -> testresult {
+    M4x4 model = m4x4_model({1, 2, 3}, quat_from_XYZ(12, 34, 59), {1, 2, 3});
+    M3x3 R {};
+    V3   t {};
+
+    m4x4_decompose(model, &R, &t);
+    assert_equal_f32(t.x, 1);
+    assert_equal_f32(t.y, 2);
+    assert_equal_f32(t.z, 3);
+
+    M4x4 rebuild = m4x4_compose(R, t);
+
+    for (int i = 0; i < array_length(M4x4::elements); ++i) {
+        assert_equal_f32(model[i], rebuild[i]);
+    }
+
+    return pass;
+}
+
 auto test_hashmap() -> testresult {
     Hash_Map<u32, u32> h1;
     h1.init();
@@ -2805,6 +2824,7 @@ s32 main(s32, char**) {
             invoke_test(test_bucket_list_leak);
             invoke_test(test_bucket_queue);
             invoke_test(test_math);
+            invoke_test(test_math_matrix_compose);
             invoke_test(test_hashmap);
             invoke_test(test_sort);
             invoke_test(test_kd_tree);

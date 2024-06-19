@@ -110,6 +110,12 @@ union Gen_V4 {
     }
 };
 
+template<typename type>
+struct Gen_Ray {
+    type offset;
+    type direction;
+};
+
 typedef Gen_V2<f32> V2;
 typedef Gen_V3<f32> V3;
 typedef Gen_V4<f32> V4;
@@ -117,6 +123,9 @@ typedef V4 Quat;
 typedef Gen_V2<s32> IV2;
 typedef Gen_V3<s32> IV3;
 typedef Gen_V4<s32> IV4;
+
+typedef Gen_Ray<V3> Ray3;
+typedef Gen_Ray<V2> Ray2;
 
 // NOTE(Felix): All matrics are column-major, since glsl shaders expect it that
 //   way, so we can just memcpy the matrices. This also includes the _00, _01
@@ -265,6 +274,10 @@ auto operator+(M2x2 a, M2x2 b) -> M2x2;
 auto operator+(M3x3 a, M3x3 b) -> M3x3;
 auto operator+(M4x4 a, M4x4 b) -> M4x4;
 
+auto operator-(M2x2 a, M2x2 b) -> M2x2;
+auto operator-(M3x3 a, M3x3 b) -> M3x3;
+auto operator-(M4x4 a, M4x4 b) -> M4x4;
+
 auto operator*(M2x2 a, f32 s)  -> M2x2;
 auto operator*(M3x3 a, f32 s)  -> M3x3;
 auto operator*(M4x4 a, f32 s)  -> M4x4;
@@ -281,12 +294,18 @@ auto m4x4_ortho(f32 left, f32 right, f32 bottom, f32 top) -> M4x4;
 auto m4x4_ortho(f32 x_extend, f32 aspect) -> M4x4;
 
 
+auto m4x4_decompose(M4x4 input, M3x3* out_rot_sheer, V3* out_translation) -> void;
+auto m4x4_compose(M3x3 out_rot_sheer, V3 out_translation) -> M4x4;
 auto m4x4_orientation(Quat orientation) -> M4x4;
 auto m4x4_translate(V3 tanslation) -> M4x4;
 auto m4x4_scale(V3 scale) -> M4x4;
 auto m4x4_model(V3 tanslation, Quat orientation, V3 scale) -> M4x4;
 
+auto m3x3_identity() -> M3x3;
 auto m3x3_orientation(Quat orientation) -> M3x3;
+
+auto frobenius(M3x3) -> float;
+auto frobenius(M4x4) -> float;
 // ---------------------
 //     quat functions
 // ---------------------
@@ -696,7 +715,7 @@ inline auto operator*(M2x2 a, M2x2 b) -> M2x2 {
 }
 
 
-inline auto operator*(M3x3 a, M3x3 b) -> M3x3 {
+auto operator*(M3x3 a, M3x3 b) -> M3x3 {
     M3x3 result {
         dot({a._00, a._10, a._20}, b.columns[0]), dot({a._01, a._11, a._21}, b.columns[0]), dot({a._02, a._12, a._22}, b.columns[0]),
         dot({a._00, a._10, a._20}, b.columns[1]), dot({a._01, a._11, a._21}, b.columns[1]), dot({a._02, a._12, a._22}, b.columns[1]),
@@ -722,6 +741,30 @@ inline auto operator*(M4x4 a, M4x4 b) -> M4x4 {
         dot({a._02, a._12, a._22, a._32}, b.columns[3]), dot({a._03, a._13, a._23, a._33}, b.columns[3]),
     };
 
+    return result;
+}
+
+auto operator-(M2x2 a, M2x2 b) -> M2x2 {
+    M2x2 result;
+    result.columns[0] = a.columns[0] - b.columns[0];
+    result.columns[1] = a.columns[1] - b.columns[1];
+    return result;
+}
+
+auto operator-(M3x3 a, M3x3 b) -> M3x3 {
+    M3x3 result;
+    result.columns[0] = a.columns[0] - b.columns[0];
+    result.columns[1] = a.columns[1] - b.columns[1];
+    result.columns[2] = a.columns[2] - b.columns[2];
+    return result;
+}
+
+auto operator-(M4x4 a, M4x4 b) -> M4x4 {
+    M4x4 result;
+    result.columns[0] = a.columns[0] - b.columns[0];
+    result.columns[1] = a.columns[1] - b.columns[1];
+    result.columns[2] = a.columns[2] - b.columns[2];
+    result.columns[3] = a.columns[3] - b.columns[3];
     return result;
 }
 
@@ -934,6 +977,48 @@ auto m4x4_model(V3 tanslation, Quat orientation, V3 scale) -> M4x4 {
     M4x4 o = m4x4_orientation(orientation);
     M4x4 s = m4x4_scale(scale);
     return t * o * s;
+}
+
+auto m4x4_decompose(M4x4 input, M3x3* out_rot_sheer, V3* out_translation) -> void {
+    out_rot_sheer->columns[0] = input.columns[0].xyz;
+    out_rot_sheer->columns[1] = input.columns[1].xyz;
+    out_rot_sheer->columns[2] = input.columns[2].xyz;
+    *out_translation          = input.columns[3].xyz;
+}
+
+auto m4x4_compose(M3x3 rot_sheer, V3 translation) -> M4x4 {
+    M4x4 result {};
+    result.columns[0].xyz = rot_sheer.columns[0];
+    result.columns[1].xyz = rot_sheer.columns[1];
+    result.columns[2].xyz = rot_sheer.columns[2];
+    result.columns[3]     = v4(translation, 1);
+    return result;
+}
+
+auto frobenius(M4x4 m) -> float {
+    f32 sum = 0;
+    for (s32 i = 0; i < array_length(m.elements); ++i) {
+        sum += m.elements[i] * m.elements[i];
+    }
+    return sqrtf(sum);
+}
+
+auto frobenius(M3x3 m) -> float {
+    f32 sum = 0;
+    for (s32 i = 0; i < array_length(m.elements); ++i) {
+        sum += m.elements[i] * m.elements[i];
+    }
+    return sqrtf(sum);
+}
+
+auto m3x3_identity() -> M3x3 {
+    M3x3 mat {};
+
+    mat._00 = 1;
+    mat._11 = 1;
+    mat._22 = 1;
+
+    return mat;
 }
 
 auto m3x3_orientation(Quat q) -> M3x3 {
