@@ -892,7 +892,7 @@ namespace json {
 
     void write_long_to_file(FILE* out, u32 offset, void* data) {
         s64* i = (s64*)(((byte*)data)+offset);
-        fprintf(out, "%lld", *i);
+        fprintf(out, "%Id", *i);
     }
 
     void write_float_to_file(FILE* out, u32 offset, void* data) {

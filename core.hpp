@@ -2612,7 +2612,6 @@ auto print_str_line(FILE* f, char* str) -> s32 {
     return print_to_file(f, "%.*s", length, str);
 }
 
-
 #ifdef FTB_USING_MATH
 auto print_v2(FILE* f, V2* v2) -> s32 {
     return print_to_file(f, "{ %f %f }",
