@@ -44,21 +44,21 @@ enum struct Window_Events {
     Window_Resized,
     Window_Got_Focus,
     Window_Lost_Focus,
-    Window_Closed,
+    Window_Wants_To_Close,
 
     ENUM_SIZE
 };
 
 struct User_Input {
     // NOTE(Felix): SOA design so we can quickly clear the
-    //   `half_transition_count' each frame with a single memset
+    //   `transition_count' each frame with a single memset
     struct {
         bool            ended_down[(u32)Keyboard_Keys::ENUM_SIZE];
-        u32  half_transition_count[(u32)Keyboard_Keys::ENUM_SIZE];
+        u32  transition_count[(u32)Keyboard_Keys::ENUM_SIZE];
     } keyboard;
     struct {
         bool            ended_down[(u32)Mouse_Buttons::ENUM_SIZE];
-        u32  half_transition_count[(u32)Mouse_Buttons::ENUM_SIZE];
+        u32  transition_count[(u32)Mouse_Buttons::ENUM_SIZE];
         f32  scroll_delta;
         V2   position;
     } mouse;
@@ -66,12 +66,12 @@ struct User_Input {
 
     bool key_went_down(Keyboard_Keys key) {
         return keyboard.ended_down[(u32)key] &&
-            keyboard.half_transition_count[(u32)key] != 0;
+            keyboard.transition_count[(u32)key] != 0;
     }
 
     bool key_went_up(Keyboard_Keys key) {
         return !keyboard.ended_down[(u32)key] &&
-            keyboard.half_transition_count[(u32)key] != 0;
+            keyboard.transition_count[(u32)key] != 0;
     }
 
     bool key_is_down(Keyboard_Keys key) {
@@ -80,12 +80,12 @@ struct User_Input {
 
     bool mouse_went_down(Mouse_Buttons button) {
         return mouse.ended_down[(u32)button] &&
-            mouse.half_transition_count[(u32)button] != 0;
+            mouse.transition_count[(u32)button] != 0;
     }
 
     bool mouse_went_up(Mouse_Buttons button) {
         return !mouse.ended_down[(u32)button] &&
-            mouse.half_transition_count[(u32)button] != 0;
+            mouse.transition_count[(u32)button] != 0;
     }
 
     bool mouse_is_down(Mouse_Buttons button) {
@@ -112,8 +112,8 @@ static bool initialized = false;
 Window_State* update_window(Window_Type window) {
     Window_State* state = hwnd_to_state.get_object_ptr(window.window);
 
-    memset(&state->input.mouse.half_transition_count, 0, sizeof(state->input.mouse.half_transition_count));
-    memset(&state->input.keyboard.half_transition_count, 0, sizeof(state->input.keyboard.half_transition_count));
+    memset(&state->input.mouse.transition_count, 0, sizeof(state->input.mouse.transition_count));
+    memset(&state->input.keyboard.transition_count, 0, sizeof(state->input.keyboard.transition_count));
 
     memset(&state->events, 0, sizeof(state->events));
 
@@ -130,6 +130,13 @@ Window_State* update_window(Window_Type window) {
     return state;
 }
 
+/*
+  NOTE(Felix): Much of this window-proc code is adapted from DearImGUI's win32
+  implementation, as it gave a good overview how to handle some edge cases (of
+  which most I have removed because I think they are not relevant for a quick
+  interactive window prototypey thing this is meant to be, but many thanks to
+  DearImGUI!)
+*/
 Keyboard_Keys key_from_vk(int vk) {
     switch (vk) {
         case VK_TAB: return Keyboard_Keys::Tab;
@@ -214,6 +221,10 @@ LRESULT ftb_window_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 
     switch (msg) {
+        case WM_CLOSE: {
+            state->events[(u32)Window_Events::Window_Wants_To_Close] = true;
+            return 0;
+        }
         case WM_MOUSEMOVE:
         case WM_NCMOUSEMOVE: {
             POINT mouse_pos = { (LONG)GET_X_LPARAM(lParam), (LONG)GET_Y_LPARAM(lParam) };
@@ -234,7 +245,7 @@ LRESULT ftb_window_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 if (msg == WM_MBUTTONDOWN || msg == WM_MBUTTONDBLCLK) { button = 2; }
                 if (msg == WM_XBUTTONDOWN || msg == WM_XBUTTONDBLCLK) { button = (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) ? 3 : 4; }
                 state->input.mouse.ended_down[button] = true;
-                ++state->input.mouse.half_transition_count[button];
+                ++state->input.mouse.transition_count[button];
                 return 0;
             }
         case WM_LBUTTONUP:
@@ -248,7 +259,7 @@ LRESULT ftb_window_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 if (msg == WM_MBUTTONUP) { button = 2; }
                 if (msg == WM_XBUTTONUP) { button = (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) ? 3 : 4; }
                 state->input.mouse.ended_down[button] = false;
-                ++state->input.mouse.half_transition_count[button];
+                ++state->input.mouse.transition_count[button];
                 return 0;
             }
         case WM_MOUSEWHEEL: {
@@ -268,7 +279,7 @@ LRESULT ftb_window_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 Keyboard_Keys key = key_from_vk(vk);
                 if (key != Keyboard_Keys::ENUM_SIZE) {
                     state->input.keyboard.ended_down[(s32)key] = is_key_down;
-                    ++state->input.keyboard.half_transition_count[(s32)key];
+                    ++state->input.keyboard.transition_count[(s32)key];
                 }
             }
             return 0;

@@ -235,6 +235,10 @@ auto operator==(V2 a, V2 b) -> bool;
 auto operator==(V3 a, V3 b) -> bool;
 auto operator==(V4 a, V4 b) -> bool;
 
+auto operator!=(V2 a, V2 b) -> bool;
+auto operator!=(V3 a, V3 b) -> bool;
+auto operator!=(V4 a, V4 b) -> bool;
+
 auto operator+(V2 a, V2 b) -> V2;
 auto operator+(V3 a, V3 b) -> V3;
 auto operator+(V4 a, V4 b) -> V4;
@@ -677,6 +681,28 @@ inline auto operator==(V4 a, V4 b) -> bool {
         a.y == b.y &&
         a.z == b.z &&
         a.w == b.w;
+}
+
+
+auto operator!=(V2 a, V2 b) -> bool {
+    return
+        a.x != b.x ||
+        a.y != b.y;
+}
+
+auto operator!=(V3 a, V3 b) -> bool {
+    return
+        a.x != b.x ||
+        a.y != b.y ||
+        a.z != b.z;
+}
+
+auto operator!=(V4 a, V4 b) -> bool {
+    return
+        a.x != b.x ||
+        a.y != b.y ||
+        a.z != b.z ||
+        a.w != b.w;
 }
 
 // ---------------------
