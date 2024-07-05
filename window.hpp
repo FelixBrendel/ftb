@@ -53,11 +53,11 @@ struct User_Input {
     // NOTE(Felix): SOA design so we can quickly clear the
     //   `transition_count' each frame with a single memset
     struct {
-        bool            ended_down[(u32)Keyboard_Keys::ENUM_SIZE];
+        bool       ended_down[(u32)Keyboard_Keys::ENUM_SIZE];
         u32  transition_count[(u32)Keyboard_Keys::ENUM_SIZE];
     } keyboard;
     struct {
-        bool            ended_down[(u32)Mouse_Buttons::ENUM_SIZE];
+        bool       ended_down[(u32)Mouse_Buttons::ENUM_SIZE];
         u32  transition_count[(u32)Mouse_Buttons::ENUM_SIZE];
         f32  scroll_delta;
         V2   position;
@@ -116,6 +116,7 @@ Window_State* update_window(Window_Type window) {
     memset(&state->input.keyboard.transition_count, 0, sizeof(state->input.keyboard.transition_count));
 
     memset(&state->events, 0, sizeof(state->events));
+    state->input.mouse.scroll_delta = 0;
 
     while (true) {
         MSG  message;
