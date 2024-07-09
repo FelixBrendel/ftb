@@ -426,6 +426,18 @@ extern Allocator_Base* libc_allocator;
 
 
 // ----------------------------------------------------------------------------
+//                              Perf_Counter
+// ----------------------------------------------------------------------------
+struct Perf_Counter {
+    s64 last_counter;
+    f32 one_over_perf_frequency;
+};
+
+void init(Perf_Counter*);
+f32  tick(Perf_Counter*);
+
+
+// ----------------------------------------------------------------------------
 //                              Maybe
 // ----------------------------------------------------------------------------
 struct Empty {};
@@ -1408,6 +1420,34 @@ struct Linear_Allocator {
 
 
 #ifdef FTB_CORE_IMPL
+
+// ----------------------------------------------------------------------------
+//                              Perf_Counter
+// ----------------------------------------------------------------------------
+
+void init(Perf_Counter* pc) {
+#ifdef FTB_WINDOWS
+    QueryPerformanceCounter((LARGE_INTEGER*)&pc->last_counter);
+    s64 freq;
+    QueryPerformanceFrequency((LARGE_INTEGER*)&freq);
+    pc->one_over_perf_frequency = 1.0f / freq;
+#else
+#  error NYI
+#endif
+}
+
+f32 tick(Perf_Counter* pc) {
+#ifdef FTB_WINDOWS
+    s64 old = pc->last_counter;
+    QueryPerformanceCounter((LARGE_INTEGER*)&pc->last_counter);
+
+    s64 diff = (pc->last_counter - old);
+    return diff * pc->one_over_perf_frequency;
+#else
+#  error NYI
+#endif
+}
+
 
 
 // ----------------------------------------------------------------------------

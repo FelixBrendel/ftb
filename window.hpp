@@ -13,7 +13,6 @@ struct Window_Type {
 };
 #endif
 
-
 struct Window_State;
 Window_Type create_window(IV2 size, const char* title);
 Window_State* update_window(Window_Type);
@@ -63,6 +62,20 @@ struct User_Input {
         V2   position;
     } mouse;
 
+    void add_key_event(Keyboard_Keys key, bool down) {
+        keyboard.ended_down[(s32)key] = down;
+        ++keyboard.transition_count[(s32)key];
+    }
+
+    void add_mouse_event(Mouse_Buttons button, bool down) {
+        mouse.ended_down[(s32)button] = down;
+        ++mouse.transition_count[(s32)button];
+    }
+
+    void set_key_state(Keyboard_Keys key, bool down) {
+        if (key_is_down(key) != down)
+            add_key_event(key, down);
+    }
 
     bool key_went_down(Keyboard_Keys key) {
         return keyboard.ended_down[(u32)key] &&
@@ -108,29 +121,6 @@ struct Window_State {
 Hash_Map<void*, Window_State> hwnd_to_state;
 static const char* class_name = "FTB_WINDOW_CLASS";
 static bool initialized = false;
-
-Window_State* update_window(Window_Type window) {
-    Window_State* state = hwnd_to_state.get_object_ptr(window.window);
-
-    memset(&state->input.mouse.transition_count, 0, sizeof(state->input.mouse.transition_count));
-    memset(&state->input.keyboard.transition_count, 0, sizeof(state->input.keyboard.transition_count));
-
-    memset(&state->events, 0, sizeof(state->events));
-    state->input.mouse.scroll_delta = 0;
-
-    while (true) {
-        MSG  message;
-        BOOL result = PeekMessage(&message, NULL, 0, 0, PM_REMOVE);
-        if (result == FALSE)
-            break;
-
-        TranslateMessage(&message);
-        DispatchMessageW(&message);
-    }
-
-    return state;
-}
-
 /*
   NOTE(Felix): Much of this window-proc code is adapted from DearImGUI's win32
   implementation, as it gave a good overview how to handle some edge cases (of
@@ -215,6 +205,55 @@ Keyboard_Keys key_from_vk(int vk) {
     }
 }
 
+static bool is_vk_down(int vk)
+{
+    return (::GetKeyState(vk) & 0x8000) != 0;
+}
+
+static void process_key_events_workarounds(Window_State* state) {
+    // Left & right Shift keys: when both are pressed together, Windows tend to not generate the WM_KEYUP event for the first released one.
+    if (state->input.key_is_down(Keyboard_Keys::Left_Shift) && !is_vk_down(VK_LSHIFT))
+        state->input.add_key_event(Keyboard_Keys::Left_Shift, false);
+
+    if (state->input.key_is_down(Keyboard_Keys::Right_Shift) && !is_vk_down(VK_RSHIFT))
+        state->input.add_key_event(Keyboard_Keys::Right_Shift, false);
+}
+
+static void update_key_modifiers(Window_State* state) {
+    state->input.set_key_state(Keyboard_Keys::Left_Shift,    is_vk_down(VK_LSHIFT));
+    state->input.set_key_state(Keyboard_Keys::Left_Shift,    is_vk_down(VK_LSHIFT));
+    state->input.set_key_state(Keyboard_Keys::Right_Shift,   is_vk_down(VK_RSHIFT));
+    state->input.set_key_state(Keyboard_Keys::Left_Control,  is_vk_down(VK_LCONTROL));
+    state->input.set_key_state(Keyboard_Keys::Right_Control, is_vk_down(VK_RCONTROL));
+    state->input.set_key_state(Keyboard_Keys::Left_Alt, is_vk_down(VK_LMENU));
+    state->input.set_key_state(Keyboard_Keys::Right_Alt, is_vk_down(VK_RMENU));
+}
+
+Window_State* update_window(Window_Type window) {
+    Window_State* state = hwnd_to_state.get_object_ptr(window.window);
+
+    memset(&state->input.mouse.transition_count, 0, sizeof(state->input.mouse.transition_count));
+    memset(&state->input.keyboard.transition_count, 0, sizeof(state->input.keyboard.transition_count));
+
+    memset(&state->events, 0, sizeof(state->events));
+    state->input.mouse.scroll_delta = 0;
+
+    while (true) {
+        MSG  message;
+        BOOL result = PeekMessage(&message, NULL, 0, 0, PM_REMOVE);
+        if (result == FALSE)
+            break;
+
+        TranslateMessage(&message);
+        DispatchMessageW(&message);
+    }
+
+    process_key_events_workarounds(state);
+
+    return state;
+}
+
+
 LRESULT ftb_window_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     Window_State* state = hwnd_to_state.get_object_ptr(hwnd);
     if (state == nullptr)
@@ -240,13 +279,12 @@ LRESULT ftb_window_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_MBUTTONDOWN: case WM_MBUTTONDBLCLK:
         case WM_XBUTTONDOWN: case WM_XBUTTONDBLCLK:
             {
-                int button = 0;
-                if (msg == WM_LBUTTONDOWN || msg == WM_LBUTTONDBLCLK) { button = 0; }
-                if (msg == WM_RBUTTONDOWN || msg == WM_RBUTTONDBLCLK) { button = 1; }
-                if (msg == WM_MBUTTONDOWN || msg == WM_MBUTTONDBLCLK) { button = 2; }
-                if (msg == WM_XBUTTONDOWN || msg == WM_XBUTTONDBLCLK) { button = (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) ? 3 : 4; }
-                state->input.mouse.ended_down[button] = true;
-                ++state->input.mouse.transition_count[button];
+                Mouse_Buttons button = Mouse_Buttons::Left;
+                if (msg == WM_LBUTTONUP) { button = Mouse_Buttons::Left; }
+                if (msg == WM_RBUTTONUP) { button = Mouse_Buttons::Right; }
+                if (msg == WM_MBUTTONUP) { button = Mouse_Buttons::Middle; }
+                if (msg == WM_XBUTTONUP) { button = (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) ? Mouse_Buttons::_4 : Mouse_Buttons::_5; }
+                state->input.add_mouse_event(button, true);
                 return 0;
             }
         case WM_LBUTTONUP:
@@ -254,13 +292,12 @@ LRESULT ftb_window_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_MBUTTONUP:
         case WM_XBUTTONUP:
             {
-                int button = 0;
-                if (msg == WM_LBUTTONUP) { button = 0; }
-                if (msg == WM_RBUTTONUP) { button = 1; }
-                if (msg == WM_MBUTTONUP) { button = 2; }
-                if (msg == WM_XBUTTONUP) { button = (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) ? 3 : 4; }
-                state->input.mouse.ended_down[button] = false;
-                ++state->input.mouse.transition_count[button];
+                Mouse_Buttons button = Mouse_Buttons::Left;
+                if (msg == WM_LBUTTONUP) { button = Mouse_Buttons::Left; }
+                if (msg == WM_RBUTTONUP) { button = Mouse_Buttons::Right; }
+                if (msg == WM_MBUTTONUP) { button = Mouse_Buttons::Middle; }
+                if (msg == WM_XBUTTONUP) { button = (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) ? Mouse_Buttons::_4 : Mouse_Buttons::_5; }
+                state->input.add_mouse_event(button, false);
                 return 0;
             }
         case WM_MOUSEWHEEL: {
@@ -273,14 +310,15 @@ LRESULT ftb_window_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_SYSKEYUP: {
             const bool is_key_down = (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN);
             if (wParam < 256) {
+                update_key_modifiers(state);
+
                 // Obtain virtual key code
                 // (keypad enter doesn't have its own... VK_RETURN with KF_EXTENDED flag means keypad enter, see IM_VK_KEYPAD_ENTER definition for details, it is mapped to ImGuiKey_KeyPadEnter.)
                 int vk = (int)wParam;
 
                 Keyboard_Keys key = key_from_vk(vk);
                 if (key != Keyboard_Keys::ENUM_SIZE) {
-                    state->input.keyboard.ended_down[(s32)key] = is_key_down;
-                    ++state->input.keyboard.transition_count[(s32)key];
+                    state->input.add_key_event(key, is_key_down);
                 }
             }
             return 0;
