@@ -1432,7 +1432,7 @@ void init(Perf_Counter* pc) {
     QueryPerformanceFrequency((LARGE_INTEGER*)&freq);
     pc->one_over_perf_frequency = 1.0f / freq;
 #else
-#  error NYI
+    *pc = {};
 #endif
 }
 
@@ -1444,7 +1444,7 @@ f32 tick(Perf_Counter* pc) {
     s64 diff = (pc->last_counter - old);
     return diff * pc->one_over_perf_frequency;
 #else
-#  error NYI
+    return 0;
 #endif
 }
 
