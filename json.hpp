@@ -606,7 +606,7 @@ namespace json {
 
             char* allocated_member = heap_copy_limited_c_string(member_name, member_name_len, allocator);
             u64 hash_val = hm_hash(allocated_member);
-            s32 existing_cell =
+            s64 existing_cell =
                 hm->get_index_of_living_cell_if_it_exists(allocated_member, hash_val);
             if (existing_cell != -1) {
                 // we already have the member in there

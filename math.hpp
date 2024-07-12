@@ -185,14 +185,14 @@ auto deg_to_rad(f32 dec) -> f32;
 auto round_to_precision(f32 num, u32 decimals) ->  f32;
 auto round_to_int(f32 num) ->  s32;
 
-auto lerp(f32 from, f32 t, f32 to) -> f32;
-auto unlerp(f32 from, f32 val, f32 to) -> f32;
+auto linerp(f32 from, f32 t, f32 to) -> f32;
+auto unlinerp(f32 from, f32 val, f32 to) -> f32;
 auto remap(f32 from_a, f32 val, f32 to_a, f32 from_b, f32 to_b) -> f32;
 
 auto clamp(u32 from, u32 x, u32 to) -> u32;
 auto clamp(f32 from, f32 x, f32 to) -> f32;
 auto clamp01(f32 x) -> f32;
-auto clamped_lerp(f32 from, f32 t, f32 to) -> f32;
+auto clamped_linerp(f32 from, f32 t, f32 to) -> f32;
 
 // ---------------------
 //   vector functions
@@ -227,9 +227,9 @@ auto noz(V2 vector) -> V2;
 auto noz(V3 vector) -> V3;
 auto noz(V4 vector) -> V4;
 
-auto lerp(V2 from, f32 t, V2 to) -> V2;
-auto lerp(V3 from, f32 t, V3 to) -> V3;
-auto lerp(V4 from, f32 t, V4 to) -> V4;
+auto linerp(V2 from, f32 t, V2 to) -> V2;
+auto linerp(V3 from, f32 t, V3 to) -> V3;
+auto linerp(V4 from, f32 t, V4 to) -> V4;
 
 auto operator==(V2 a, V2 b) -> bool;
 auto operator==(V3 a, V3 b) -> bool;
@@ -341,16 +341,16 @@ auto round_to_int(f32 num) -> s32 {
     return (s32)(num < 0 ? (num - 0.5f) : (num + 0.5f));
 }
 
-auto lerp(f32 from, f32 t, f32 to) -> f32 {
+auto linerp(f32 from, f32 t, f32 to) -> f32 {
     return from + (to - from) * t;
 }
 
-auto unlerp(f32 from, f32 val, f32 to) -> f32 {
+auto unlinerp(f32 from, f32 val, f32 to) -> f32 {
     return (val - from) / (to - from);
 }
 
 auto remap(f32 from_a, f32 val, f32 to_a, f32 from_b, f32 to_b) -> f32 {
-    return lerp(from_b, unlerp(from_a, val, to_a), to_b);
+    return linerp(from_b, unlinerp(from_a, val, to_a), to_b);
 }
 
 auto clamp(u32 from, u32 x, u32 to) -> u32 {
@@ -367,7 +367,7 @@ auto clamp01(f32 x) -> f32 {
     return clamp(0, x, 1);
 }
 
-auto clamped_lerp(f32 from, f32 t, f32 to) -> f32 {
+auto clamped_linerp(f32 from, f32 t, f32 to) -> f32 {
     t = clamp01(t);
     return from + (to - from) * t;
 }
@@ -650,15 +650,15 @@ auto noz(V4 vector) -> V4 {
     return 1.0f / len * vector;
 }
 
-auto lerp(V2 from, f32 t, V2 to) -> V2 {
+auto linerp(V2 from, f32 t, V2 to) -> V2 {
     return from + (to - from) * t;
 }
 
-auto lerp(V3 from, f32 t, V3 to) -> V3 {
+auto linerp(V3 from, f32 t, V3 to) -> V3 {
     return from + (to - from) * t;
 }
 
-auto lerp(V4 from, f32 t, V4 to) -> V4 {
+auto linerp(V4 from, f32 t, V4 to) -> V4 {
     return from + (to - from) * t;
 }
 

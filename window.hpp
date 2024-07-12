@@ -405,6 +405,7 @@ Window_Type create_window(IV2 size, const char* title) {
     return result;
 }
 #  else
-#    error "Not yet implemented"
+Window_Type create_window(IV2 size, const char* title);
+Window_State* update_window(Window_Type);
 #  endif
 #endif

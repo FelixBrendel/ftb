@@ -336,21 +336,21 @@ bool strncpy_utf8_0(char* dest, const char* src, u64 dest_size);
 typedef unsigned char byte;
 typedef unsigned int u32;
 
-void* allocate(u32 size_in_bytes, u32 alignment);
-void* allocate_0(u32 size_in_bytes, u32 alignment);
-void* resize(void* old, u32 size_in_bytes, u32 alignment);
+void* allocate(u64 size_in_bytes, u32 alignment);
+void* allocate_0(u64 size_in_bytes, u32 alignment);
+void* resize(void* old, u64 size_in_bytes, u32 alignment);
 void  deallocate(void* old);
 
 template <typename Type>
-inline Type* allocate(u32 amount) {
+inline Type* allocate(u64 amount) {
     return (Type*)allocate(amount * sizeof(Type), alignof(Type));
 }
 template <typename Type>
-inline Type* allocate_0(u32 amount) {
+inline Type* allocate_0(u64 amount) {
     return (Type*)allocate_0(amount * sizeof(Type), alignof(Type));
 }
 template <typename Type>
-inline Type* resize(void* old, u32 amount) {
+inline Type* resize(void* old, u64 amount) {
     return (Type*)resize(old, amount * sizeof(Type), alignof(Type));
 }
 
@@ -380,23 +380,23 @@ struct Allocator_Base {
     Allocator_Type type;
     Allocator_Base* next_allocator;
 
-    void* allocate(u32 size_in_bytes, u32 alignment);
-    void* allocate_0(u32 size_in_bytes, u32 alignment);
-    void* resize(void* old, u32 size_in_bytes, u32 alignment);
+    void* allocate(u64 size_in_bytes, u32 alignment);
+    void* allocate_0(u64 size_in_bytes, u32 alignment);
+    void* resize(void* old, u64 size_in_bytes, u32 alignment);
     void  deallocate(void* old);
 
     template <typename Type>
-    Type* allocate(u32 amount = 1){
+    Type* allocate(u64 amount = 1){
         return (Type*)allocate(amount * sizeof(Type), alignof(Type));
     }
 
     template <typename Type>
-    Type* allocate_0(u32 amount = 1) {
+    Type* allocate_0(u64 amount = 1) {
         return (Type*)allocate_0(amount * sizeof(Type), alignof(Type));
     }
 
     template <typename Type>
-    Type* resize(void* old, u32 amount) {
+    Type* resize(void* old, u64 amount) {
         return (Type*)resize(old, amount * sizeof(Type), alignof(Type));
     }
 };
@@ -1561,16 +1561,16 @@ Allocator_Base* pop_allocator() {
 }
 
 
-inline void* allocate(u32 size_in_bytes, u32 alignment) {
+inline void* allocate(u64 size_in_bytes, u32 alignment) {
     return grab_current_allocator()->allocate(size_in_bytes, alignment);
 }
 
 
-inline void* allocate_0(u32 size_in_bytes, u32 alignment) {
+inline void* allocate_0(u64 size_in_bytes, u32 alignment) {
     return grab_current_allocator()->allocate_0(size_in_bytes, alignment);
 }
 
-inline void* resize(void* old, u32 size_in_bytes, u32 alignment) {
+inline void* resize(void* old, u64 size_in_bytes, u32 alignment) {
     return grab_current_allocator()->resize(old, size_in_bytes, alignment);
 }
 
@@ -1581,15 +1581,15 @@ void  deallocate(void* old) {
 //
 // LibC Allocator functions
 //
-void* LibC_Allocator_allocate(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+void* LibC_Allocator_allocate(Allocator_Base* base, u64 size_in_bytes, u32 align) {
     return malloc(size_in_bytes);
 }
 
-void* LibC_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+void* LibC_Allocator_allocate_0(Allocator_Base* base, u64 size_in_bytes, u32 align) {
     return calloc(1, size_in_bytes);
 }
 
-void* LibC_Allocator_resize(Allocator_Base* base, void* old, u32 size_in_bytes, u32 align) {
+void* LibC_Allocator_resize(Allocator_Base* base, void* old, u64 size_in_bytes, u32 align) {
     return realloc(old, size_in_bytes);
 }
 
@@ -1604,21 +1604,21 @@ void LibC_Allocator::init() {
 //
 // Printing Allocator functions
 //
-void* Printing_Allocator_allocate(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+void* Printing_Allocator_allocate(Allocator_Base* base, u64 size_in_bytes, u32 align) {
     void* res = base->next_allocator->allocate(size_in_bytes, align);
     println("%{color<}[Printing Allocator]: Allocating %u (align %u) -> %p.%{>color}",
             console_magenta, size_in_bytes, align, res);
     return res;
 }
 
-void* Printing_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+void* Printing_Allocator_allocate_0(Allocator_Base* base, u64 size_in_bytes, u32 align) {
     void* res = base->next_allocator->allocate_0(size_in_bytes, align);
     println("%{color<}[Printing Allocator]: Allocating zeroed %u (align %u) -> %p.%{>color}",
             console_magenta, size_in_bytes, align, res);
     return res;
 }
 
-void* Printing_Allocator_resize(Allocator_Base* base, void* old, u32 size_in_bytes, u32 align) {
+void* Printing_Allocator_resize(Allocator_Base* base, void* old, u64 size_in_bytes, u32 align) {
     void* res = base->next_allocator->resize(old, size_in_bytes, align);
     println("%{color<}[Printing Allocator]: Resizing %p to %u (align %u) -> %p.%{>color}",
             console_magenta, old, size_in_bytes, align, res);
@@ -1647,7 +1647,7 @@ auto alloc_info_cmp = [](const Allocation_Info* a, const Allocation_Info* b) -> 
     return (s32)((u8*)a->prt - (u8*)b->prt);
  };
 
-void Leak_Detecting_Allocator_add_ptr(Allocator_Base* base, void* ptr, u32 amount) {
+void Leak_Detecting_Allocator_add_ptr(Allocator_Base* base, void* ptr, u64 amount) {
     Leak_Detecting_Allocator* ld = (Leak_Detecting_Allocator*)base;
     Allocation_Info ai = {
         .prt           = ptr,
@@ -1678,21 +1678,21 @@ void Leak_Detecting_Allocator_remove_ptr(Allocator_Base* base, void* ptr) {
     }
 }
 
-void* Leak_Detecting_Allocator_allocate(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+void* Leak_Detecting_Allocator_allocate(Allocator_Base* base, u64 size_in_bytes, u32 align) {
     void* res = base->next_allocator->allocate(size_in_bytes, align);
     if (res)
         Leak_Detecting_Allocator_add_ptr(base, res, size_in_bytes);
     return res;
 }
 
-void* Leak_Detecting_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+void* Leak_Detecting_Allocator_allocate_0(Allocator_Base* base, u64 size_in_bytes, u32 align) {
     void* res = base->next_allocator->allocate_0(size_in_bytes, align);
     if (res)
         Leak_Detecting_Allocator_add_ptr(base, res, size_in_bytes);
     return res;
 }
 
-void* Leak_Detecting_Allocator_resize(Allocator_Base* base, void* old, u32 size_in_bytes, u32 align) {
+void* Leak_Detecting_Allocator_resize(Allocator_Base* base, void* old, u64 size_in_bytes, u32 align) {
     void* res = base->next_allocator->resize(old, size_in_bytes, align);
     if (res) {
         Leak_Detecting_Allocator_remove_ptr(base, old);
@@ -1773,21 +1773,21 @@ void Resettable_Allocator_remove_ptr(Allocator_Base* base, void* ptr) {
     }
 }
 
-void* Resettable_Allocator_allocate(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+void* Resettable_Allocator_allocate(Allocator_Base* base, u64 size_in_bytes, u32 align) {
     void* res = base->next_allocator->allocate(size_in_bytes, align);
     if (res)
         Resettable_Allocator_add_ptr(base, res);
     return res;
 }
 
-void* Resettable_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+void* Resettable_Allocator_allocate_0(Allocator_Base* base, u64 size_in_bytes, u32 align) {
     void* res = base->next_allocator->allocate_0(size_in_bytes, align);
     if (res)
         Resettable_Allocator_add_ptr(base, res);
     return res;
 }
 
-void* Resettable_Allocator_resize(Allocator_Base* base, void* old, u32 size_in_bytes, u32 align) {
+void* Resettable_Allocator_resize(Allocator_Base* base, void* old, u64 size_in_bytes, u32 align) {
     void* res = base->next_allocator->resize(old, size_in_bytes, align);
     if (res) {
         Resettable_Allocator_add_ptr(base, res);
@@ -1826,21 +1826,21 @@ void Resettable_Allocator::deallocate_everyting_still_allocated() {
 //
 // Bookkeeping Allocator functions
 //
-void* Bookkeeping_Allocator_allocate(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+void* Bookkeeping_Allocator_allocate(Allocator_Base* base, u64 size_in_bytes, u32 align) {
     void* res = base->next_allocator->allocate(size_in_bytes, align);
     Bookkeeping_Allocator* bk = (Bookkeeping_Allocator*)base;
     ++bk->num_allocate_calls;
     return res;
 }
 
-void* Bookkeeping_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+void* Bookkeeping_Allocator_allocate_0(Allocator_Base* base, u64 size_in_bytes, u32 align) {
     void* res = base->next_allocator->allocate_0(size_in_bytes, align);
     Bookkeeping_Allocator* bk = (Bookkeeping_Allocator*)base;
     ++bk->num_allocate_0_calls;
     return res;
 }
 
-void* Bookkeeping_Allocator_resize(Allocator_Base* base, void* old, u32 size_in_bytes, u32 align) {
+void* Bookkeeping_Allocator_resize(Allocator_Base* base, void* old, u64 size_in_bytes, u32 align) {
     void* res = base->next_allocator->resize(old, size_in_bytes, align);
     Bookkeeping_Allocator* bk = (Bookkeeping_Allocator*)base;
     ++bk->num_resize_calls;
@@ -1881,7 +1881,7 @@ void Bookkeeping_Allocator::print_statistics() {
 //
 // Linear Allocator functions
 //
-void* Linear_Allocator_allocate(Allocator_Base* base, u32 amount, u32 align) {
+void* Linear_Allocator_allocate(Allocator_Base* base, u64 amount, u32 align) {
     Linear_Allocator* self = (Linear_Allocator*)base;
 
     u32 overshot_align_to_8  = self->count % 8;
@@ -1902,13 +1902,13 @@ void* Linear_Allocator_allocate(Allocator_Base* base, u32 amount, u32 align) {
     return ret;
 }
 
-void* Linear_Allocator_allocate_0(Allocator_Base* base, u32 size_in_bytes, u32 align) {
+void* Linear_Allocator_allocate_0(Allocator_Base* base, u64 size_in_bytes, u32 align) {
     void* ret = Linear_Allocator_allocate(base, size_in_bytes, align);
     if (ret) memset(ret, 0, size_in_bytes);
     return ret;
 }
 
-void* Linear_Allocator_resize(Allocator_Base* base, void* old, u32 amount, u32 align) {
+void* Linear_Allocator_resize(Allocator_Base* base, void* old, u64 amount, u32 align) {
     Linear_Allocator* self = (Linear_Allocator*)base;
 
     assert(old); // NOTE(Felix): Don't support resizing nullptr yet
@@ -1979,9 +1979,9 @@ void Linear_Allocator::deinit() {
 
 
 struct Allocator_Functions {
-    void* (*allocate)(Allocator_Base*, u32 amount, u32 align);
-    void* (*allocate_0)(Allocator_Base*, u32 amount, u32 align);
-    void* (*resize)(Allocator_Base*, void* old, u32 amount, u32 align);
+    void* (*allocate)(Allocator_Base*, u64 amount, u32 align);
+    void* (*allocate_0)(Allocator_Base*, u64 amount, u32 align);
+    void* (*resize)(Allocator_Base*, void* old, u64 amount, u32 align);
     void  (*deallocate)(Allocator_Base*, void* old);
 };
 
@@ -2003,21 +2003,21 @@ Allocator_Functions allocator_function_table[((int)Allocator_Type::Allocator_Typ
 //
 // Base Allocator functions
 //
-void* Allocator_Base::allocate(u32 size_in_bytes, u32 alignment) {
+void* Allocator_Base::allocate(u64 size_in_bytes, u32 alignment) {
     if ((int)type >= ALLOCATOR_TYPES_ENUM_START) {
         return allocator_function_table[(int)type-ALLOCATOR_TYPES_ENUM_START].allocate(this, size_in_bytes, alignment);
     }
     return nullptr;
 }
 
-void* Allocator_Base::allocate_0(u32 size_in_bytes, u32 alignment) {
+void* Allocator_Base::allocate_0(u64 size_in_bytes, u32 alignment) {
     if ((int)type >= ALLOCATOR_TYPES_ENUM_START) {
         return allocator_function_table[(int)type-ALLOCATOR_TYPES_ENUM_START].allocate_0(this, size_in_bytes, alignment);
     }
     return nullptr;
 }
 
-void* Allocator_Base::resize(void* old, u32 size_in_bytes, u32 alignment) {
+void* Allocator_Base::resize(void* old, u64 size_in_bytes, u32 alignment) {
     if ((int)type >= ALLOCATOR_TYPES_ENUM_START) {
         return allocator_function_table[(int)type-ALLOCATOR_TYPES_ENUM_START].resize(this, old, size_in_bytes, alignment);
     }

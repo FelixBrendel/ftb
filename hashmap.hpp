@@ -35,9 +35,9 @@
 
 #ifndef FTB_HASHMAP_IMPL
 
-u32 hm_hash(const char* str);
-u32 hm_hash(char* str);
-u32 hm_hash(void* ptr);
+u64 hm_hash(const char* str);
+u64 hm_hash(char* str);
+u64 hm_hash(void* ptr);
 
 bool hm_objects_match(const char* a, const char* b);
 bool hm_objects_match(char* a, char* b);
@@ -45,25 +45,25 @@ bool hm_objects_match(void* a, void* b);
 
 #else // implementations
 
-static u32 hm_hash(const char* str) {
-    u32 value = str[0] << 7;
-    s32 i = 0;
+static u64 hm_hash(const char* str) {
+    u64 value = str[0] << 7;
+    s64 i = 0;
     while (str[i]) {
         value = (10000003 * value) ^ str[i++];
     }
     return value ^ i;
 }
 
-static u32 hm_hash(char* str) {
-    u32 value = str[0] << 7;
-    s32 i = 0;
+static u64 hm_hash(char* str) {
+    u64 value = str[0] << 7;
+    s64 i = 0;
     while (str[i]) {
         value = (10000003 * value) ^ str[i++];
     }
     return value ^ i;
 }
 
-static u32 hm_hash(void* ptr) {
+static u64 hm_hash(void* ptr) {
     return ((u64)ptr * 2654435761) % 4294967296;
 }
 
@@ -83,8 +83,8 @@ static inline bool hm_objects_match(void* a, void* b) {
 
 template <typename key_type, typename value_type>
 struct Hash_Map {
-    u32 current_capacity;
-    u32 cell_count;
+    u64 current_capacity;
+    u64 cell_count;
     Allocator_Base* allocator;
 
     struct HM_Cell {
@@ -98,7 +98,7 @@ struct Hash_Map {
         value_type object;
     }* data;
 
-    void init(u32 initial_capacity = 8, Allocator_Base* back_allocator = nullptr) {
+    void init(u64 initial_capacity = 8, Allocator_Base* back_allocator = nullptr) {
         if (back_allocator)
             allocator = back_allocator;
         else
@@ -126,7 +126,7 @@ struct Hash_Map {
 
     template <typename lambda>
     void for_each(lambda p) {
-        for(u32 index = 0; index < current_capacity; ++index)
+        for(u64 index = 0; index < current_capacity; ++index)
             if (data[index].occupancy == HM_Cell::Occupancy::Occupied)
                 p(data[index].original, data[index].object, index);
     }
@@ -137,8 +137,8 @@ struct Hash_Map {
     }
 
 
-    s32 get_index_of_living_cell_if_it_exists(key_type key, u64 hash_val) {
-        s32 index = hash_val & (current_capacity - 1);
+    s64 get_index_of_living_cell_if_it_exists(key_type key, u64 hash_val) {
+        s64 index = hash_val & (current_capacity - 1);
         HM_Cell cell = data[index];
         /* test if there is or was something there */
         if (cell.occupancy != HM_Cell::Occupancy::Avaliable) {
@@ -156,8 +156,8 @@ struct Hash_Map {
             } else {
                 /* objects dont match, this means we have */
                 /* a collision. We just search forward    */
-                for (u32 i = 0; i < current_capacity; ++i) {
-                    u32 new_idx = (i + index) & (current_capacity - 1);
+                for (u64 i = 0; i < current_capacity; ++i) {
+                    u64 new_idx = (i + index) & (current_capacity - 1);
                     cell = data[new_idx];
                     /* If we find a avaliable cell while looking */
                     /* forward, the object is not in the hm      */
@@ -189,7 +189,7 @@ struct Hash_Map {
     }
 
     key_type search_key_to_object(value_type v) {
-        for (u32 i = 0; i < current_capacity; ++i) {
+        for (u64 i = 0; i < current_capacity; ++i) {
             if (data[i].object == v &&
                 data[i].occupancy == HM_Cell::Occupancy::Occupied)
             {
@@ -204,7 +204,7 @@ struct Hash_Map {
         ret.init();
         // QUESTION(Felix): Does it make sense to
         // ret.reserve(this->cell_count)?
-        for (u32 i = 0; i < current_capacity; ++i) {
+        for (u64 i = 0; i < current_capacity; ++i) {
             if (data[i].occupancy == HM_Cell::Occupancy::Occupied)
                 ret.append(data[i].original);
         }
@@ -212,7 +212,7 @@ struct Hash_Map {
     }
 
     value_type get_object(key_type key, u64 hash_val) {
-        s32 index = get_index_of_living_cell_if_it_exists(key, hash_val);
+        s64 index = get_index_of_living_cell_if_it_exists(key, hash_val);
         if (index != -1) {
             return data[index].object;
         }
@@ -224,7 +224,7 @@ struct Hash_Map {
     }
 
     value_type* get_object_ptr(key_type key, u64 hash_val) {
-        s32 index = get_index_of_living_cell_if_it_exists(key, hash_val);
+        s64 index = get_index_of_living_cell_if_it_exists(key, hash_val);
         if (index != -1) {
             return &(data[index].object);
         }
@@ -237,14 +237,14 @@ struct Hash_Map {
 
 
     void delete_object(key_type key) {
-        s32 index = get_index_of_living_cell_if_it_exists(key, hm_hash((key_type)key));
+        s64 index = get_index_of_living_cell_if_it_exists(key, hm_hash((key_type)key));
         if (index != -1) {
             data[index].occupancy = HM_Cell::Occupancy::Deleted;
         }
     }
 
     void set_object(key_type key, value_type obj, u64 hash_val) {
-        u32 index = hash_val & (current_capacity - 1);
+        u64 index = hash_val & (current_capacity - 1);
 
         /* if we the desired cell is avaliable, write to it and done :) */
         if (data[index].occupancy == HM_Cell::Occupancy::Avaliable) {
@@ -263,7 +263,7 @@ struct Hash_Map {
                     current_capacity *= 4;
 
                     /* insert all old items again */
-                    for (u32 i = 0; i < current_capacity/4; ++i) {
+                    for (u64 i = 0; i < current_capacity/4; ++i) {
                         auto cell = old_data[i];
                         if (cell.occupancy == HM_Cell::Occupancy::Occupied) {
                             set_object(cell.original, cell.object, cell.hash);
@@ -276,7 +276,7 @@ struct Hash_Map {
                 /* search for empty slot for new cell starting at desired index; */
                 /* preventing gotos using lambdas!                               */
                 [&]{
-                    for (u32 i = index; i < current_capacity; ++i) {
+                    for (u64 i = index; i < current_capacity; ++i) {
                         if (data[i].occupancy == HM_Cell::Occupancy::Avaliable ||
                             hm_objects_match(data[i].original, key))
                         {
@@ -284,7 +284,7 @@ struct Hash_Map {
                             return;
                         }
                     }
-                    for (u32 i = 0; i < index; ++i) {
+                    for (u64 i = 0; i < index; ++i) {
                         if (data[i].occupancy == HM_Cell::Occupancy::Avaliable ||
                             hm_objects_match(data[i].original, key))
                         {
@@ -310,7 +310,7 @@ struct Hash_Map {
     void dump_occupancy(const char* path) {
         FILE* out = fopen(path, "w");
         defer { fclose(out); };
-        for (u32 i = 0; i < current_capacity; ++i) {
+        for (u64 i = 0; i < current_capacity; ++i) {
             if (data[i].occupancy == HM_Cell::Occupancy::Avaliable) {
                 fprintf(out, "%04u [AVAILABLE]\n", i);
             } else if (data[i].occupancy == HM_Cell::Occupancy::Deleted) {

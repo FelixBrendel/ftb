@@ -306,7 +306,7 @@ auto load_obj(const char* path) -> Mesh_Data {
     {
         u32 counter{0};
         for (auto vfp : fprints) {
-            s32 index = vertex_fp_to_index.get_index_of_living_cell_if_it_exists(vfp, hm_hash(vfp));
+            s64 index = vertex_fp_to_index.get_index_of_living_cell_if_it_exists(vfp, hm_hash(vfp));
             if(counter%3 == 0) {
                 Face f {};
                 result.faces.append(f);
