@@ -84,8 +84,12 @@
 // ----------------------------------------------------------------------------
 //                                   macros
 // ----------------------------------------------------------------------------
-#define MIN(a, b) ((a)<(b)?(a):(b))
-#define MAX(a, b) ((a)<(b)?(b):(a))
+#ifndef MIN
+#  define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
+#ifndef MAX
+#  define MAX(a, b) ((a)<(b)?(b):(a))
+#endif
 
 #define string_from_literal(lit) (String{.data=(char*)lit, .length=strlen(lit)})
 
