@@ -662,20 +662,20 @@ auto linerp(V4 from, f32 t, V4 to) -> V4 {
     return from + (to - from) * t;
 }
 
-inline auto operator==(V2 a, V2 b) -> bool {
+auto operator==(V2 a, V2 b) -> bool {
     return
         a.x == b.x &&
         a.y == b.y;
 }
 
-inline auto operator==(V3 a, V3 b) -> bool {
+auto operator==(V3 a, V3 b) -> bool {
     return
         a.x == b.x &&
         a.y == b.y &&
         a.z == b.z;
 }
 
-inline auto operator==(V4 a, V4 b) -> bool {
+auto operator==(V4 a, V4 b) -> bool {
     return
         a.x == b.x &&
         a.y == b.y &&
@@ -731,7 +731,7 @@ auto operator==(M4x4 a, M4x4 b) -> bool {
 }
 
 
-inline auto operator*(M2x2 a, M2x2 b) -> M2x2 {
+auto operator*(M2x2 a, M2x2 b) -> M2x2 {
     M2x2 result {
         dot(V2{a._00, a._10}, b.columns[0]), dot(V2{a._01, a._11}, b.columns[0]),
         dot(V2{a._00, a._10}, b.columns[1]), dot(V2{a._01, a._11}, b.columns[1]),
@@ -752,7 +752,7 @@ auto operator*(M3x3 a, M3x3 b) -> M3x3 {
     return result;
 }
 
-inline auto operator*(M4x4 a, M4x4 b) -> M4x4 {
+auto operator*(M4x4 a, M4x4 b) -> M4x4 {
     M4x4 result {
         dot({a._00, a._10, a._20, a._30}, b.columns[0]), dot({a._01, a._11, a._21, a._31}, b.columns[0]),
         dot({a._02, a._12, a._22, a._32}, b.columns[0]), dot({a._03, a._13, a._23, a._33}, b.columns[0]),
@@ -794,14 +794,14 @@ auto operator-(M4x4 a, M4x4 b) -> M4x4 {
     return result;
 }
 
-inline auto operator+(M2x2 a, M2x2 b) -> M2x2 {
+auto operator+(M2x2 a, M2x2 b) -> M2x2 {
     M2x2 result;
     result.columns[0] = a.columns[0] + b.columns[0];
     result.columns[1] = a.columns[1] + b.columns[1];
     return result;
 }
 
-inline auto operator+(M3x3 a, M3x3 b) -> M3x3 {
+auto operator+(M3x3 a, M3x3 b) -> M3x3 {
     M3x3 result;
     result.columns[0] = a.columns[0] + b.columns[0];
     result.columns[1] = a.columns[1] + b.columns[1];
@@ -809,7 +809,7 @@ inline auto operator+(M3x3 a, M3x3 b) -> M3x3 {
     return result;
 }
 
-inline auto operator+(M4x4 a, M4x4 b) -> M4x4 {
+auto operator+(M4x4 a, M4x4 b) -> M4x4 {
     M4x4 result;
     result.columns[0] = a.columns[0] + b.columns[0];
     result.columns[1] = a.columns[1] + b.columns[1];
