@@ -647,7 +647,7 @@ auto noz(V4 vector) -> V4 {
     f32 len = length(vector);
     if (len == 0)
         return vector;
-    return 1.0f / len * vector;
+    return (1.0f / len) * vector;
 }
 
 auto linerp(V2 from, f32 t, V2 to) -> V2 {

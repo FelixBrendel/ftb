@@ -98,8 +98,9 @@ namespace json {
                 Pattern* child_pattern;
             } list;
             struct {
-                Data_Type   destination_type;
-                u32         destination_offset;
+                reader_function custom_reader;    // either custom_reader or destination_type will be set
+                Data_Type       destination_type;
+                u32             destination_offset;
             } value;
         };
 
@@ -132,18 +133,17 @@ namespace json {
                  List_Info list_info={0}, Parser_Hooks hooks={0});
     Pattern list(const Pattern& element_pattern,
                  List_Info list_info={0}, Parser_Hooks hooks={0});
-    Pattern integer(u32 offset,  Parser_Hooks hooks={0});
-    Pattern longint(u32 offset,  Parser_Hooks hooks={0});
-    Pattern floating(u32 offset, Parser_Hooks hooks={0});
-    Pattern boolean_(u32 offset, Parser_Hooks hooks={0});
-    Pattern string(u32 offset,   Parser_Hooks hooks={0});
-    Pattern custom(Json_Type source_type, Data_Type destination_type,
+    Pattern p_s32(u32 offset,  Parser_Hooks hooks={0});
+    Pattern p_s64(u32 offset,  Parser_Hooks hooks={0});
+    Pattern p_f32(u32 offset, Parser_Hooks hooks={0});
+    Pattern p_bool(u32 offset, Parser_Hooks hooks={0});
+    Pattern p_str(u32 offset,   Parser_Hooks hooks={0});
+    Pattern custom(Json_Type source_type, reader_function reader_fun,
                    u32 destination_offset, Parser_Hooks hooks={0});
 
     // Pattern member_value(const char* key, Json_Type source_type, Data_Type destination_type, u32 destination_offset);
     Pattern_Match_Result pattern_match(const char* string, Pattern pattern, void* obj_to_match_into, void* callback_data = nullptr, Allocator_Base* allocator = nullptr);
     void write_pattern_to_file(const char* path, Pattern pattern, void* user_data);
-    void register_custom_reader_function(Data_Type dt, reader_function fun);
 }
 
 
@@ -152,16 +152,6 @@ namespace json {
     const char true_string[]  = "true";
     const char false_string[] = "false";
     const char null_string[]  = "null";
-
-    reader_function custom_readders[127];
-
-    void register_custom_reader_function(Data_Type dt, reader_function fun) {
-        panic_if((u8)dt >= 1 << 7,
-                 "custom readers must have an "
-                 "enum value of less than 1<<7(=%u)",1<<7);
-
-        custom_readders[(u8)dt] = fun;
-    }
 
     Json_Type identify_thing(const char* string) {
         if (is_quotes_char(string[0])) return Json_Type::String;
@@ -180,27 +170,25 @@ namespace json {
         return Json_Type::Invalid;
     }
 
-    u32 eat_construct(const char* string, char delimiter) {
-        // NOTE(Felix): Expects to start somewhere inside construct, not on the
-        //   start of the onctruct
+    u32 eat_whitespace_and_comments(const char* string) {
         u32 eaten = 0;
+        u32 prev_eaten;
+        do {
+            prev_eaten = eaten;
 
-        while (string[eaten] && string[eaten] != delimiter) {
-            if (string[eaten] == '"')
-                eaten += eat_string(string+eaten);
-            else if (string[eaten] == '{') {
-                ++eaten;
-                eaten += eat_construct(string+eaten, '}');
-            } else if (string[eaten] == '[') {
-                ++eaten;
-                eaten += eat_construct(string+eaten, ']');
+            u32 whitespace_len = eat_whitespace(string);
+            eaten  += whitespace_len;
+            string += whitespace_len;
+            // log_error("after eat ws: '%.*s'", 20,string);
+
+            if (string[0] == '/' && string[1] == '/') {
+                u32 line_len = eat_line(string);
+                eaten  += line_len;
+                string += line_len;
+                // log_error("after eat line: '%.*s'", 20,string);
             }
-            else
-                ++eaten;
-        }
 
-        ++eaten; // overstep delimiter
-
+        } while (prev_eaten != eaten);
         return eaten;
     }
 
@@ -249,14 +237,6 @@ namespace json {
                                                      Allocator_Base* allocator);
 
     u32 read_into(void* destination, Data_Type dtype, const char* source) {
-        // NOTE(Felix): Check for custom type
-        if ((u8)dtype < 1<<7) {
-            panic_if(!custom_readders[(u8)dtype],
-                     "Attempting to read custom data type %u "
-                     "but no reader was registered for it", (u8)dtype);
-            return custom_readders[(u8)dtype](source, destination);
-        }
-
         switch (dtype) {
             case Data_Type::Integer: return read_int(source,  (s32*)destination);
             case Data_Type::Long:    return read_long(source, (s64*)destination);
@@ -278,11 +258,11 @@ namespace json {
         *out_eaten = 0;
         u32 eaten = 1; // overstep {
 
-        eaten += eat_whitespace(string+eaten);
+        eaten += eat_whitespace_and_comments(string+eaten);
 
         while (string[eaten] != '}') {
             panic_if(string[eaten] != '\"',
-                     "expecting a string here but got %s",
+                     "expecting a string here but got '%s'",
                      string+eaten);
 
             u32 sub_eaten = 0;
@@ -302,7 +282,7 @@ namespace json {
                 eaten += eat_construct(string+eaten, '}');
             }
 
-            eaten += eat_whitespace(string+eaten);
+            eaten += eat_whitespace_and_comments(string+eaten);
 
             panic_if(string[eaten] != ',' &&
                      string[eaten] != '}',
@@ -314,7 +294,7 @@ namespace json {
             if (string[eaten] == ',') {
                 ++eaten;
 
-                eaten += eat_whitespace(string+eaten);
+                eaten += eat_whitespace_and_comments(string+eaten);
             }
         }
 
@@ -337,7 +317,7 @@ namespace json {
 
         *out_eaten = 0;
         u32 eaten = 0;
-        eaten += eat_whitespace(string);
+        eaten += eat_whitespace_and_comments(string);
 
         Json_Type thing_at_point = identify_thing(string+eaten);
 
@@ -365,49 +345,59 @@ namespace json {
                      "Actual  type: %d\n"
                      "At: %s", pattern.type, thing_at_point, string+eaten);
 
-            if (thing_at_point == Json_Type::Object) {
-                sub_result = pattern_match_object(call_ctx, pattern,
-                                                  matched_obj, callback_data,
-                                                  &eaten_sub_object, allocator);
-            } else if (thing_at_point == Json_Type::List) {
-                sub_result = pattern_match_list(call_ctx, pattern,
-                                                *pattern.list.child_pattern,
-                                                ((u8*)matched_obj) + pattern.list.array_list_offset,
-                                                callback_data,
-                                                &eaten_sub_object, allocator);
+            if (pattern.value.destination_type == Data_Type::Custom) {
+                if (pattern.type != thing_at_point) {
+                    panic("Trying to parse a custom type expecting type %d but type was actually %d", pattern.type, thing_at_point);
+                }
+                eaten += pattern.value.custom_reader(string+eaten, (void*)(((u8*)matched_obj)+pattern.value.destination_offset));
+                sub_result = Pattern_Match_Result::OK_CONTINUE;
+                
             } else {
-                // match simple values
 
-                panic_if(pattern.type == Json_Type::Object_Member_Name,
-                         "object member not valid here");
-                if (thing_at_point == pattern.type) {
-                    eaten += read_into((void*)(((u8*)matched_obj)+pattern.value.destination_offset),
-                              pattern.value.destination_type,
-                              string+eaten);
-                } else if (thing_at_point == Json_Type::String) {
-                    // NOTE(Felix): if types don't match, but in the supplied
-                    //   json we are looking at a string, then try to read the
-                    //   thing in the string
-                    if (identify_thing(string+eaten+1) == pattern.type) {
-                        ++eaten; // overstep quotation marks
+                if (thing_at_point == Json_Type::Object) {
+                    sub_result = pattern_match_object(call_ctx, pattern,
+                                                      matched_obj, callback_data,
+                                                      &eaten_sub_object, allocator);
+                } else if (thing_at_point == Json_Type::List) {
+                    sub_result = pattern_match_list(call_ctx, pattern,
+                                                    *pattern.list.child_pattern,
+                                                    ((u8*)matched_obj) + pattern.list.array_list_offset,
+                                                    callback_data,
+                                                    &eaten_sub_object, allocator);
+                } else {
+                    // match simple values
+
+                    panic_if(pattern.type == Json_Type::Object_Member_Name,
+                             "object member not valid here");
+                    if (thing_at_point == pattern.type) {
                         eaten += read_into((void*)(((u8*)matched_obj)+pattern.value.destination_offset),
                                            pattern.value.destination_type,
                                            string+eaten);
-                        ++eaten; // overstep quotation marks
+                    } else if (thing_at_point == Json_Type::String) {
+                        // NOTE(Felix): if types don't match, but in the supplied
+                        //   json we are looking at a string, then try to read the
+                        //   thing in the string
+                        if (identify_thing(string+eaten+1) == pattern.type) {
+                            ++eaten; // overstep quotation marks
+                            eaten += read_into((void*)(((u8*)matched_obj)+pattern.value.destination_offset),
+                                               pattern.value.destination_type,
+                                               string+eaten);
+                            ++eaten; // overstep quotation marks
+                        }
+                    } else if (pattern.value.destination_type == Data_Type::String &&
+                               thing_at_point == Json_Type::Number)
+                    {
+                        // NOTE(Felix): if we're on a number but should read into a string
+                        u32 str_len = eat_number(string+eaten);
+                        String* str = (String*)(((u8*)matched_obj)+pattern.value.destination_offset);
+                        str->data   = heap_copy_limited_c_string(string+eaten, str_len);
+                        str->length = str_len;
+                        eaten += str_len;
                     }
-                } else if (pattern.value.destination_type == Data_Type::String &&
-                           thing_at_point == Json_Type::Number)
-                {
-                    // NOTE(Felix): if we're on a number but should read into a string
-                    u32 str_len = eat_number(string+eaten);
-                    String* str = (String*)(((u8*)matched_obj)+pattern.value.destination_offset);
-                    str->data   = heap_copy_limited_c_string(string+eaten, str_len);
-                    str->length = str_len;
-                    eaten += str_len;
+
+                    sub_result = Pattern_Match_Result::OK_CONTINUE;
+
                 }
-
-                sub_result = Pattern_Match_Result::OK_CONTINUE;
-
             }
 
             if (sub_result == Pattern_Match_Result::MATCHING_ERROR)
@@ -496,7 +486,7 @@ namespace json {
         // void* base_user_data = user_data;
         *out_eaten = 0;
         u32 eaten = 1; // overstep [
-        eaten += eat_whitespace(string+eaten);
+        eaten += eat_whitespace_and_comments(string+eaten);
         void* target_element_ptr = matched_obj;
         s32 matching_list_index = 0;
         while (string[eaten] != ']') {
@@ -534,7 +524,7 @@ namespace json {
             }
 
             eaten += sub_eaten;
-            eaten += eat_whitespace(string+eaten);
+            eaten += eat_whitespace_and_comments(string+eaten);
 
             panic_if(string[eaten] != ',' &&
                      string[eaten] != ']',
@@ -543,7 +533,7 @@ namespace json {
 
             if (string[eaten] == ',') {
                 ++eaten; // overstep ,
-                eaten += eat_whitespace(string+eaten);
+                eaten += eat_whitespace_and_comments(string+eaten);
             }
 
             matching_list_index++;
@@ -575,14 +565,14 @@ namespace json {
         u32 value_lengh = 0;
 
         eaten += member_name_len+2; // overstep string and both "
-        eaten += eat_whitespace(string+eaten);
+        eaten += eat_whitespace_and_comments(string+eaten);
 
         panic_if(string[eaten] != ':',
                  "expected a : here, but got %s",
                  string+eaten);
         ++eaten; // overstep :
 
-        eaten += eat_whitespace(string+eaten);
+        eaten += eat_whitespace_and_comments(string+eaten);
 
         Pattern_Match_Result sub_result = Pattern_Match_Result::OK_CONTINUE;
 
@@ -736,7 +726,7 @@ namespace json {
     // }
 
 
-    Pattern string(u32 offset, Parser_Hooks hooks) {
+    Pattern p_str(u32 offset, Parser_Hooks hooks) {
         Pattern p = Pattern {
             .type  = Json_Type::String,
             .value = {
@@ -748,7 +738,7 @@ namespace json {
         return p;
     }
 
-    Pattern integer(u32 offset, Parser_Hooks hooks) {
+    Pattern p_s32(u32 offset, Parser_Hooks hooks) {
         Pattern p = Pattern {
             .type  = Json_Type::Number,
             .value = {
@@ -761,7 +751,7 @@ namespace json {
         return p;
     }
 
-    Pattern longint(u32 offset, Parser_Hooks hooks) {
+    Pattern p_s64(u32 offset, Parser_Hooks hooks) {
         Pattern p = Pattern {
             .type  = Json_Type::Number,
             .value = {
@@ -774,7 +764,7 @@ namespace json {
         return p;
     }
 
-    Pattern floating(u32 offset, Parser_Hooks hooks) {
+    Pattern p_f32(u32 offset, Parser_Hooks hooks) {
         Pattern p = Pattern {
             .type  = Json_Type::Number,
             .value = {
@@ -787,7 +777,7 @@ namespace json {
         return p;
     }
 
-    Pattern boolean_(u32 offset, Parser_Hooks hooks) {
+    Pattern p_bool(u32 offset, Parser_Hooks hooks) {
         Pattern p = Pattern {
             .type  = Json_Type::Bool,
             .value = {
@@ -864,13 +854,13 @@ namespace json {
         return p;
     }
 
-    Pattern custom(Json_Type source_type, Data_Type destination_type,
+    Pattern custom(Json_Type source_type, reader_function reader_fun,
                    u32 destination_offset, Parser_Hooks hooks)
     {
         Pattern p = Pattern {
             .type  = source_type,
             .value =  {
-                .destination_type = destination_type,
+                .custom_reader      = reader_fun,
                 .destination_offset = destination_offset
             },
             .parser_hooks = hooks

@@ -25,15 +25,16 @@ enum struct Mouse_Buttons {
 };
 
 enum struct Keyboard_Keys {
-    A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
-    _0, _1, _2, _3, _4, _5, _6, _7, _8, _9,
-
     F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12,
 
     Space, Escape, Enter, Tab, Backspace, Delete,
     Arrow_Left, Arrow_Right, Arrow_Up, Arrow_Down,
 
     Left_Shift, Right_Shift, Left_Control, Right_Control, Left_Alt, Right_Alt,
+
+    _0='0', _1, _2, _3, _4, _5, _6, _7, _8, _9,
+    A='a', B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
+
 
     ENUM_SIZE
 };

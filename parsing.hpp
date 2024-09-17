@@ -2,6 +2,7 @@
 #include "core.hpp"
 
 enum struct Data_Type : u8 {
+    Custom = 0,
     String = 1 << 7,
     Integer,
     Long,
@@ -24,6 +25,7 @@ u32 read_bool(const char* str, bool* out_bool);
 u32 read_float(const char* str, f32* out_float);
 
 u32 eat_line(const char* str);
+u32 eat_construct(const char* string, char delimiter);
 u32 eat_whitespace(const char* str);
 u32 eat_string(const char* str);
 u32 eat_number(const char* str);
@@ -55,6 +57,30 @@ u32 eat_line(const char* str) {
         ++str;
         ++eaten;
     }
+    return eaten;
+}
+
+u32 eat_construct(const char* string, char delimiter) {
+    // NOTE(Felix): Expects to start somewhere inside construct, not on the
+    //   start of the onctruct
+    u32 eaten = 0;
+
+    while (string[eaten] && string[eaten] != delimiter) {
+        if (string[eaten] == '"')
+            eaten += eat_string(string+eaten);
+        else if (string[eaten] == '{') {
+            ++eaten;
+            eaten += eat_construct(string+eaten, '}');
+        } else if (string[eaten] == '[') {
+            ++eaten;
+            eaten += eat_construct(string+eaten, ']');
+        }
+        else
+            ++eaten;
+    }
+
+    ++eaten; // overstep delimiter
+
     return eaten;
 }
 
