@@ -4,6 +4,9 @@
 #include "hashmap.hpp"
 #include <initializer_list>
 
+// TODO(Felix):
+//  - pattern for reading into `maybe` types
+//  - allow multiple object member patterns with different json types
 
 namespace json {
     enum struct Pattern_Match_Result {
@@ -351,7 +354,7 @@ namespace json {
                 }
                 eaten += pattern.value.custom_reader(string+eaten, (void*)(((u8*)matched_obj)+pattern.value.destination_offset));
                 sub_result = Pattern_Match_Result::OK_CONTINUE;
-                
+
             } else {
 
                 if (thing_at_point == Json_Type::Object) {
@@ -618,11 +621,18 @@ namespace json {
         } else {
             Object_Member pattern_todo;
             bool found_pattern_todo = false;
+
+            Json_Type thing_at_point = identify_thing(string+eaten);
+
             // check for children patterns with that member name
             for (u32 i = 0; i < p.object.member_count; ++i) {
                 const Object_Member om = p.object.members[i];
-                if (strlen(om.key) == member_name_len &&
-                    strncmp(om.key, member_name, member_name_len) == 0)
+                bool names_match =
+                    strlen(om.key) == member_name_len &&
+                    strncmp(om.key, member_name, member_name_len) == 0;
+                bool types_compatible = pattern_types_compatible(om.pattern.type, thing_at_point);
+
+                if (names_match && types_compatible)
                 {
                     found_pattern_todo = true;
                     pattern_todo = om;
@@ -636,7 +646,7 @@ namespace json {
                     .parent_type = Parser_Context_Type::Object_Member,
                     .parent {
                         .object  = {
-                            .member_name  = String {
+                            .member_name = String {
                                 // HACK(Felix): casting const away
                                 (char*)member_name,
                                 member_name_len},

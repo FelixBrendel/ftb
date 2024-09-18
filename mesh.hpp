@@ -35,6 +35,7 @@
 
 #include "core.hpp"
 #include "math.hpp"
+#include "parsing.hpp"
 
 struct Vertex {
     V3 position;
@@ -114,6 +115,30 @@ inline auto hm_objects_match(Vertex_Fingerprint a, Vertex_Fingerprint b) -> bool
         && a.norm_i == b.norm_i;
 }
 
+auto read_vertex_fingerprint(char** cursor, Vertex_Fingerprint* out_vfp) -> void {
+    // NOTE(Felix): all the indices in the obj file start at 1, so we subtract
+    //   1 of all after reading.
+    (*cursor) += read_long(*cursor, (s64*)&(out_vfp->pos_i));
+    --(out_vfp->pos_i);
+
+    if (*cursor[0] == '/') {
+        ++(*cursor); // overstep slash
+        (*cursor) += read_long(*cursor, (s64*)&(out_vfp->uv_i));
+        --(out_vfp->uv_i);
+
+        if (*cursor[0] == '/') {
+            ++(*cursor); // overstep slash
+            (*cursor) += read_long(*cursor, (s64*)&(out_vfp->norm_i));
+            --(out_vfp->norm_i);
+        } else {
+            out_vfp->norm_i = -1;
+        }
+    } else {
+        out_vfp->uv_i = -1;
+        out_vfp->norm_i = -1;
+    }
+}
+
 auto load_obj(const char* path) -> Mesh_Data {
     File_Read obj_str_read = read_entire_file(path);
     if (!obj_str_read.success)
@@ -136,80 +161,19 @@ auto load_obj(const char* path) -> Mesh_Data {
 
     char* cursor = obj_str.data;
 
-    auto eat_line = [&]() {
-        while (!(*cursor == '\n' || *cursor == '\r' || *cursor == '\0'))
-            ++cursor;
-    };
-
-    auto eat_whitespace = [&]() {
-        while (*cursor == ' '  || *cursor == '\n' ||
-               *cursor == '\t' || *cursor == '\r') {
-            ++cursor;
-        }
-    };
-
     auto eat_until_relevant = [&]() {
         char* old_read_pos;
         do {
             old_read_pos = cursor;
-            eat_whitespace();
-            if (*cursor == '#') eat_line(); // comment
-            if (*cursor == 'o') eat_line(); // object name
-            if (*cursor == 'l') eat_line(); // poly lines
-            if (*cursor == 'u') eat_line(); // ???
-            if (*cursor == 's') eat_line(); // smooth shading
-            if (*cursor == 'm') eat_line(); // material
-            if (*cursor == 'g') eat_line(); // obj group
+            cursor += eat_whitespace(cursor);
+            if (*cursor == '#') cursor += eat_line(cursor); // comment
+            if (*cursor == 'o') cursor += eat_line(cursor); // object name
+            if (*cursor == 'l') cursor += eat_line(cursor); // poly lines
+            if (*cursor == 'u') cursor += eat_line(cursor); // ???
+            if (*cursor == 's') cursor += eat_line(cursor); // smooth shading
+            if (*cursor == 'm') cursor += eat_line(cursor); // material
+            if (*cursor == 'g') cursor += eat_line(cursor); // obj group
         } while(cursor != old_read_pos);
-    };
-
-    auto read_int = [&]() -> u32 {
-        eat_whitespace();
-        u64 res = 0;
-        s32 negation = 1;
-        if (*cursor == '-') {
-            negation = -1;
-            ++cursor;
-        }
-        while (*cursor >= '0' && *cursor <= '9') {
-            res = res*10 + (*cursor - '0');
-            ++cursor;
-        }
-        return negation*(u32)res;
-    };
-
-    auto read_float = [&]() -> f32 {
-        eat_whitespace();
-        u64 res = 0;
-        f32 fres;
-        f32 negation = 1.0f;
-        if (*cursor == '-') {
-            negation = -1.0f;
-            ++cursor;
-        }
-        while (*cursor >= '0' && *cursor <= '9') {
-            res = res*10 + (*cursor - '0');
-            ++cursor;
-        }
-
-        fres = (f32)res;
-
-        if (*cursor == '.') {
-            int div = 1;
-            ++cursor;
-            char* cursor_pos = cursor;
-            int decimals = read_int();
-            u32 read_chars = (u32)(cursor - cursor_pos);
-
-            fres += ((f32)decimals/powf(10, (f32)read_chars));
-        }
-        if (*cursor == 'e') {
-            ++cursor;
-            int exp = read_int();
-            fres *= powf(10, (f32)exp);
-        }
-
-        return fres * negation;
     };
 
     {
@@ -224,22 +188,22 @@ auto load_obj(const char* path) -> Mesh_Data {
                 if (*cursor == ' ') {
                     // vertex pos
                     ++cursor;
-                    x = read_float();
-                    y = read_float();
-                    z = read_float();
+                    cursor += read_float(cursor, &x);
+                    cursor += read_float(cursor, &y);
+                    cursor += read_float(cursor, &z);
                     positions.extend({x, y, z});
                 } else if (*cursor == 'n') {
                     // vertex normal
                     ++cursor;
-                    x = read_float();
-                    y = read_float();
-                    z = read_float();
+                    cursor += read_float(cursor, &x);
+                    cursor += read_float(cursor, &y);
+                    cursor += read_float(cursor, &z);
                     normals.extend({x, y, z});
                 } else if (*cursor == 't') {
                     // vertex texture corrds
                     ++cursor;
-                    u = read_float();
-                    v = read_float();
+                    cursor += read_float(cursor, &u);
+                    cursor += read_float(cursor, &v);
                     v = 1 - v; // NOTE(Felix): Invert v, because in blender v goes up
                     uvs.extend({u, v});
                 } else {
@@ -249,47 +213,23 @@ auto load_obj(const char* path) -> Mesh_Data {
             } else if (*cursor == 'f') {
                 // ZoneScopedN("read f");
                 ++cursor;
-                Vertex_Fingerprint vfp;
+                Vertex_Fingerprint vfp {};
                 for (u32 i = 0; i < 3; ++i) {
-                    vfp.pos_i  = read_int();
-                    ++cursor; // overstep slash
-                    vfp.uv_i   = read_int();
-                    ++cursor; // overstep slash
-                    vfp.norm_i = read_int();
-
-                    // NOTE(Felix): all the indices in the obj file start at 1
-                    --vfp.pos_i;
-                    --vfp.uv_i;
-                    --vfp.norm_i;
-
+                    read_vertex_fingerprint(&cursor, &vfp);
                     fprints.append(vfp);
                 }
                 {
-                    // NOTE(Felix): check for quads
-                    eat_whitespace();
-                    if (*cursor >= '0' &&  *cursor <= '9') {
-                        vfp.pos_i  = read_int();
-                        ++cursor; // overstep slash
-                        vfp.uv_i   = read_int();
-                        ++cursor; // overstep slash
-                        vfp.norm_i = read_int();
+                    // NOTE(Felix): check for n-gons (assume triangle stip)
+                    cursor += eat_whitespace(cursor);
+                    u32 first = fprints.count-3;
+                    while (*cursor >= '0' && *cursor <= '9') {
+                        read_vertex_fingerprint(&cursor, &vfp);
 
-                        // NOTE(Felix): all the indices in the obj file start at
-                        // 1
-                        --vfp.pos_i;
-                        --vfp.uv_i;
-                        --vfp.norm_i;
-
+                        fprints.append(fprints[first]);
+                        fprints.append(fprints[fprints.count-2]);
                         fprints.append(vfp);
-                        fprints.append(fprints[fprints.count-4]);
-                        fprints.append(fprints[fprints.count-3]);
-                    }
-                }
-                {
-                    // NOTE(Felix): check for polygon with more verts than 4
-                    eat_whitespace();
-                    if (*cursor >= '0' &&  *cursor <= '9') {
-                        panic("Only tris and quads are supported");
+
+                        cursor += eat_whitespace(cursor);
                     }
                 }
             } else {
@@ -319,14 +259,21 @@ auto load_obj(const char* path) -> Mesh_Data {
                         positions[3 * (u32)vfp.pos_i + 0],
                         positions[3 * (u32)vfp.pos_i + 1],
                         positions[3 * (u32)vfp.pos_i + 2]},
-                    .normal {
+                };
+                if (vfp.norm_i != -1) {
+                    v.normal = {
                         normals[3 * (u32)vfp.norm_i + 0],
                         normals[3 * (u32)vfp.norm_i + 1],
-                        normals[3 * (u32)vfp.norm_i + 2]},
-                    .texture_coordinates {
+                        normals[3 * (u32)vfp.norm_i + 2]
+                    };
+                }
+                if (vfp.uv_i != -1) {
+                    v.texture_coordinates = {
                         uvs[2 * (u32)vfp.uv_i + 0],
-                        uvs[2 * (u32)vfp.uv_i + 1]},
-                };
+                        uvs[2 * (u32)vfp.uv_i + 1]
+                    };
+                }
+
                 u32 new_index = result.vertices.count;
                 result.vertices.append(v);
                 result.faces.data[result.faces.count-1][counter%3] = new_index;
