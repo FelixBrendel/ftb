@@ -14,8 +14,9 @@ struct Window_Type {
 #endif
 
 struct Window_State;
-Window_Type create_window(IV2 size, const char* title);
+Window_Type   create_window(IV2 size, const char* title);
 Window_State* update_window(Window_Type);
+void          destroy_window(Window_Type);
 
 enum struct Mouse_Buttons {
     Left, Right, Middle,
@@ -405,8 +406,14 @@ Window_Type create_window(IV2 size, const char* title) {
 
     return result;
 }
+
+void destroy_window(Window_Type window) {
+    DestroyWindow(window.window);
+}
+
 #  else
 Window_Type create_window(IV2 size, const char* title);
 Window_State* update_window(Window_Type);
+void destroy_window(Window_Type window);
 #  endif
 #endif

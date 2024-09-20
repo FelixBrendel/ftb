@@ -291,7 +291,7 @@ auto operator*(f32 s, M3x3 a)  -> M3x3;
 auto operator*(f32 s, M4x4 a)  -> M4x4;
 
 auto m4x4_identity() -> M4x4;
-auto m4x4_from_axis_angle(V3 axis, f32 angle) -> M4x4;
+auto m4x4_from_axis_angle(V3 axis, f32 angle_in_rad) -> M4x4;
 auto m4x4_look_at(V3 eye, V3 target, V3 up) -> M4x4;
 auto m4x4_perspective(f32 fov_y, f32 aspect, f32 clip_near, f32 clip_far) -> M4x4;
 auto m4x4_ortho(f32 left, f32 right, f32 bottom, f32 top) -> M4x4;
@@ -300,6 +300,7 @@ auto m4x4_ortho(f32 x_extend, f32 aspect) -> M4x4;
 
 auto m4x4_decompose(M4x4 input, M3x3* out_rot_sheer, V3* out_translation) -> void;
 auto m4x4_compose(M3x3 out_rot_sheer, V3 out_translation) -> M4x4;
+auto m4x4_transpose(M4x4 mat) -> M4x4;
 auto m4x4_orientation(Quat orientation) -> M4x4;
 auto m4x4_translate(V3 tanslation) -> M4x4;
 auto m4x4_scale(V3 scale) -> M4x4;
@@ -315,6 +316,7 @@ auto frobenius(M4x4) -> float;
 // ---------------------
 auto quat_from_axis_angle(V3 axis, f32 angle) -> Quat;
 auto quat_from_XYZ(f32 x, f32 y, f32 z) -> Quat;
+auto quat_from_m4x4(M4x4 m) -> Quat;
 
 #else // implementations
 
@@ -865,8 +867,8 @@ M4x4 m4x4_identity() {
     return mat;
 }
 
-auto m4x4_from_axis_angle(V3 axis, f32 angle) -> M4x4 {
-    f32 a = angle;
+auto m4x4_from_axis_angle(V3 axis, f32 angle_in_rad) -> M4x4 {
+    f32 a = angle_in_rad;
     f32 c = cosf(a);
     f32 s = sinf(a);
     axis = noz(axis);
@@ -965,6 +967,18 @@ auto m4x4_translate(V3 tanslation) -> M4x4 {
 
     result.columns[3].xyz = tanslation;
     result.columns[3].w = 1;
+
+    return result;
+}
+
+auto m4x4_transpose(M4x4 m) -> M4x4 {
+    M4x4 result;
+
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            result[i*4+j] = m[j*4+i];
+        }
+    }
 
     return result;
 }
@@ -1101,6 +1115,32 @@ auto quat_from_XYZ(f32 x, f32 y, f32 z) -> Quat {
         .z = cx*cy*sz - sx*sy*cz,
         .w = cx*cy*cz + sx*sy*sz
     };
+}
+
+auto quat_from_m4x4(M4x4 m) -> Quat {
+    // source: https://math.stackexchange.com/a/3183435
+    Quat q;
+    f32 t;
+    if (m._22 < 0) {
+        if (m._00 > m._11) {
+            t = 1 + m._00 - m._11 - m._22;
+            q = Quat{ t, m._01+m._10, m._20+m._02, m._12-m._21 };
+        } else {
+            t = 1 - m._00 + m._11 - m._22;
+            q = Quat{ m._01+m._10, t, m._12+m._21, m._20-m._02 };
+        }
+    } else {
+        if (m._00 < -m._11) {
+            t = 1 - m._00 - m._11 + m._22;
+            q = Quat{ m._20+m._02, m._12+m._21, t, m._01-m._10 };
+        } else {
+            t = 1 + m._00 + m._11 + m._22;
+            q = Quat{ m._12-m._21, m._20-m._02, m._01-m._10, t };
+        }
+    }
+    q = q *(0.5f / sqrtf(t));
+
+    return q;
 }
 
 #endif // FTB_MATH_IMPL

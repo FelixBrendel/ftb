@@ -78,7 +78,10 @@ struct Vertex_Fingerprint {
 
 auto hm_hash(Vertex_Fingerprint v) -> u64;
 auto hm_objects_match(Vertex_Fingerprint a, Vertex_Fingerprint b) -> bool;
+
 auto load_obj(const char* path) -> Mesh_Data;
+auto load_obj_from_in_memory_string(const char* cursor) -> Mesh_Data;
+
 auto resample_mesh(Mesh_Data m, u32 num_samples, Array_List<V3>* out_points) -> void;
 auto generate_fibonacci_sphere(u32 num_points, Array_List<V3>* out_points) -> void;
 auto get_random_barycentric_coordinates(f32* out_u, f32* out_v, f32* out_w) -> void;
@@ -115,7 +118,7 @@ inline auto hm_objects_match(Vertex_Fingerprint a, Vertex_Fingerprint b) -> bool
         && a.norm_i == b.norm_i;
 }
 
-auto read_vertex_fingerprint(char** cursor, Vertex_Fingerprint* out_vfp) -> void {
+auto read_vertex_fingerprint(const char** cursor, Vertex_Fingerprint* out_vfp) -> void {
     // NOTE(Felix): all the indices in the obj file start at 1, so we subtract
     //   1 of all after reading.
     (*cursor) += read_long(*cursor, (s64*)&(out_vfp->pos_i));
@@ -134,20 +137,13 @@ auto read_vertex_fingerprint(char** cursor, Vertex_Fingerprint* out_vfp) -> void
             out_vfp->norm_i = -1;
         }
     } else {
-        out_vfp->uv_i = -1;
+        out_vfp->uv_i   = -1;
         out_vfp->norm_i = -1;
     }
 }
 
-auto load_obj(const char* path) -> Mesh_Data {
-    File_Read obj_str_read = read_entire_file(path);
-    if (!obj_str_read.success)
-        return {};
-
-    Allocated_String obj_str = obj_str_read.contents;
-    defer{
-        obj_str.free();
-    };
+auto load_obj_from_in_memory_string(const char* cursor, const char* eof) -> Mesh_Data {
+    const char* start_cursor = cursor;
 
     Mesh_Data result;
 
@@ -159,10 +155,8 @@ auto load_obj(const char* path) -> Mesh_Data {
     Auto_Array_List<f32> uvs(512);
     Auto_Array_List<Vertex_Fingerprint> fprints(512);
 
-    char* cursor = obj_str.data;
-
     auto eat_until_relevant = [&]() {
-        char* old_read_pos;
+        const char* old_read_pos;
         do {
             old_read_pos = cursor;
             cursor += eat_whitespace(cursor);
@@ -177,7 +171,6 @@ auto load_obj(const char* path) -> Mesh_Data {
     };
 
     {
-        char* eof = obj_str.data+obj_str.length;
         while (true) {
             eat_until_relevant();
             f32 x, y, z, u, v;
@@ -207,7 +200,7 @@ auto load_obj(const char* path) -> Mesh_Data {
                     v = 1 - v; // NOTE(Felix): Invert v, because in blender v goes up
                     uvs.extend({u, v});
                 } else {
-                    panic("unknown marker \"v%c\" at %u", cursor, cursor-obj_str.data);
+                    panic("unknown marker \"v%c\" at %u", cursor, cursor-start_cursor);
                     return {};
                 }
             } else if (*cursor == 'f') {
@@ -233,7 +226,7 @@ auto load_obj(const char* path) -> Mesh_Data {
                     }
                 }
             } else {
-                panic("unknown marker \"%c\" (pos: %ld)", *cursor, cursor-obj_str.data);
+                panic("unknown marker \"%c\" (pos: %ld)", *cursor, cursor-start_cursor);
                 return {};
             }
         }
@@ -283,6 +276,22 @@ auto load_obj(const char* path) -> Mesh_Data {
         }
     }
     return result;
+
+}
+
+auto load_obj(const char* path) -> Mesh_Data {
+    File_Read obj_str_read = read_entire_file(path);
+    if (!obj_str_read.success)
+        return {};
+
+    Allocated_String obj_str = obj_str_read.contents;
+    defer{
+        obj_str.free();
+    };
+
+    char* cursor = obj_str.data;
+    char* eof    = obj_str.data+obj_str.length;
+    return load_obj_from_in_memory_string(cursor, eof);
 }
 
 

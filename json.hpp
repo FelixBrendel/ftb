@@ -6,6 +6,10 @@
 
 // TODO(Felix):
 //  - pattern for reading into `maybe` types
+//  - pattern for reading into array types, like lists but just offset + array_count
+//  - write a test for "multiple object member patterns with different json types"
+
+// DONE(Felix):
 //  - allow multiple object member patterns with different json types
 
 namespace json {
@@ -86,6 +90,11 @@ namespace json {
     struct Pattern {
         Json_Type type;
 
+        // NOTE(Felix): custom_reader might be set or nullptr; if set,
+        //   value.destination_offset must also be set, as it will be passed
+        //   as the destination to the custom reader
+        reader_function custom_reader;
+
         union {
             struct {
                 Object_Member* members;
@@ -101,7 +110,6 @@ namespace json {
                 Pattern* child_pattern;
             } list;
             struct {
-                reader_function custom_reader;    // either custom_reader or destination_type will be set
                 Data_Type       destination_type;
                 u32             destination_offset;
             } value;
@@ -348,11 +356,11 @@ namespace json {
                      "Actual  type: %d\n"
                      "At: %s", pattern.type, thing_at_point, string+eaten);
 
-            if (pattern.value.destination_type == Data_Type::Custom) {
+            if (pattern.custom_reader) {
                 if (pattern.type != thing_at_point) {
                     panic("Trying to parse a custom type expecting type %d but type was actually %d", pattern.type, thing_at_point);
                 }
-                eaten += pattern.value.custom_reader(string+eaten, (void*)(((u8*)matched_obj)+pattern.value.destination_offset));
+                eaten += pattern.custom_reader(string+eaten, (void*)(((u8*)matched_obj)+pattern.value.destination_offset));
                 sub_result = Pattern_Match_Result::OK_CONTINUE;
 
             } else {
@@ -868,9 +876,9 @@ namespace json {
                    u32 destination_offset, Parser_Hooks hooks)
     {
         Pattern p = Pattern {
-            .type  = source_type,
+            .type           = source_type,
+            .custom_reader  = reader_fun,
             .value =  {
-                .custom_reader      = reader_fun,
                 .destination_offset = destination_offset
             },
             .parser_hooks = hooks
