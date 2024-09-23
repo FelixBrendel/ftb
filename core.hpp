@@ -433,8 +433,12 @@ extern Allocator_Base* libc_allocator;
 //                              Perf_Counter
 // ----------------------------------------------------------------------------
 struct Perf_Counter {
+#ifdef FTB_WINDOWS
     s64 last_counter;
     f32 one_over_perf_frequency;
+#else
+    struct timespec last_timespec;
+#endif
 };
 
 void init(Perf_Counter*);
@@ -1428,6 +1432,9 @@ struct Linear_Allocator {
 // ----------------------------------------------------------------------------
 //                              Perf_Counter
 // ----------------------------------------------------------------------------
+#ifndef FTB_WINDOWS
+# include <time.h>
+#endif
 
 void init(Perf_Counter* pc) {
 #ifdef FTB_WINDOWS
@@ -1436,7 +1443,7 @@ void init(Perf_Counter* pc) {
     QueryPerformanceFrequency((LARGE_INTEGER*)&freq);
     pc->one_over_perf_frequency = 1.0f / freq;
 #else
-    *pc = {};
+    clock_gettime(CLOCK_MONOTONIC_RAW, &pc->last_timespec);
 #endif
 }
 
@@ -1448,7 +1455,14 @@ f32 tick(Perf_Counter* pc) {
     s64 diff = (pc->last_counter - old);
     return diff * pc->one_over_perf_frequency;
 #else
-    return 0;
+    struct timespec old = pc->last_timespec;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &pc->last_timespec);
+
+    f32 diff =
+        (pc->last_timespec.tv_sec - old.tv_sec) +
+        (pc->last_timespec.tv_nsec - old.tv_nsec) / 1e9;
+
+    return diff;
 #endif
 }
 

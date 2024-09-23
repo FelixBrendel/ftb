@@ -7,9 +7,10 @@ struct Window_Type {
     HWND window;
 };
 #else
+# include <X11/Xlib.h>
 struct Window_Type {
-    u64   window;
-    void* display;
+    u64      window;
+    Display* display;
 };
 #endif
 
@@ -116,6 +117,15 @@ struct Window_State {
 };
 
 #ifdef FTB_WINDOW_IMPL
+
+void clear_state_for_update(Window_State* state) {
+    memset(&state->input.mouse.transition_count, 0, sizeof(state->input.mouse.transition_count));
+    memset(&state->input.keyboard.transition_count, 0, sizeof(state->input.keyboard.transition_count));
+
+    memset(&state->events, 0, sizeof(state->events));
+    state->input.mouse.scroll_delta = 0;
+}
+
 #  ifdef FTB_WINDOWS
 #include "hashmap.hpp"
 #include <windowsx.h>
@@ -234,11 +244,7 @@ static void update_key_modifiers(Window_State* state) {
 Window_State* update_window(Window_Type window) {
     Window_State* state = hwnd_to_state.get_object_ptr(window.window);
 
-    memset(&state->input.mouse.transition_count, 0, sizeof(state->input.mouse.transition_count));
-    memset(&state->input.keyboard.transition_count, 0, sizeof(state->input.keyboard.transition_count));
-
-    memset(&state->events, 0, sizeof(state->events));
-    state->input.mouse.scroll_delta = 0;
+    clear_state_for_update(state);
 
     while (true) {
         MSG  message;
@@ -412,8 +418,173 @@ void destroy_window(Window_Type window) {
 }
 
 #  else
-Window_Type create_window(IV2 size, const char* title);
-Window_State* update_window(Window_Type);
-void destroy_window(Window_Type window);
+
+Hash_Map<void*, Window_State> window_to_state;
+
+static Atom wm_delete_window;
+Window_Type create_window(IV2 size, const char* title) {
+    Window_Type result;
+
+    result.display = XOpenDisplay(NULL);
+    if (!result.display) {
+        return {};
+    }
+
+    if (window_to_state.data == nullptr) {
+        window_to_state.init();
+    }
+
+    Screen* screen   = DefaultScreenOfDisplay(result.display);
+    s32     screenId = DefaultScreen(result.display);
+
+
+    XEvent ev;
+
+    result.window = XCreateSimpleWindow(
+        result.display, RootWindowOfScreen(screen), 0, 0,
+        size.x, size.y, 1,
+        BlackPixel(result.display, screenId),
+        WhitePixel(result.display, screenId));
+
+    XStoreName(result.display, result.window, title);
+
+    XSelectInput(result.display, result.window,
+                 KeyPressMask    | KeyReleaseMask |
+                 ButtonPressMask | ButtonReleaseMask);
+
+    XClearWindow(result.display, result.window);
+    XMapRaised(result.display, result.window);
+
+    wm_delete_window = XInternAtom(result.display, "WM_DELETE_WINDOW", False);
+    XSetWMProtocols(result.display, result.window, &wm_delete_window, 1);
+
+    window_to_state.set_object((void*)result.window, Window_State{});
+
+    return result;
+}
+#include <X11/keysymdef.h>
+#include <X11/Xutil.h>
+Window_State* update_window(Window_Type window) {
+    Window_State* state = window_to_state.get_object_ptr((void*)window.window);
+    clear_state_for_update(state);
+
+    // Get Mouse pos
+    {
+        Window root_return, child_return;
+        int root_x_return, root_y_return;
+        int win_x_return, win_y_return;
+        unsigned int mask_return;
+
+        Bool success =
+            XQueryPointer(window.display, window.window, &root_return, &child_return,
+                          &root_x_return, &root_y_return, &win_x_return, &win_y_return,
+                          &mask_return);
+
+        if (success == True) {
+            state->input.mouse.position = {
+                (f32)win_x_return,
+                (f32)win_y_return
+            };
+        }
+    }
+
+    while (XPending(window.display)) {
+        XEvent ev;
+        XNextEvent(window.display, &ev);
+
+        if (ev.type == ClientMessage &&
+            ev.xclient.data.l[0] == wm_delete_window)
+        {
+            state->events[(u32)Window_Events::Window_Wants_To_Close] = true;
+            continue;
+        }
+
+        switch (ev.type) {
+            case ButtonPress:
+            case ButtonRelease: {
+                bool is_down = ev.type == ButtonPress;
+
+                if (ev.xbutton.button == 4) {
+                    state->input.mouse.scroll_delta += 1;
+                } else if (ev.xbutton.button == 5) {
+                    state->input.mouse.scroll_delta -= 1;
+                } else {
+                    Mouse_Buttons button = Mouse_Buttons::ENUM_SIZE;
+
+                    switch (ev.xbutton.button) {
+                        case 1: button = Mouse_Buttons::Left;   break;
+                        case 3: button = Mouse_Buttons::Right;  break;
+                        case 2: button = Mouse_Buttons::Middle; break;
+                    }
+
+                    if (button != Mouse_Buttons::ENUM_SIZE) {
+                        u32 button_as_int = (u32)button;
+                        ++state->input.mouse.transition_count[button_as_int];
+                        state->input.mouse.ended_down[button_as_int] = is_down;
+                    }
+                }
+
+            } break;
+            case KeyPress:
+            case KeyRelease: {
+                bool is_down = ev.type == KeyPress;
+                int len = 0;
+                KeySym keysym = 0;
+                char str[25] = {0};
+                len = XLookupString(&ev.xkey, str, 25, &keysym, NULL);
+
+                Keyboard_Keys key = Keyboard_Keys::ENUM_SIZE;
+
+                if (keysym >= XK_0 && keysym <= XK_9) {
+                    key = (Keyboard_Keys)((u32)Keyboard_Keys::_0 + (keysym - XK_0));
+                } else if (keysym >= XK_F1 && keysym <= XK_F11) {
+                    // NOTE(Felix): XK_F12 is not the next number XK_F11, so
+                    //   only handle until F11 and manually handle F12
+                    //   separately
+                    key = (Keyboard_Keys)((u32)Keyboard_Keys::F1 + (keysym - XK_F1));
+                } else if (keysym >= XK_a && keysym <= XK_z) {
+                    key = (Keyboard_Keys)((u32)Keyboard_Keys::A + (keysym - XK_a));
+                } else {
+
+                    switch (keysym) {
+#define handle(x, my) case (x): key = Keyboard_Keys::my; break
+                        handle(XK_space,     Space);
+                        handle(XK_Escape,    Escape);
+                        handle(XK_Return,    Enter);
+                        handle(XK_Tab,       Tab);
+                        handle(XK_BackSpace, Backspace);
+                        handle(XK_Delete,    Delete);
+                        handle(XK_Left,      Arrow_Left);
+                        handle(XK_Right,     Arrow_Right);
+                        handle(XK_Up,        Arrow_Up);
+                        handle(XK_Down,      Arrow_Down);
+                        handle(XK_F12,       F12);
+                        handle(XK_Shift_L,   Left_Shift);
+                        handle(XK_Shift_R,   Right_Shift);
+                        handle(XK_Control_L, Left_Control);
+                        handle(XK_Control_R, Right_Control);
+                        handle(XK_Alt_L,     Left_Alt);
+                        handle(XK_Alt_R,     Right_Alt);
+#undef handle
+                    }
+                }
+
+                if (key != Keyboard_Keys::ENUM_SIZE) {
+                    u32 key_as_int = (u32)key;
+                    ++state->input.keyboard.transition_count[key_as_int];
+                    state->input.keyboard.ended_down[key_as_int] = is_down;
+                }
+
+            } break;
+        }
+    }
+
+    return state;
+}
+
+void destroy_window(Window_Type window) {
+    XDestroyWindow(window.display, window.window);
+    XCloseDisplay(window.display);
+}
 #  endif
 #endif
