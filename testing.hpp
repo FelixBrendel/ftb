@@ -49,51 +49,51 @@ enum testresult {
           "\n\tgot anyways:  " format "\n",                             \
           __FILE__, __LINE__, (type)(value), (type)(variable))
 
-#define assert_equal_string(variable, value)                              \
-    do {                                                                  \
-        auto v1{variable};                                                \
-        auto v2{value};                                                   \
-        if (!(v1 == v2)) {                                                       \
-            print_assert_equal_fail(&(v1), &(v2), String*, "%{->Str}");   \
-            return fail;                                                  \
-        }                                                                 \
+#define assert_equal_string(variable, value)                            \
+    do {                                                                \
+        auto v1{variable};                                              \
+        auto v2{value};                                                 \
+        if (!(v1 == v2)) {                                              \
+            print_assert_equal_fail(&(v1), &(v2), String*, "%{->Str}"); \
+            return fail;                                                \
+        }                                                               \
     } while (0)
 
 
 #define assert_equal_int(variable, value)                               \
-    if (variable != value) {                                            \
-        print_assert_equal_fail(variable, value, size_t, "%{u64}");     \
+    if ((variable) != (value)) {                                        \
+        print_assert_equal_fail((variable), (value), size_t, "%{u64}"); \
         return fail;                                                    \
     }
 
 #define assert_not_equal_int(variable, value)                           \
-    if (variable == value) {                                            \
-        print_assert_not_equal_fail(variable, value, size_t, "%{u64}"); \
+    if ((variable) == (value)) {                                        \
+        print_assert_not_equal_fail((variable), (value), size_t, "%{u64}"); \
         return fail;                                                    \
     }
 
 
-#define assert_equal_f32(variable, value)                           \
-    if (fabsl((f32)variable - (f32)value) > f32_epsilon) {          \
-        print_assert_equal_fail(variable, value, f32, "%{f32}");    \
-        return fail;                                                \
+#define assert_equal_f32(variable, value)                               \
+    if (fabsl((f32)(variable) - (f32)(value)) > f32_epsilon) {          \
+        print_assert_equal_fail((variable), (value), f32, "%{f32}");    \
+        return fail;                                                    \
     }
 
 #define assert_not_equal_f32(variable, value)                           \
-    if (fabsl((f32)variable - (f32)value) <= f32_epsilon) {             \
-        print_assert_not_equal_fail(variable, value, f32, "%{f32}");    \
+    if (fabsl((f32)(variable) - (f32)(value)) <= f32_epsilon) {         \
+        print_assert_not_equal_fail((variable), (value), f32, "%{f32}"); \
         return fail;                                                    \
     }
 
-#define assert_equal_f64(variable, value)                           \
-    if (fabsl((f64)variable - (f64)value) > f64_epsilon) {          \
-        print_assert_equal_fail(variable, value, f64, "%{f64}");    \
-        return fail;                                                \
+#define assert_equal_f64(variable, value)                               \
+    if (fabsl((f64)(variable) - (f64)(value)) > f64_epsilon) {          \
+        print_assert_equal_fail((variable), (value), f64, "%{f64}");    \
+        return fail;                                                    \
     }
 
 #define assert_not_equal_f64(variable, value)                           \
-    if (fabsl((f64)variable - (f64)value) <= f64_epsilon) {             \
-        print_assert_not_equal_fail(variable, value, f64, "%{f64}");    \
+    if (fabsl((f64)(variable) - (f64)(value)) <= f64_epsilon) {         \
+        print_assert_not_equal_fail((variable), (value), f64, "%{f64}"); \
         return fail;                                                    \
     }
 

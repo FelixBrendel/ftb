@@ -654,6 +654,8 @@ auto init_printer(Allocator_Base* allocator = nullptr) -> void;
 auto deinit_printer() -> void;
 
 auto print_stacktrace(FILE* file = stderr) -> void;
+auto hex_dump(void* ptr, s64 count, u32 bytes_per_line = 16) -> void;
+
 
 #define with_print_prefix(pfx)                  \
     MPP_BEFORE(1, push_print_prefix(pfx);)      \
@@ -1755,7 +1757,12 @@ void Leak_Detecting_Allocator::print_leak_statistics() {
     with_print_prefix("  | ") {
         for (Allocation_Info& ai : allocated_prts) {
             total_leaked_bytes += ai.size_in_bytes;
-            println("Leaked %lu bytes at %p", ai.size_in_bytes, ai.prt);
+            println("Leaked %lu bytes at %p, hex_dump:",
+                    ai.size_in_bytes, ai.prt);
+
+            with_print_prefix("  ") {
+                hex_dump(ai.prt, ai.size_in_bytes);
+            }
         }
 
         println("");
@@ -2668,6 +2675,43 @@ auto print_str_line(FILE* f, char* str) -> s32 {
         length++;
     }
     return print_to_file(f, "%.*s", length, str);
+}
+
+auto hex_dump(void* ptr, s64 count, u32 bytes_per_line) -> void {
+    u8* bytes = (u8*)ptr;
+
+    u8* line_start = bytes;
+    bool start_of_line = true;
+    for (u32 byte_idx = 0; byte_idx < count; ++byte_idx) {
+        if (start_of_line) {
+            print("%02x ", (bytes[byte_idx]) &0xff);
+            start_of_line = false;
+        }
+        else
+            raw_print("%02x ", (bytes[byte_idx]) &0xff);
+
+        if ((byte_idx+1) % bytes_per_line == 0 || byte_idx+1==count) {
+            raw_print("| ",
+                      (bytes+byte_idx)-line_start,
+                     line_start);
+
+            for (u32 char_idx = 0; char_idx < (bytes+byte_idx)-line_start; ++char_idx) {
+                char c = line_start[char_idx];
+                if (c > 32 && c < 126) {
+                    raw_print("%c", c);
+                } else {
+                    raw_print(".");
+                }
+            }
+
+            raw_print("\n");
+
+            line_start = bytes+byte_idx+1;
+            start_of_line = true;
+        }
+    }
+
+    println("");
 }
 
 #ifdef FTB_USING_MATH

@@ -31,6 +31,7 @@ clang++ -DFTB_STACKTRACE_INFO -g -fsanitize=undefined -std=c++17 %SRC% %CLANG_DE
 echo.
 rem %BINDIR_WIN%\clang_alloctest.exe
 rem %BINDIR_WIN%\clang_printer_colors
+echo RUNNING: %BINDIR_WIN%\clang_%EXE_WIN%
 %BINDIR_WIN%\clang_%EXE_WIN%
 
 rem echo.

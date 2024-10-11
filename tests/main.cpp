@@ -1,4 +1,5 @@
 #define _CRT_SECURE_NO_WARNINGS
+#include <cstddef>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -68,6 +69,146 @@ inline bool hm_objects_match(Key a, Key b) {
         && a.z == b.z;
 }
 
+auto test_obj_to_json_str() -> testresult {
+    using namespace json;
+
+    enum struct Color {
+        Red, Green, Blue
+    };
+
+    struct Sub_Data {
+        s32   sub_int;
+        bool  sub_bool;
+        Color sub_color;
+
+        bool operator==(Sub_Data& other) {
+            return
+                sub_int   == other.sub_int  &&
+                sub_bool  == other.sub_bool &&
+                sub_color == other.sub_color;
+        }
+    };
+    struct Data {
+        s32      integer;
+        f32      floating;
+        String   string;
+        Array_List<Sub_Data> sub_data;
+
+        void free() {
+            string.free();
+            sub_data.deinit();
+        }
+
+        bool operator==(Data& other) {
+            bool lists_same = sub_data.count == other.sub_data.count;
+            if (lists_same) {
+                for (u32 i = 0; i < sub_data.count; ++i) {
+                    lists_same &= sub_data[i] == other.sub_data[i];
+                }
+            }
+
+            return
+                integer  == other.integer  &&
+                floating == other.floating &&
+                string   == other.string   &&
+                lists_same;
+        }
+    };
+
+    auto p_color = [](u32 offset) -> Pattern {
+        return json::custom(
+            Json_Type::String, offset,
+            {
+                .custom_reader = [](const char* point, void* out_color_enum) -> u32 {
+                    String str;
+                    u32 length = read_string(point, &str);
+                    defer { str.free(); };
+                    Color* out_color = (Color*)out_color_enum;
+
+                    if     (str == string_from_literal("red"))   *out_color = Color::Red;
+                    else if(str == string_from_literal("green")) *out_color = Color::Green;
+                    else                                             *out_color = Color::Blue;
+
+                    return length;
+                },
+                .custom_writer = [](FILE* out_file, void* color_to_write) -> u32 {
+                    Color* out_color = (Color*)color_to_write;
+                    switch (*out_color) {
+                        case Color::Red:   return print_to_file(out_file, "\"red\"");
+                        case Color::Green: return print_to_file(out_file, "\"green\"");
+                        case Color::Blue:  return print_to_file(out_file, "\"blue\"");
+                        default: panic("Unknown color %d", *out_color);
+                    }
+                }
+            });
+    };
+
+    Pattern p_data = object({
+            {"integer",  p_s32(offsetof(Data, integer))},
+            {"floating", p_f32(offsetof(Data, floating))},
+            {"string",   p_str(offsetof(Data, string))},
+            {"sub_data", list(object({
+                        {"sub_int",   p_s32(offsetof(Sub_Data,  sub_int))},
+                        {"sub_bool",  p_bool(offsetof(Sub_Data, sub_bool))},
+                        {"sub_color", p_color(offsetof(Sub_Data, sub_color))}
+                    }),
+                    {
+                        .array_list_offset = offsetof(Data, sub_data),
+                        .element_size      = sizeof(Data::sub_data[0]),
+                    })},
+    });
+
+    const char* json_str = R"JSON(
+    {
+        "integer"  : 123,
+        "floating" : 3.1415,
+        "string"   : "Hello There",
+        "sub_data" : [
+             {
+                 "sub_int"  : 333,
+                 "sub_bool" : false,
+                 "sub_color": "red",
+             },
+             {
+                 "sub_int"  : 555,
+                 "sub_bool" : true,
+                 "sub_color": "blue",
+             },
+        ]
+    })JSON";
+
+    Data data {};
+    defer { data.free(); };
+    Pattern_Match_Result result = pattern_match(json_str, p_data, &data);
+
+    assert_true(result == Pattern_Match_Result::OK_DONE ||
+                result == Pattern_Match_Result::OK_CONTINUE);
+
+    assert_equal_int(data.integer, 123);
+    assert_equal_f32(data.floating, 3.1415);
+    assert_equal_string(data.string, string_from_literal("Hello There"));
+    assert_equal_int(data.sub_data.count, 2);
+    assert_equal_int(data.sub_data[0].sub_int, 333);
+    assert_equal_int(data.sub_data[0].sub_bool, false);
+    assert_equal_int(data.sub_data[0].sub_color, Color::Red);
+    assert_equal_int(data.sub_data[1].sub_int, 555);
+    assert_equal_int(data.sub_data[1].sub_bool, true);
+    assert_equal_int(data.sub_data[1].sub_color, Color::Blue);
+
+    Allocated_String exported_json_str = write_pattern_to_string(p_data, &data);
+    defer { exported_json_str.free(); };
+
+    Data data_reparsed {};
+    defer { data_reparsed.free(); };
+    result = pattern_match(exported_json_str.data, p_data, &data_reparsed);
+
+    assert_true(result == Pattern_Match_Result::OK_DONE ||
+                result == Pattern_Match_Result::OK_CONTINUE);
+
+    assert_true(data == data_reparsed);
+
+    return pass;
+}
 
 auto print_dots(FILE* f) -> u32 {
     return print_to_file(f, "...");
@@ -1138,19 +1279,19 @@ auto test_math() -> testresult {
     {
         V3 a = { 1,  1, 1 };
         V3 b = { 0, 21, 0 };
-        V3 l = lerp(a, 0, b);
+        V3 l = linerp(a, 0, b);
 
         assert_equal_f32(l.x, a.x);
         assert_equal_f32(l.y, a.y);
         assert_equal_f32(l.z, a.z);
 
-        l = lerp(a, 1, b);
+        l = linerp(a, 1, b);
 
         assert_equal_f32(l.x, b.x);
         assert_equal_f32(l.y, b.y);
         assert_equal_f32(l.z, b.z);
 
-        l = lerp(a, 0.5, b);
+        l = linerp(a, 0.5, b);
 
         assert_equal_f32(l.x, 0.5);
         assert_equal_f32(l.y, 11.0);
@@ -1159,17 +1300,17 @@ auto test_math() -> testresult {
     {
         V2 a = { 1,  1 };
         V2 b = { 0, 21 };
-        V2 l = lerp(a, 0, b);
+        V2 l = linerp(a, 0, b);
 
         assert_equal_f32(l.x, a.x);
         assert_equal_f32(l.y, a.y);
 
-        l = lerp(a, 1, b);
+        l = linerp(a, 1, b);
 
         assert_equal_f32(l.x, b.x);
         assert_equal_f32(l.y, b.y);
 
-        l = lerp(a, 0.5, b);
+        l = linerp(a, 0.5, b);
 
         assert_equal_f32(l.x, 0.5);
         assert_equal_f32(l.y, 11.0);
@@ -1756,10 +1897,10 @@ auto test_json_simple_object_new_syntax() -> testresult {
     };
 
     Pattern p = json::object({
-        {"int",    json::integer (offsetof(Test, i))},
-        {"float",  json::floating(offsetof(Test, f))},
-        {"bool",   json::boolean_(offsetof(Test, b))},
-        {"string", json::string  (offsetof(Test, s))},
+        {"int",    json::p_s32 (offsetof(Test, i))},
+        {"float",  json::p_f32 (offsetof(Test, f))},
+        {"bool",   json::p_bool(offsetof(Test, b))},
+        {"string", json::p_str (offsetof(Test, s))},
     });
 
     Test t;
@@ -1808,37 +1949,39 @@ auto test_json_wildcard_match_and_parser_context() -> testresult {
         Array_List<Wildcard_Obj> objs;
     };
 
-    Parser_Hooks string_list_hooks = {};
-    string_list_hooks.leave_hook = [](void* matched_obj, void* callback_data,
-                                      Hook_Context h_context, Parser_Context p_context)
+    Hooks string_list_hooks = {
+        .leave_hook = [](void* matched_obj, void* callback_data,
+                         Hook_Context h_context, Parser_Context p_context)
         -> Pattern_Match_Result
-    {
-        List_Entry* entry = (List_Entry*)matched_obj;
-        panic_if(p_context.context_stack.parent_type != Parser_Context_Type::List_Entry,
-                 "p_context.context_stack.parent_type != Parser_Context_Type::List_Entry");
-        entry->idx = p_context.context_stack.parent.list_entry.index;
-        return Pattern_Match_Result::OK_CONTINUE;
+        {
+            List_Entry* entry = (List_Entry*)matched_obj;
+            panic_if(p_context.context_stack.parent_type != Parser_Context_Type::List_Entry,
+                     "p_context.context_stack.parent_type != Parser_Context_Type::List_Entry");
+            entry->idx = p_context.context_stack.parent.list_entry.index;
+            return Pattern_Match_Result::OK_CONTINUE;
+        }
     };
 
-    Parser_Hooks wildcard_list_hooks = {};
-    wildcard_list_hooks.leave_hook = [](void* matched_obj, void* callback_data,
-                                      Hook_Context h_context, Parser_Context p_context)
+    Hooks wildcard_list_hooks = {
+        .leave_hook = [](void* matched_obj, void* callback_data,
+                         Hook_Context h_context, Parser_Context p_context)
         -> Pattern_Match_Result
-    {
-        Wildcard_Obj* entry = (Wildcard_Obj*)matched_obj;
-        panic_if(p_context.context_stack.parent_type != Parser_Context_Type::Object_Member,
-                 "p_context.context_stack.parent_type != Parser_Context_Type::Object_Member");
+        {
+            Wildcard_Obj* entry = (Wildcard_Obj*)matched_obj;
+            panic_if(p_context.context_stack.parent_type != Parser_Context_Type::Object_Member,
+                     "p_context.context_stack.parent_type != Parser_Context_Type::Object_Member");
 
-        panic_if(p_context.context_stack.previous->parent_type != Parser_Context_Type::Object_Member,
-                 "p_context.context_stack.previous->parent_type != Parser_Context_Type::Object_Member");
-        entry->key = p_context.context_stack.previous->parent.object.member_name;
-        return Pattern_Match_Result::OK_CONTINUE;
+            panic_if(p_context.context_stack.previous->parent_type != Parser_Context_Type::Object_Member,
+                     "p_context.context_stack.previous->parent_type != Parser_Context_Type::Object_Member");
+            entry->key = p_context.context_stack.previous->parent.object.member_name;
+            return Pattern_Match_Result::OK_CONTINUE;
+        }
     };
 
     Pattern json_pattern =
         object({{
                     "list", list({
-                            string(offsetof(List_Entry, value), string_list_hooks)
+                            p_str(offsetof(List_Entry, value), string_list_hooks)
                         }, {
                             .array_list_offset = offsetof(Match_Target, list),
                             .element_size      = sizeof(Match_Target::list[0])
@@ -1846,7 +1989,7 @@ auto test_json_wildcard_match_and_parser_context() -> testresult {
                 }},
             {(Fallback_Pattern){
                 .pattern = object({{
-                            "value", integer(offsetof(Wildcard_Obj, value), wildcard_list_hooks)
+                            "value", p_s32(offsetof(Wildcard_Obj, value), wildcard_list_hooks)
                         }}),
                 .array_list_offset = offsetof(Match_Target, objs),
                 .element_size      = sizeof(Match_Target::objs[0]),
@@ -1889,6 +2032,7 @@ auto test_json_wildcard_match_and_parser_context() -> testresult {
         elem.value.free();
     }
     target.list.deinit();
+    target.objs.deinit();
 
 
     return pass;
@@ -1940,18 +2084,18 @@ auto test_json_config() -> testresult {
     };
 
     Pattern p = object({
-        {"config_version",     integer(offsetof(Tafel_Config, config_version))},
-        {"db_client_id",       string (offsetof(Tafel_Config, db_client_id))},
-        {"db_client_secret",   string (offsetof(Tafel_Config, db_client_secret))},
-        {"mvg_location_names", list({string(0)}, {
+        {"config_version",     p_s32(offsetof(Tafel_Config, config_version))},
+        {"db_client_id",       p_str (offsetof(Tafel_Config, db_client_id))},
+        {"db_client_secret",   p_str (offsetof(Tafel_Config, db_client_secret))},
+        {"mvg_location_names", list({p_str(0)}, {
                 .array_list_offset = offsetof(Tafel_Config, mvg_locations),
                 .element_size      = sizeof(Tafel_Config::mvg_locations[0]),
                 })},
-        {"db_station_names",  list({string(0)}, {
+        {"db_station_names",  list({p_str(0)}, {
                 .array_list_offset = offsetof(Tafel_Config, db_stations),
                 .element_size      = sizeof(Tafel_Config::db_stations[0]),
                 })},
-        {"destination_blacklist", list({string(0)}, {
+        {"destination_blacklist", list({p_str(0)}, {
                 .array_list_offset = offsetof(Tafel_Config, destination_blacklist),
                 .element_size      = sizeof(Tafel_Config::destination_blacklist[0]),
                 })},
@@ -2081,21 +2225,21 @@ auto test_json_mvg() -> testresult {
 
     using namespace json;
     Pattern product =
-        object({{"products", list({string(0)}, {
+        object({{"products", list({p_str(0)}, {
                             .array_list_offset = offsetof(Location, products),
                             .element_size = sizeof(String)
                         })},
-                {"type",          string  (offsetof(Location, type))},
-                {"latitude",      floating(offsetof(Location, latitude))},
-                {"longitude",     floating(offsetof(Location, longitude))},
-                {"id",            string  (offsetof(Location, id))},
-                {"divaId",        integer (offsetof(Location, divaId))},
-                {"place",         string  (offsetof(Location, place))},
-                {"name",          string  (offsetof(Location, name))},
-                {"has_live_data", boolean_(offsetof(Location, has_live_data))},
-                {"has_zoom_data", boolean_(offsetof(Location, has_zoom_data))},
-                {"aliases",       string  (offsetof(Location, aliases))},
-                {"tariffZones",   string  (offsetof(Location, tariffZones))},
+                {"type",          p_str (offsetof(Location, type))},
+                {"latitude",      p_f32 (offsetof(Location, latitude))},
+                {"longitude",     p_f32 (offsetof(Location, longitude))},
+                {"id",            p_str (offsetof(Location, id))},
+                {"divaId",        p_s32 (offsetof(Location, divaId))},
+                {"place",         p_str (offsetof(Location, place))},
+                {"name",          p_str (offsetof(Location, name))},
+                {"has_live_data", p_bool(offsetof(Location, has_live_data))},
+                {"has_zoom_data", p_bool(offsetof(Location, has_zoom_data))},
+                {"aliases",       p_str (offsetof(Location, aliases))},
+                {"tariffZones",   p_str (offsetof(Location, tariffZones))},
             }, {}, {
                 // NOTE(Felix): stop after first location
                 .leave_hook = [](void* match, void* callback_data, Hook_Context, Parser_Context) -> Pattern_Match_Result {
@@ -2177,7 +2321,7 @@ testresult test_json_extract_value_from_list() {
     using namespace json;
     const char* str = "{\"current_condition\":[{\"temp_C\":3}]}";
     f32 result = 0;
-    Pattern p = object({{"current_condition", list({object({{"temp_C", floating(0)}})})}});
+    Pattern p = object({{"current_condition", list({object({{"temp_C", p_f32(0)}})})}});
 
     Pattern_Match_Result r = pattern_match(str, p, &result);
     assert_equal_int(r, Pattern_Match_Result::OK_CONTINUE);
@@ -2190,7 +2334,7 @@ testresult test_json_parse_from_quoted_value() {
     using namespace json;
     const char* str = "{\"value\":\"3\"}";
     f32 result = 0;
-    Pattern p = object({{"value",  floating(0)}});
+    Pattern p = object({{"value",  p_f32(0)}});
 
     Pattern_Match_Result r = pattern_match(str, p, &result);
     assert_equal_int(r, Pattern_Match_Result::OK_CONTINUE);
@@ -2323,25 +2467,25 @@ testresult test_json_bug() {
        }
 )JSON";
         Pattern departure = object({
-                {"product",             string  (offsetof(Departure, product))},
-                {"label",               string  (offsetof(Departure, label))},
-                {"destination",         string  (offsetof(Departure, destination))},
-                {"live",                boolean_(offsetof(Departure, live))},
-                {"delay",               floating(offsetof(Departure, delay))},
-                {"cancelled",           boolean_(offsetof(Departure, cancelled))},
-                {"lineBackgroundColor", string  (offsetof(Departure, line_background_color))},
-                {"departureId",         string  (offsetof(Departure, departure_id))},
-                {"sev",                 boolean_(offsetof(Departure, sev))},
-                {"platform",            string  (offsetof(Departure, platform))},
-                {"stopPositionNumber",  integer (offsetof(Departure, stop_position_number))},
+                {"product",             p_str  (offsetof(Departure, product))},
+                {"label",               p_str  (offsetof(Departure, label))},
+                {"destination",         p_str  (offsetof(Departure, destination))},
+                {"live",                p_bool (offsetof(Departure, live))},
+                {"delay",               p_f32  (offsetof(Departure, delay))},
+                {"cancelled",           p_bool (offsetof(Departure, cancelled))},
+                {"lineBackgroundColor", p_str  (offsetof(Departure, line_background_color))},
+                {"departureId",         p_str  (offsetof(Departure, departure_id))},
+                {"sev",                 p_bool (offsetof(Departure, sev))},
+                {"platform",            p_str  (offsetof(Departure, platform))},
+                {"stopPositionNumber",  p_s32  (offsetof(Departure, stop_position_number))},
         });
         Pattern serving_line = object({
-                {"destination", string( offsetof(Serving_Line, destination))},
-                {"sev",         boolean_(offsetof(Serving_Line, sev))},
-                {"network",     string( offsetof(Serving_Line, network))},
-                {"product",     string( offsetof(Serving_Line, product))},
-                {"lineNumber",  string( offsetof(Serving_Line, line_number))},
-                {"divaId",      string( offsetof(Serving_Line, diva_id))},
+                {"destination", p_str (offsetof(Serving_Line, destination))},
+                {"sev",         p_bool(offsetof(Serving_Line, sev))},
+                {"network",     p_str (offsetof(Serving_Line, network))},
+                {"product",     p_str (offsetof(Serving_Line, product))},
+                {"lineNumber",  p_str (offsetof(Serving_Line, line_number))},
+                {"divaId",      p_str (offsetof(Serving_Line, diva_id))},
         });
         Pattern p =
             object({
@@ -2724,29 +2868,29 @@ auto test_json_bug_again() -> testresult {
     Pattern departure = object(
         {
             // {"departureTime",       custom(Json_Type::Number, (Data_Type)Custom_Data_Types::UNIX_TIME_IN_MS, offsetof(Departure, departure_time))},
-            {"product",             string  (offsetof(Departure, product))},
-            {"label",               string  (offsetof(Departure, label))},
-            {"destination",         string  (offsetof(Departure, destination))},
-            {"live",                boolean_ (offsetof(Departure, live))},
-            {"delay",               floating(offsetof(Departure, delay))},
-            {"cancelled",           boolean_ (offsetof(Departure, cancelled))},
-            {"lineBackgroundColor", string  (offsetof(Departure, line_background_color))},
-            {"departureId",         string  (offsetof(Departure, departure_id))},
-            {"sev",                 boolean_ (offsetof(Departure, sev))},
-            {"platform",            string  (offsetof(Departure, platform))},
-            {"stopPositionNumber",  integer (offsetof(Departure, stop_position_number))},
-            {"infoMessages",        list    ({string(0)}, {
+            {"product",             p_str  (offsetof(Departure, product))},
+            {"label",               p_str  (offsetof(Departure, label))},
+            {"destination",         p_str  (offsetof(Departure, destination))},
+            {"live",                p_bool (offsetof(Departure, live))},
+            {"delay",               p_f32  (offsetof(Departure, delay))},
+            {"cancelled",           p_bool (offsetof(Departure, cancelled))},
+            {"lineBackgroundColor", p_str  (offsetof(Departure, line_background_color))},
+            {"departureId",         p_str  (offsetof(Departure, departure_id))},
+            {"sev",                 p_bool (offsetof(Departure, sev))},
+            {"platform",            p_str  (offsetof(Departure, platform))},
+            {"stopPositionNumber",  p_s32 (offsetof(Departure, stop_position_number))},
+            {"infoMessages",        list    ({p_str(0)}, {
                         .array_list_offset = offsetof(Departure, info_messages),
                         .element_size      = sizeof(Departure::info_messages[0]),
                     })}
         });
     Pattern serving_line = object({
-            {"destination", string(offsetof(Serving_Line, destination))},
-            {"sev",         boolean_(offsetof(Serving_Line, sev))},
-            {"network",     string(offsetof(Serving_Line, network))},
-            {"product",     string(offsetof(Serving_Line, product))},
-            {"lineNumber",  string(offsetof(Serving_Line, line_number))},
-            {"divaId",      string(offsetof(Serving_Line, diva_id))},
+            {"destination", p_str(offsetof(Serving_Line, destination))},
+            {"sev",         p_bool(offsetof(Serving_Line, sev))},
+            {"network",     p_str(offsetof(Serving_Line, network))},
+            {"product",     p_str(offsetof(Serving_Line, product))},
+            {"lineNumber",  p_str(offsetof(Serving_Line, line_number))},
+            {"divaId",      p_str(offsetof(Serving_Line, diva_id))},
         });
     Pattern p = object({
             {"departures", list({departure}, {
@@ -2805,6 +2949,7 @@ s32 main(s32, char**) {
         with_allocator(ld) {
             defer { ld.print_leak_statistics(); };
 
+            invoke_test(test_obj_to_json_str);
 
             invoke_test(test_json_simple_object_new_syntax);
             invoke_test(test_json_mvg);
@@ -2840,7 +2985,6 @@ s32 main(s32, char**) {
             invoke_test(test_scheduler_animations);
 
             invoke_test(test_scratch_memory);
-
             // invoke_test(test_printer);
         }
 

@@ -20,17 +20,17 @@ namespace json {
     };
 
     enum struct Json_Type {
-        Invalid,
+        Invalid               = 0,
 
-        List,
-        Object,
-        Object_As_Hash_Map,
-        Object_Member_Name,
+        List                  = 1<<0,
+        Object                = 1<<1,
+        Object_As_Hash_Map    = 1<<2,
+        Object_Member_Name    = 1<<3,
 
-        String,
-        Number,
-        Bool,
-        Null,
+        String                = 1<<4,
+        Number                = 1<<5,
+        Bool                  = 1<<6,
+        Null                  = 1<<7,
     };
 
     struct Hook_Context {
@@ -69,7 +69,28 @@ namespace json {
                                                 Hook_Context h_context,
                                                 Parser_Context p_context);
 
-    typedef u32 (*reader_function)(const char* position, void* out_read_value);
+    typedef u32  (*reader_function)(const char* position, void* out_read_value);
+
+    // NOTE(Felix): In the future when we write into a sting buffer instead of
+    //   a file we can merge both functionalities. We first wirte the key and
+    //   colon of the objet members and then wirte/check the value. If nothing
+    //   is to be written, we rewind the writing pointer a bit to overwrite
+    //   the key again.
+    typedef u32  (*writer_function)(FILE*           file, void* value_to_write);
+    typedef bool (*writer_selection_function)(void* value_to_write);
+
+    struct Hooks {
+        // NOTE(Felix): custom_reader might be set or nullptr; if set,
+        //   value.destination_offset must also be set, as it will be passed
+        //   as the destination to the custom reader
+        reader_function           custom_reader;
+        writer_function           custom_writer;
+        writer_selection_function custom_writer_selection; // NOTE(Felix): see note above at writer_selection_function
+
+        void* callback_data;
+        parser_hook enter_hook;
+        parser_hook leave_hook;
+    };
 
     struct Key_Mapping {
         const char* key;
@@ -77,23 +98,11 @@ namespace json {
         u32         destination_offset;
     };
 
-
-    struct Parser_Hooks {
-        void* callback_data;
-        parser_hook enter_hook;
-        parser_hook leave_hook;
-    };
-
     struct Object_Member;
     struct Fallback_Pattern;
 
     struct Pattern {
         Json_Type type;
-
-        // NOTE(Felix): custom_reader might be set or nullptr; if set,
-        //   value.destination_offset must also be set, as it will be passed
-        //   as the destination to the custom reader
-        reader_function custom_reader;
 
         union {
             struct {
@@ -115,10 +124,9 @@ namespace json {
             } value;
         };
 
-        Parser_Hooks parser_hooks;
+        Hooks hooks;
 
         void print();
-
     };
 
     struct Fallback_Pattern {
@@ -137,24 +145,28 @@ namespace json {
         u32 element_size;
     };
 
-    Pattern object(std::initializer_list<Object_Member> members, Fallback_Pattern fallback_pattern={}, Parser_Hooks hooks={0});
-    Pattern object(u32 hash_map_offset, Parser_Hooks hooks={0});
+    Pattern object(std::initializer_list<Object_Member> members, Fallback_Pattern fallback_pattern={}, Hooks hooks={0});
+    Pattern object(u32 hash_map_offset, Hooks hooks={0});
 
     Pattern list(Pattern&& element_pattern,
-                 List_Info list_info={0}, Parser_Hooks hooks={0});
+                 List_Info list_info={0}, Hooks hooks={0});
     Pattern list(const Pattern& element_pattern,
-                 List_Info list_info={0}, Parser_Hooks hooks={0});
-    Pattern p_s32(u32 offset,  Parser_Hooks hooks={0});
-    Pattern p_s64(u32 offset,  Parser_Hooks hooks={0});
-    Pattern p_f32(u32 offset, Parser_Hooks hooks={0});
-    Pattern p_bool(u32 offset, Parser_Hooks hooks={0});
-    Pattern p_str(u32 offset,   Parser_Hooks hooks={0});
-    Pattern custom(Json_Type source_type, reader_function reader_fun,
-                   u32 destination_offset, Parser_Hooks hooks={0});
+                 List_Info list_info={0}, Hooks hooks={0});
+    Pattern p_s32(u32 offset,  Hooks hooks={0});
+    Pattern p_s64(u32 offset,  Hooks hooks={0});
+    Pattern p_f32(u32 offset, Hooks hooks={0});
+    Pattern p_bool(u32 offset, Hooks hooks={0});
+    Pattern p_str(u32 offset,   Hooks hooks={0});
+    Pattern custom(Json_Type source_type, u32 destination_offset,
+                   Hooks hooks={0});
 
     // Pattern member_value(const char* key, Json_Type source_type, Data_Type destination_type, u32 destination_offset);
     Pattern_Match_Result pattern_match(const char* string, Pattern pattern, void* obj_to_match_into, void* callback_data = nullptr, Allocator_Base* allocator = nullptr);
     void write_pattern_to_file(const char* path, Pattern pattern, void* user_data);
+    Allocated_String write_pattern_to_string(Pattern pattern, void* user_data, Allocator_Base* allocator = nullptr);
+
+    // helper for custom parsers
+    Json_Type identify_thing(const char* string);
 }
 
 
@@ -314,8 +326,12 @@ namespace json {
         return Pattern_Match_Result::OK_CONTINUE;
     }
 
+    bool pattern_types_match(Json_Type type_in_pattern, Json_Type type_in_string) {
+        return (((u64)type_in_pattern & (u64)type_in_string) != 0);
+    }
+
     bool pattern_types_compatible(Json_Type type_in_pattern, Json_Type type_in_string) {
-        return type_in_pattern == type_in_string
+        return pattern_types_match(type_in_pattern, type_in_string)
             || (type_in_string == Json_Type::Object && type_in_pattern == Json_Type::Object_As_Hash_Map)
             || (type_in_string == Json_Type::Number && type_in_pattern == Json_Type::String);
     }
@@ -338,10 +354,10 @@ namespace json {
         call_ctx.position_in_string = {string+eaten};
 
         // maybe run enter hook
-        if (pattern.parser_hooks.enter_hook) {
+        if (pattern.hooks.enter_hook) {
             enter_message =
-                pattern.parser_hooks.enter_hook(matched_obj, callback_data,
-                                                {thing_at_point}, call_ctx);
+                pattern.hooks.enter_hook(matched_obj, callback_data,
+                                         {thing_at_point}, call_ctx);
         }
 
         // if children were registered for this pattern
@@ -356,11 +372,11 @@ namespace json {
                      "Actual  type: %d\n"
                      "At: %s", pattern.type, thing_at_point, string+eaten);
 
-            if (pattern.custom_reader) {
-                if (pattern.type != thing_at_point) {
+            if (pattern.hooks.custom_reader) {
+                if (!pattern_types_match(pattern.type, thing_at_point)) {
                     panic("Trying to parse a custom type expecting type %d but type was actually %d", pattern.type, thing_at_point);
                 }
-                eaten += pattern.custom_reader(string+eaten, (void*)(((u8*)matched_obj)+pattern.value.destination_offset));
+                eaten += pattern.hooks.custom_reader(string+eaten, (void*)(((u8*)matched_obj)+pattern.value.destination_offset));
                 sub_result = Pattern_Match_Result::OK_CONTINUE;
 
             } else {
@@ -426,9 +442,9 @@ namespace json {
         call_ctx.position_in_string = string+eaten;
 
         // maybe run leave hook
-        if (pattern.parser_hooks.leave_hook) {
+        if (pattern.hooks.leave_hook) {
             leave_message =
-                pattern.parser_hooks.leave_hook(matched_obj, callback_data, {thing_at_point}, call_ctx);
+                pattern.hooks.leave_hook(matched_obj, callback_data, {thing_at_point}, call_ctx);
         }
 
         if (enter_message == Pattern_Match_Result::MATCHING_ERROR ||
@@ -744,73 +760,73 @@ namespace json {
     // }
 
 
-    Pattern p_str(u32 offset, Parser_Hooks hooks) {
+    Pattern p_str(u32 offset, Hooks hooks) {
         Pattern p = Pattern {
             .type  = Json_Type::String,
             .value = {
                 .destination_type   = Data_Type::String,
                 .destination_offset = offset
             },
-            .parser_hooks = hooks
+            .hooks = hooks
         };
         return p;
     }
 
-    Pattern p_s32(u32 offset, Parser_Hooks hooks) {
+    Pattern p_s32(u32 offset, Hooks hooks) {
         Pattern p = Pattern {
             .type  = Json_Type::Number,
             .value = {
                 .destination_type   = Data_Type::Integer,
                 .destination_offset = offset
             },
-            .parser_hooks = hooks
+            .hooks = hooks
         };
 
         return p;
     }
 
-    Pattern p_s64(u32 offset, Parser_Hooks hooks) {
+    Pattern p_s64(u32 offset, Hooks hooks) {
         Pattern p = Pattern {
             .type  = Json_Type::Number,
             .value = {
                 .destination_type   = Data_Type::Long,
                 .destination_offset = offset
             },
-            .parser_hooks = hooks
+            .hooks = hooks
         };
 
         return p;
     }
 
-    Pattern p_f32(u32 offset, Parser_Hooks hooks) {
+    Pattern p_f32(u32 offset, Hooks hooks) {
         Pattern p = Pattern {
             .type  = Json_Type::Number,
             .value = {
                 .destination_type   = Data_Type::Float,
                 .destination_offset = offset
             },
-            .parser_hooks = hooks
+            .hooks = hooks
         };
 
         return p;
     }
 
-    Pattern p_bool(u32 offset, Parser_Hooks hooks) {
+    Pattern p_bool(u32 offset, Hooks hooks) {
         Pattern p = Pattern {
             .type  = Json_Type::Bool,
             .value = {
                 .destination_type   = Data_Type::Boolean,
                 .destination_offset = offset
             },
-            .parser_hooks = hooks
+            .hooks = hooks
         };
         return p;
     }
 
-    Pattern object(std::initializer_list<Object_Member> members, Fallback_Pattern fallback_pattern, Parser_Hooks hooks) {
+    Pattern object(std::initializer_list<Object_Member> members, Fallback_Pattern fallback_pattern, Hooks hooks) {
         Pattern p = Pattern {
             .type = Json_Type::Object,
-            .parser_hooks = hooks
+            .hooks = hooks
         };
 
         Allocator_Base* temp = grab_temp_allocator();
@@ -835,10 +851,10 @@ namespace json {
         return p;
     }
 
-    Pattern object(u32 hash_map_offset, Parser_Hooks hooks) {
+    Pattern object(u32 hash_map_offset, Hooks hooks) {
         Pattern p = Pattern {
             .type = Json_Type::Object_As_Hash_Map,
-            .parser_hooks = hooks
+            .hooks = hooks
         };
         p.object_as_hash_map.hash_map_offset = hash_map_offset;
         return p;
@@ -846,13 +862,13 @@ namespace json {
 
     Pattern list(Pattern&& element_pattern,
                  List_Info list_info,
-                 Parser_Hooks hooks)
+                 Hooks hooks)
     {
         return list((const Pattern&)element_pattern, list_info, hooks);
     }
 
     Pattern list(const Pattern& element_pattern,
-                 List_Info list_info, Parser_Hooks hooks)
+                 List_Info list_info, Hooks hooks)
     {
         Allocator_Base* temp = grab_temp_allocator();
         Pattern* child = temp->allocate<Pattern>(1);
@@ -865,23 +881,20 @@ namespace json {
                 .array_list_offset = list_info.array_list_offset,
                 .child_pattern     = child
             },
-            .parser_hooks = hooks
+            .hooks = hooks
         };
 
 
         return p;
     }
 
-    Pattern custom(Json_Type source_type, reader_function reader_fun,
-                   u32 destination_offset, Parser_Hooks hooks)
-    {
+    Pattern custom(Json_Type source_type, u32 destination_offset, Hooks hooks) {
         Pattern p = Pattern {
-            .type           = source_type,
-            .custom_reader  = reader_fun,
-            .value =  {
+            .type         = source_type,
+            .value = {
                 .destination_offset = destination_offset
             },
-            .parser_hooks = hooks
+            .hooks = hooks
         };
 
         return p;
@@ -905,7 +918,7 @@ namespace json {
 
     void write_float_to_file(FILE* out, u32 offset, void* data) {
         float* f = (float*)(((byte*)data)+offset);
-        fprintf(out, "%f", *f);
+        fprintf(out, "%g", *f);
     }
 
     void write_string_to_file(FILE* out, u32 offset, void* data) {
@@ -925,6 +938,7 @@ namespace json {
         }
 
         for (u32 i = 1; i < list_p->count; ++i) {
+            element_pointer = ((u8*)element_pointer)+element_size;
             fprintf(out, ", ");
             write_pattern_to_file(out, child_pattern, element_pointer);
         }
@@ -942,24 +956,61 @@ namespace json {
 
         fprintf(out, "{");
 
-
-
         for (u32 i = 0; i < member_count; ++i) {
             const Object_Member om = members[i];
 
-            if (i++ != 0) {
+            if (i != 0) {
                 fprintf(out, ", ");
             }
 
-            print_one_key_value_pair(om);
+            bool member_should_be_written = true;
+            if (om.pattern.hooks.custom_writer_selection) {
+                u8* offset_data = ((u8*)data) + om.pattern.value.destination_offset;
+                member_should_be_written &= om.pattern.hooks.custom_writer_selection(offset_data);
+            }
+
+            if (member_should_be_written)
+                print_one_key_value_pair(om);
         }
 
         fprintf(out, "}");
     }
 
 
+    Allocated_String write_pattern_to_string(Pattern pattern, void* user_data, Allocator_Base* allocator) {
+        if (!allocator)
+            allocator = grab_current_allocator();
+
+        FILE* t_file = tmpfile();
+        if (!t_file) {
+            return {};
+        }
+
+        write_pattern_to_file(t_file, pattern, user_data);
+
+        Allocated_String ret {};
+        ret.length    = ftell(t_file) + 1;
+
+        rewind(t_file);
+
+        ret.allocator = allocator;
+        ret.data      = allocator->allocate<char>((u32)ret.length);
+        ret.length    = fread(ret.data, sizeof(char), ret.length, t_file);
+        ret.data[ret.length] = '\0';
+
+        return ret;
+    }
 
     void write_pattern_to_file(FILE* out, Pattern pattern, void* user_data) {
+        if (pattern.hooks.custom_reader || pattern.hooks.custom_writer) {
+            void* offset_user_data = ((u8*)user_data) + pattern.value.destination_offset;
+            if (!pattern.hooks.custom_writer) {
+                panic("No custom writer set");
+            } else {
+                pattern.hooks.custom_writer(out, offset_user_data);
+                return;
+            }
+        }
 
         switch (pattern.type) {
             case Json_Type::Null: fprintf(out, "null"); break;

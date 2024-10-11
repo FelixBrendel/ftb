@@ -316,6 +316,7 @@ auto frobenius(M4x4) -> float;
 // ---------------------
 auto quat_from_axis_angle(V3 axis, f32 angle) -> Quat;
 auto quat_from_XYZ(f32 x, f32 y, f32 z) -> Quat;
+auto quat_to_XYZ_Euler(Quat q) -> V3;
 auto quat_from_m4x4(M4x4 m) -> Quat;
 
 #else // implementations
@@ -1141,6 +1142,29 @@ auto quat_from_m4x4(M4x4 m) -> Quat {
     q = q *(0.5f / sqrtf(t));
 
     return q;
+}
+
+
+auto quat_to_XYZ_Euler(Quat q) -> V3 {
+    // source: https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+    V3 angles;
+
+    // roll (x-axis rotation)
+    f32 sinr_cosp = 2 * (q.w * q.x + q.y * q.z);
+    f32 cosr_cosp = 1 - 2 * (q.x * q.x + q.y * q.y);
+    angles.x = atan2f(sinr_cosp, cosr_cosp);
+
+    // pitch (y-axis rotation)
+    f32 sinp = sqrtf(1 + 2 * (q.w * q.y - q.x * q.z));
+    f32 cosp = sqrtf(1 - 2 * (q.w * q.y - q.x * q.z));
+    angles.y = 2 * atan2f(sinp, cosp) - pi / 2;
+
+    // yaw (z-axis rotation)
+    f32 siny_cosp = 2 * (q.w * q.z + q.x * q.y);
+    f32 cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
+    angles.z = atan2f(siny_cosp, cosy_cosp);
+        
+    return angles;
 }
 
 #endif // FTB_MATH_IMPL
