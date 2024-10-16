@@ -29,7 +29,7 @@ namespace json {
 
         String                = 1<<4,
         Number                = 1<<5,
-        Bool                  = 1<<6,
+        Boolean               = 1<<6,
         Null                  = 1<<7,
     };
 
@@ -245,8 +245,8 @@ namespace json {
 
         // NOTE(Felix): -1 after the size because sizeof returns the size
         //   including the null terminator
-        if (strncmp(string, true_string,  sizeof(true_string)-1))  return Json_Type::Bool;
-        if (strncmp(string, false_string, sizeof(false_string)-1)) return Json_Type::Bool;
+        if (strncmp(string, true_string,  sizeof(true_string)-1))  return Json_Type::Boolean;
+        if (strncmp(string, false_string, sizeof(false_string)-1)) return Json_Type::Boolean;
         if (strncmp(string, null_string,  sizeof(null_string)-1))  return Json_Type::Null;
 
         return Json_Type::Invalid;
@@ -282,7 +282,7 @@ namespace json {
             case Json_Type::Number: return eat_number(string);
             case Json_Type::List:   return eat_construct(string+1, ']')+1; // +1 to start in the construct
             case Json_Type::Object: return eat_construct(string+1, '}')+1; // +1 to start in the construct
-            case Json_Type::Bool:
+            case Json_Type::Boolean:
             case Json_Type::Null: {
                 u32 eaten = 0;
                 while (is_alpha_char(string[eaten]))
@@ -876,7 +876,7 @@ namespace json {
 
     Pattern p_bool(u32 offset, Hooks hooks) {
         Pattern p = Pattern {
-            .type  = Json_Type::Bool,
+            .type  = Json_Type::Boolean,
             .value = {
                 .destination_type   = Data_Type::Boolean,
                 .destination_offset = offset
@@ -1078,7 +1078,7 @@ namespace json {
 
         switch (pattern.type) {
             case Json_Type::Null: fprintf(out, "null"); break;
-            case Json_Type::Bool: {
+            case Json_Type::Boolean: {
                 write_bool_to_file(out, pattern.value.destination_offset, user_data);
             } break;
             case Json_Type::String: {
@@ -1119,7 +1119,7 @@ namespace json {
 
     void Pattern::print() {
         switch (type) {
-            case Json_Type::Bool:               raw_print("bool");          break;
+            case Json_Type::Boolean:            raw_print("bool");          break;
             case Json_Type::Invalid:            raw_print("invalid");       break;
             case Json_Type::Null:               raw_print("null");          break;
             case Json_Type::List:               raw_print("list");          break;

@@ -1506,7 +1506,10 @@ auto read_entire_file(const char* filename, Allocator_Base* allocator) -> File_R
 
             /* Allocate our buffer to that size. */
             ret.contents.data = allocator->allocate<char>((u32)ret.contents.length+1);
-
+	    panic_if(!ret.contents.data,
+		     "Could not allocate space for file contents (%u bytes) ",
+		     ret.contents.length+1);
+	    	    
             /* Read the entire file into memory. */
             ret.contents.length = fread(ret.contents.data, sizeof(char),
                                         ret.contents.length, fp);
@@ -1547,7 +1550,7 @@ Linear_Allocator temp_linear_allocator = {
     .length = sizeof(tempback_buffer)
 };
 
-Allocator_Base* libc_allocator =(Allocator_Base*)&internal_libc_allocator;
+Allocator_Base* libc_allocator = (Allocator_Base*)&internal_libc_allocator;
 Allocator_Base* temp_allocator = (Allocator_Base*)&temp_linear_allocator;
 Allocator_Base* global_allocator_stack = (Allocator_Base*)&internal_libc_allocator;
 
@@ -1563,11 +1566,11 @@ Allocator_Base* grab_temp_allocator() {
 }
 
 u64 get_temp_allocator_depth() {
-    return ((Linear_Allocator*)&temp_allocator)->count;
+    return ((Linear_Allocator*)temp_allocator)->count;
 }
 
 void reset_temp_allocator(u64 depth) {
-    ((Linear_Allocator*)&temp_allocator)->count = depth;
+    ((Linear_Allocator*)temp_allocator)->count = depth;
 }
 
 Allocator_Base* push_allocator(Allocator_Base* new_allocator) {
