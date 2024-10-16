@@ -290,6 +290,7 @@ auto operator*(f32 s, M2x2 a)  -> M2x2;
 auto operator*(f32 s, M3x3 a)  -> M3x3;
 auto operator*(f32 s, M4x4 a)  -> M4x4;
 
+auto m4x4(M3x3) -> M4x4;
 auto m4x4_identity() -> M4x4;
 auto m4x4_from_axis_angle(V3 axis, f32 angle_in_rad) -> M4x4;
 auto m4x4_look_at(V3 eye, V3 target, V3 up) -> M4x4;
@@ -308,6 +309,7 @@ auto m4x4_model(V3 tanslation, Quat orientation, V3 scale) -> M4x4;
 
 auto m3x3_identity() -> M3x3;
 auto m3x3_orientation(Quat orientation) -> M3x3;
+auto m3x3_transpose(M3x3 mat) -> M3x3;
 
 auto frobenius(M3x3) -> float;
 auto frobenius(M4x4) -> float;
@@ -857,6 +859,26 @@ auto operator*(f32 s, M4x4 a)  -> M4x4 {
     return a * s;
 }
 
+auto m4x4(M3x3 m) -> M4x4 {
+    M4x4 mat {};
+
+    mat._00 = m._00;
+    mat._01 = m._01;
+    mat._02 = m._02;
+
+    mat._10 = m._10;
+    mat._11 = m._11;
+    mat._12 = m._12;
+
+    mat._20 = m._20;
+    mat._21 = m._21;
+    mat._22 = m._22;
+
+    mat._33 = 1.0f;
+
+    return mat;
+}
+
 M4x4 m4x4_identity() {
     M4x4 mat {};
 
@@ -968,6 +990,18 @@ auto m4x4_translate(V3 tanslation) -> M4x4 {
 
     result.columns[3].xyz = tanslation;
     result.columns[3].w = 1;
+
+    return result;
+}
+
+auto m3x3_transpose(M3x3 mat) -> M3x3 {
+    M3x3 result;
+
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            result[i*3+j] = mat[j*3+i];
+        }
+    }
 
     return result;
 }
@@ -1163,7 +1197,7 @@ auto quat_to_XYZ_Euler(Quat q) -> V3 {
     f32 siny_cosp = 2 * (q.w * q.z + q.x * q.y);
     f32 cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
     angles.z = atan2f(siny_cosp, cosy_cosp);
-        
+
     return angles;
 }
 

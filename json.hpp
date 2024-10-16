@@ -154,11 +154,12 @@ namespace json {
                  List_Info list_info={0}, Hooks hooks={0});
     Pattern p_s32(u32 offset,  Hooks hooks={0});
     Pattern p_s64(u32 offset,  Hooks hooks={0});
-    Pattern p_f32(u32 offset, Hooks hooks={0});
+    Pattern p_f32(u32 offset,  Hooks hooks={0});
     Pattern p_bool(u32 offset, Hooks hooks={0});
-    Pattern p_str(u32 offset,   Hooks hooks={0});
+    Pattern p_str(u32 offset,  Hooks hooks={0});
     Pattern custom(Json_Type source_type, u32 destination_offset,
                    Hooks hooks={0});
+
 
     // Pattern member_value(const char* key, Json_Type source_type, Data_Type destination_type, u32 destination_offset);
     Pattern_Match_Result pattern_match(const char* string, Pattern pattern, void* obj_to_match_into, void* callback_data = nullptr, Allocator_Base* allocator = nullptr);
@@ -167,6 +168,26 @@ namespace json {
 
     // helper for custom parsers
     Json_Type identify_thing(const char* string);
+    u32 eat_whitespace_and_comments(const char* string);
+    u32 read_float_array(const char* point, f32* arr, u32 count);
+    u32 write_float_array(FILE* out_file, f32* arr, u32 count);
+
+
+    // NOTE(Felix): This can go away once we have dedicated array patterns.
+    template <u32 ARRAY_SIZE>
+    json::Pattern p_f32_arr(u32 offset) {
+        return json::custom(
+            json::Json_Type::List, offset, {
+                .custom_reader = [](const char* point, void* out_vec3) -> u32 {
+                    return read_float_array(point, (f32*)out_vec3, ARRAY_SIZE);
+                },
+                .custom_writer = [](FILE* out_file, void* vec3_to_write) -> u32 {
+                    return write_float_array(out_file, (f32*)vec3_to_write, ARRAY_SIZE);
+                }
+            }
+        );
+    }
+
 }
 
 
@@ -175,6 +196,44 @@ namespace json {
     const char true_string[]  = "true";
     const char false_string[] = "false";
     const char null_string[]  = "null";
+
+    u32 read_float_array(const char* point, f32* arr, u32 count) {
+        panic_if(point[0] != '[', "Trying to parse float array, but not on list: '%.*s'", 50, point);
+        ++point;
+
+        u32 total_length = 1 + eat_construct(point, ']');
+
+        {
+            for (u32 i = 0; i < count-1; ++i) {
+                point += read_float(point, &arr[i]);
+                point += eat_whitespace_and_comments(point);
+                panic_if(point[0] != ',', "',' expected after coordinate in float array");
+                ++point; // overstep ','
+                point += eat_whitespace_and_comments(point);
+            }
+
+            point += read_float(point, &arr[count -1]);
+            point += eat_whitespace_and_comments(point);
+            panic_if(point[0] != ']', "']' expected after coordinate in float array");
+        }
+
+        return total_length;
+    }
+
+    u32 write_float_array(FILE* out_file, f32* arr, u32 count) {
+        u32 written = print_to_file(out_file, "[");
+
+        u32 i = 0;
+        for (; i < count-1; ++i) {
+            print_to_file(out_file, "%g, ", arr[i]);
+        }
+        print_to_file(out_file, "%g", arr[i]);
+
+        written += print_to_file(out_file, "]");
+
+        return written;
+    }
+
 
     Json_Type identify_thing(const char* string) {
         if (is_quotes_char(string[0])) return Json_Type::String;
@@ -664,16 +723,18 @@ namespace json {
                 }
             }
 
+            String member_name_str = String {
+                // HACK(Felix): casting const away
+                (char*)member_name,
+                member_name_len
+            };
             Parser_Context call_ctx {
                 .context_stack = {
                     .previous    = &ctx.context_stack,
                     .parent_type = Parser_Context_Type::Object_Member,
                     .parent {
                         .object  = {
-                            .member_name = String {
-                                // HACK(Felix): casting const away
-                                (char*)member_name,
-                                member_name_len},
+                            .member_name = member_name_str,
                         }
                     }
                 },
@@ -688,8 +749,10 @@ namespace json {
                                                  &value_lengh, allocator);
 
 
-                if (sub_result == Pattern_Match_Result::MATCHING_ERROR)
+                if (sub_result == Pattern_Match_Result::MATCHING_ERROR) {
+                    log_info("When matching %{->Str}", member_name_str);
                     return Pattern_Match_Result::MATCHING_ERROR;
+                }
 
             } else if (p.object.fallback_pattern) {
                 void* target = list_assure_free_slot(
@@ -899,6 +962,7 @@ namespace json {
 
         return p;
     }
+
 
     void write_pattern_to_file(FILE* path, Pattern pattern, void* user_data);
     void write_bool_to_file(FILE* out, u32 offset, void* data) {

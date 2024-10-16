@@ -529,10 +529,17 @@ struct Allocated_String {
 bool print_into_string(String string, const char* format, ...);
 char* heap_copy_c_string(const char* str, Allocator_Base* allocator = nullptr);
 char* heap_copy_limited_c_string(const char* str, u32 len, Allocator_Base* allocator = nullptr);
+const char* string_from_wstring(const wchar_t* w_string, Allocator_Base* allocator);
 
 // ----------------------------------------------------------------------------
 //                              IO
 // ----------------------------------------------------------------------------
+#include <filesystem>
+// NOTE(Felix): Sorry... I hate lower case type names
+typedef std::filesystem::path                 Path;
+typedef std::filesystem::directory_iterator   Dir_Iterator;
+typedef std::filesystem::directory_entry      Dir_Entry;
+
 struct File_Read {
     bool             success;
     Allocated_String contents;
@@ -1531,7 +1538,7 @@ LibC_Allocator internal_libc_allocator = LibC_Allocator{
     }
 };
 
-unsigned char tempback_buffer[1024*1024*16]; // 16MB
+unsigned char tempback_buffer[1024*1024*128]; // 128MB
 Linear_Allocator temp_linear_allocator = {
     .base {
         .type = Allocator_Type::Linear_Allocator,
@@ -2918,6 +2925,32 @@ void Allocated_String::free() {
 // ----------------------------------------------------------------------------
 //                            strings implementation
 // ----------------------------------------------------------------------------
+const char* string_from_wstring(const wchar_t* w_string, Allocator_Base* allocator) {
+#ifdef FTB_WINDOWS
+    char* buffer      = nullptr;
+    int   buffer_size = 0;
+    int   result = WideCharToMultiByte(CP_UTF8, 0 /* dwFlags */, w_string,
+                                       -1, /*-1 length == 0 terminated string*/
+                                       (LPSTR)buffer, buffer_size, 0, 0);
+
+    panic_if(result <= 0, "error converting strings (1)");
+
+    buffer_size = result+1;
+    buffer = allocator->allocate_0<char>(buffer_size);
+
+    result = WideCharToMultiByte(CP_UTF8, 0 /* dwFlags */, w_string,
+                                 -1, /*-1 length == 0 terminated string*/
+                                 (LPSTR)buffer, buffer_size, 0, 0);
+
+    panic_if(result <= 0, "error converting strings (2)");
+
+    return buffer;
+#else
+    panic("");
+    return {};
+#endif
+}
+
 char* heap_copy_limited_c_string(const char* str, u32 len, Allocator_Base* allocator) {
     if (!allocator)
         allocator = grab_current_allocator();
