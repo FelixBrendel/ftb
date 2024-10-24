@@ -184,6 +184,10 @@ auto load_obj_from_in_memory_string(const char* cursor, const char* eof) -> Mesh
                     cursor += read_float(cursor, &x);
                     cursor += read_float(cursor, &y);
                     cursor += read_float(cursor, &z);
+
+                    // skip optional 4th component, or vertex colors
+                    cursor += eat_line(cursor);
+
                     positions.extend({x, y, z});
                 } else if (*cursor == 'n') {
                     // vertex normal
@@ -226,7 +230,7 @@ auto load_obj_from_in_memory_string(const char* cursor, const char* eof) -> Mesh
                     }
                 }
             } else {
-                panic("unknown marker \"%c\" (pos: %ld)", *cursor, cursor-start_cursor);
+                log_warning("unknown marker \"%c\" (pos: %ld)", *cursor, cursor-start_cursor);
                 return {};
             }
         }
@@ -291,7 +295,10 @@ auto load_obj(const char* path) -> Mesh_Data {
 
     char* cursor = obj_str.data;
     char* eof    = obj_str.data+obj_str.length;
-    return load_obj_from_in_memory_string(cursor, eof);
+    Mesh_Data data =  load_obj_from_in_memory_string(cursor, eof);
+    if (data.vertices.count == 0)
+        log_error("error while reading '%s'", path);
+    return data;
 }
 
 

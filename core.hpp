@@ -643,8 +643,10 @@ enum struct Printer_Function_Type {
 auto register_printer_ptr(const char* spec, printer_function_ptr fun, Printer_Function_Type type) -> void;
 auto print_va_args_to_file(FILE* file, static_string format, va_list* arg_list) -> s32;
 auto print_va_args_to_string(char** out, Allocator_Base* allocator, static_string format, va_list* arg_list)  -> s32;
+auto print_va_args_to_string(String* out, Allocator_Base* allocator, static_string format, va_list* arg_list)  -> s32;
 auto print_va_args(static_string format, va_list* arg_list) -> s32;
 auto print_to_string(char** out, Allocator_Base* allocator, static_string format, ...) -> s32;
+auto print_to_string(String* out, Allocator_Base* allocator, static_string format, ...) -> s32;
 auto print_to_file(FILE* file, static_string format, ...) -> s32;
 
 auto print(static_string format, ...) -> s32;
@@ -1120,7 +1122,6 @@ struct Array_List {
     // }
 };
 
-
 template <typename type>
 struct Auto_Array_List : public Array_List<type> {
     Auto_Array_List(u32 length = 16, Allocator_Base* base_allocator = nullptr) {
@@ -1435,6 +1436,27 @@ struct Linear_Allocator {
     void deinit();
 };
 
+
+// ----------------------------------------------------------------------------
+//                              Errors
+// ----------------------------------------------------------------------------
+enum struct Error_Type : u64 {
+    No_Error = 0,
+    // NOTE(Felix): leave the bottom 32 bits for custom user errors
+    Out_Of_Memory = 1llu << 32,
+    File_Not_Found,
+    Misc = (u64)-1,
+};
+
+struct Result {
+    Error_Type error_type; // can be used for whatever
+
+    bool ok() {
+        return error_type == Error_Type::No_Error;
+    }
+};
+
+Result error(Error_Type);
 
 #ifdef FTB_CORE_IMPL
 
@@ -2062,6 +2084,15 @@ void Allocator_Base::deallocate(void* old) {
     }
 }
 
+// ----------------------------------------------------------------------------
+//                            errors impl
+// ----------------------------------------------------------------------------
+Result error(Error_Type type) {
+    return Result{
+        .error_type = type
+    };
+}
+
 
 
 // ----------------------------------------------------------------------------
@@ -2392,7 +2423,11 @@ int print_va_args_to_file(FILE* file, static_string format, va_list* arg_list) {
     return printed_chars;
 }
 
-int print_va_args_to_string(char** out, Allocator_Base* allocator, static_string format, va_list* arg_list) {
+int print_va_args(static_string format, va_list* arg_list) {
+    return print_va_args_to_file(stdout, format, arg_list);
+}
+
+int print_va_args_to_string(String* out, Allocator_Base* allocator, static_string format, va_list* arg_list) {
     if (!allocator)
         allocator = grab_current_allocator();
 
@@ -2403,45 +2438,51 @@ int print_va_args_to_string(char** out, Allocator_Base* allocator, static_string
 
     int num_printed_chars = print_va_args_to_file(t_file, format, arg_list);
 
-    *out = allocator->allocate<char>(num_printed_chars+1);
+    out->data = allocator->allocate<char>(num_printed_chars+1);
 
     rewind(t_file);
-    fread(*out, sizeof(char), num_printed_chars, t_file);
-    (*out)[num_printed_chars] = '\0';
+    fread(out->data, sizeof(char), num_printed_chars, t_file);
+    out->data[num_printed_chars] = '\0';
 
     fclose(t_file);
 
     return num_printed_chars;
 }
 
-int print_va_args(static_string format, va_list* arg_list) {
-    return print_va_args_to_file(stdout, format, arg_list);
+int print_va_args_to_string(char** out, Allocator_Base* allocator, static_string format, va_list* arg_list) {
+    if (!allocator)
+        allocator = grab_current_allocator();
+
+    String str;
+    int num_printed_chars = print_va_args_to_string(&str, allocator, format, arg_list);
+    *out = str.data;
+    return num_printed_chars;
 }
 
-int print_to_string(char** out, Allocator_Base* allocator, static_string format, ...) {
+int print_to_string(String* out, Allocator_Base* allocator, static_string format, ...) {
     if (!allocator)
         allocator = grab_current_allocator();
 
     va_list arg_list;
     va_start(arg_list, format);
 
-    FILE* t_file = tmpfile();
-    if (!t_file) {
-        return 0;
-    }
+    int num_printed_chars = print_va_args_to_string(out, allocator, format, &arg_list);
 
-    int num_printed_chars = print_va_args_to_file(t_file, format, &arg_list);
     va_end(arg_list);
 
+    return num_printed_chars;
+}
 
-    *out = allocator->allocate<char>(num_printed_chars+1);
+int print_to_string(char** out, Allocator_Base* allocator, static_string format, ...) {
+    String str;
+    if (!allocator)
+        allocator = grab_current_allocator();
 
-    rewind(t_file);
-    fread(*out, sizeof(char), num_printed_chars, t_file);
-    (*out)[num_printed_chars] = '\0';
+    va_list arg_list;
+    va_start(arg_list, format);
 
-    fclose(t_file);
-
+    int num_printed_chars = print_to_string(&str, allocator, format, &arg_list);
+    *out = str.data;
     return num_printed_chars;
 }
 

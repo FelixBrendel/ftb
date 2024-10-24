@@ -30,6 +30,7 @@ inline bool hm_objects_match(Key a, Key b);
 #include "../pool_allocator.hpp"
 
 #include "../hooks.hpp"
+#include "../ringbuffer.hpp"
 #include "../hashmap.hpp"
 #include "../scheduler.hpp"
 #include "../soa_sort.hpp"
@@ -2933,6 +2934,61 @@ auto test_json_bug_again() -> testresult {
     return pass;
 }
 
+auto test_ringbuffer() -> testresult {
+    Ringbuffer<s32> rb;
+    rb.init(3);
+    defer { rb.deinit(); };
+
+
+    assert(rb.is_empty);
+
+    bool did_overflow;
+    did_overflow = rb.push(99);
+    assert_equal_int(rb.count(), 1);
+    assert_equal_int(did_overflow, false);
+
+    did_overflow = rb.push(100);
+    assert_equal_int(rb.count(), 2);
+    assert_equal_int(did_overflow, false);
+
+    did_overflow = rb.push(101);
+    assert_equal_int(rb.count(), 3);
+    assert_equal_int(did_overflow, false);
+
+    did_overflow = rb.push(102);
+    assert_equal_int(rb.count(), 3);
+    assert_equal_int(did_overflow, true);
+
+    did_overflow = rb.push(103);
+    assert_equal_int(rb.count(), 3);
+    assert_equal_int(did_overflow, true);
+
+
+    u32 i = 0;
+    s32 num = rb.data[(i + rb.start_idx) % rb.length];
+    assert_equal_int(num, 101);
+
+    i++;
+    num = rb.data[(i + rb.start_idx) % rb.length];
+    assert_equal_int(num, 102);
+
+    i++;
+    num = rb.data[(i + rb.start_idx) % rb.length];
+    assert_equal_int(num, 103);
+
+
+    i = 0;
+    rb.for_each([&](s32& val) -> testresult {
+        if (i == 0) assert_equal_int(val, 101);
+        if (i == 1) assert_equal_int(val, 102);
+        if (i == 2) assert_equal_int(val, 103);
+        ++i;
+        return pass;
+    });
+
+    return pass;
+}
+
 s32 main(s32, char**) {
     testresult result;
 
@@ -2985,6 +3041,7 @@ s32 main(s32, char**) {
             invoke_test(test_scheduler_animations);
 
             invoke_test(test_scratch_memory);
+            invoke_test(test_ringbuffer);
             // invoke_test(test_printer);
         }
 

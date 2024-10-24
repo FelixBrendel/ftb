@@ -1,6 +1,7 @@
 #pragma once
 #include "core.hpp"
 #include "math.hpp"
+#include "ringbuffer.hpp"
 
 #ifdef FTB_WINDOWS
 struct Window_Type {
@@ -37,6 +38,7 @@ enum struct Keyboard_Keys {
     _0='0', _1, _2, _3, _4, _5, _6, _7, _8, _9,
     A='a', B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
 
+    Comma, Semicolon, Period, Colon, Minus, Underscore, Plus, Asterisk, Hash, Apostrophe,
 
     ENUM_SIZE
 };
@@ -64,6 +66,8 @@ struct User_Input {
         f32  scroll_delta;
         V2   position;
     } mouse;
+
+    Ringbuffer<char> input_buffer;
 
     void add_key_event(Keyboard_Keys key, bool down) {
         keyboard.ended_down[(s32)key] = down;
@@ -114,6 +118,7 @@ struct Window_State {
     IV2  new_size;
 
     User_Input input;
+    u32 keyboard_codepage;
 };
 
 #ifdef FTB_WINDOW_IMPL
@@ -124,6 +129,7 @@ void clear_state_for_update(Window_State* state) {
 
     memset(&state->events, 0, sizeof(state->events));
     state->input.mouse.scroll_delta = 0;
+    state->input.input_buffer.reset();
 }
 
 #  ifdef FTB_WINDOWS
@@ -148,9 +154,17 @@ Keyboard_Keys key_from_vk(int vk) {
         case VK_UP: return Keyboard_Keys::Arrow_Up;
         case VK_DOWN: return Keyboard_Keys::Arrow_Down;
         case VK_DELETE: return Keyboard_Keys::Delete;
+        case VK_BACK: return Keyboard_Keys::Backspace;
         case VK_SPACE: return Keyboard_Keys::Space;
         case VK_RETURN: return Keyboard_Keys::Enter;
         case VK_ESCAPE: return Keyboard_Keys::Escape;
+
+        case VK_OEM_7: return Keyboard_Keys::Apostrophe;
+        case VK_OEM_COMMA: return Keyboard_Keys::Comma;
+        case VK_OEM_MINUS: return Keyboard_Keys::Minus;
+        case VK_OEM_PERIOD: return Keyboard_Keys::Period;
+        case VK_OEM_1: return Keyboard_Keys::Semicolon;
+
         case VK_NUMPAD0: return Keyboard_Keys::_0;
         case VK_NUMPAD1: return Keyboard_Keys::_1;
         case VK_NUMPAD2: return Keyboard_Keys::_2;
@@ -217,8 +231,16 @@ Keyboard_Keys key_from_vk(int vk) {
     }
 }
 
-static bool is_vk_down(int vk)
-{
+// code taken from dear imgui
+void update_codepage(Window_State* window) {
+    // Retrieve keyboard code page, required for handling of non-Unicode Windows.
+    HKL keyboard_layout = ::GetKeyboardLayout(0);
+    LCID keyboard_lcid = MAKELCID(HIWORD(keyboard_layout), SORT_DEFAULT);
+    if (GetLocaleInfoA(keyboard_lcid, (LOCALE_RETURN_NUMBER | LOCALE_IDEFAULTANSICODEPAGE), (LPSTR)&window->keyboard_codepage, sizeof(window->keyboard_codepage)) == 0)
+        window->keyboard_codepage = CP_ACP; // Fallback to default ANSI code page when fails.
+}
+
+static bool is_vk_down(int vk) {
     return (::GetKeyState(vk) & 0x8000) != 0;
 }
 
@@ -341,6 +363,22 @@ LRESULT ftb_window_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             state->events[(s32)Window_Events::Window_Lost_Focus] = true;
             return 0;
         }
+        case WM_CHAR: {
+            wchar_t wch = 0;
+            MultiByteToWideChar(state->keyboard_codepage, MB_PRECOMPOSED, (char*)&wParam, 1, &wch, 1);
+            char utf8_buffer[5];
+            WideCharToMultiByte(CP_UTF8, 0 /* dwFlags */, &wch, 1, /*length = 1*/
+                                (LPSTR)utf8_buffer, sizeof(utf8_buffer), 0, 0);
+
+            if (utf8_buffer[0] < 128) {
+                state->input.input_buffer.push(utf8_buffer[0]);
+            }
+            return 0;
+        }
+        case WM_INPUTLANGCHANGE: {
+            update_codepage(state);
+            return 0;
+        }
     }
 
     return DefWindowProc(hwnd, msg, wParam, lParam);
@@ -408,7 +446,11 @@ Window_Type create_window(IV2 size, const char* title) {
     UpdateWindow(result.window);
     ShowWindow(result.window, SW_SHOW);
 
-    hwnd_to_state.set_object(result.window, Window_State{});
+    Window_State win_state = {};
+    update_codepage(&win_state);
+
+    win_state.input.input_buffer.init(16);
+    hwnd_to_state.set_object(result.window, win_state);
 
     return result;
 }

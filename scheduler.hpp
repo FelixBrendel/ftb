@@ -414,7 +414,9 @@ auto Scheduler::schedule_action(Scheduled_Action_Create_Info aci) -> Scheduled_A
 
     scheduled_action->seconds_to_run = aci.seconds_to_run;
     _init_action(&scheduled_action->action, aci.action);
+#ifdef FTB_INTERNAL_DEBUG
     log_debug("scheduling action %s %d", aci.action.name, scheduled_action->action.creation_stamp);
+#endif
     return scheduled_action;
 }
 
@@ -504,7 +506,9 @@ inline auto Scheduler::chain_action(Action_Or_Animation aoa, Action_Create_Info 
 }
 
 inline auto Scheduler::execute_action(Action* action) -> void {
+#ifdef FTB_INTERNAL_DEBUG
     log_debug("running action %s %d", action->name, action->creation_stamp);
+#endif
 
     action->already_ran = true;
     if (action->type == Function_Type::Closure) {
@@ -513,22 +517,32 @@ inline auto Scheduler::execute_action(Action* action) -> void {
         action->lambda();
     }
 
+#ifdef FTB_INTERNAL_DEBUG
     log_debug("finished running action %s %d", action->name, action->creation_stamp);
+#endif
 }
 
 auto Scheduler::handle_chained_action(Action* action) -> void {
+#ifdef FTB_INTERNAL_DEBUG
     log_debug("Handling chained actions");
+#endif
     while (action) {
+#ifdef FTB_INTERNAL_DEBUG
         log_debug("RUNNING CHAINED %s %d", action->name, action->creation_stamp);
+#endif
         execute_action(action);
 
+#ifdef FTB_INTERNAL_DEBUG
         log_debug("DELETING action %s %d", action->name, action->creation_stamp);
+#endif
         chained_actions->deallocate(action);
         action = action->next;
 
         if (_should_stop_iterating) break;
     }
+#ifdef FTB_INTERNAL_DEBUG
     log_debug("Chained actions done");
+#endif
 }
 
 auto Scheduler::run_pending_actions_and_reset() -> void {
