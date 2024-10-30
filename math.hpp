@@ -136,7 +136,7 @@ union M2x2 {
         f32 _00; f32 _01;
         f32 _10; f32 _11;
     };
-    V2 columns[2];
+    V2  columns[2];
     f32 elements[4];
 
     inline f32 &operator[](const int &index) {
@@ -150,7 +150,7 @@ union M3x3 {
         f32 _10; f32 _11; f32 _12;
         f32 _20; f32 _21; f32 _22;
     };
-    V3 columns[3];
+    V3  columns[3];
     f32 elements[9];
 
     inline f32 &operator[](const int &index) {
@@ -165,16 +165,13 @@ union M4x4 {
         f32 _20; f32 _21; f32 _22; f32 _23;
         f32 _30; f32 _31; f32 _32; f32 _33;
     };
-    V4 columns[4];
+    V4  columns[4];
     f32 elements[16];
 
     inline f32 &operator[](const int &index) {
         return elements[index];
     }
 };
-
-
-#ifndef FTB_MATH_IMPL
 
 // ---------------------
 //     f32 functions
@@ -290,9 +287,13 @@ auto operator*(f32 s, M2x2 a)  -> M2x2;
 auto operator*(f32 s, M3x3 a)  -> M3x3;
 auto operator*(f32 s, M4x4 a)  -> M4x4;
 
+auto quick_invert_transformation_mat_without_scale(M4x4 mat) -> M4x4;
+
 auto m4x4(M3x3) -> M4x4;
 auto m4x4_identity() -> M4x4;
 auto m4x4_from_axis_angle(V3 axis, f32 angle_in_rad) -> M4x4;
+auto identity_look_at(V3* out_eye, V3* out_target, V3* out_up) -> void;
+auto look_at_from_m4x4(M4x4 view_mat, V3* out_eye, V3* out_target, V3* out_up) -> void;
 auto m4x4_look_at(V3 eye, V3 target, V3 up) -> M4x4;
 auto m4x4_perspective(f32 fov_y, f32 aspect, f32 clip_near, f32 clip_far) -> M4x4;
 auto m4x4_ortho(f32 left, f32 right, f32 bottom, f32 top) -> M4x4;
@@ -321,7 +322,7 @@ auto quat_from_XYZ(f32 x, f32 y, f32 z) -> Quat;
 auto quat_to_XYZ_Euler(Quat q) -> V3;
 auto quat_from_m4x4(M4x4 m) -> Quat;
 
-#else // implementations
+#ifdef FTB_MATH_IMPL
 
 f32 pi     = 3.1415926535897932384626433832795f;
 f32 two_pi = 6.283185307179586476925286766559f;
@@ -915,27 +916,167 @@ auto m4x4_from_axis_angle(V3 axis, f32 angle_in_rad) -> M4x4 {
     return r;
 }
 
-auto m4x4_look_at(V3 eye, V3 target, V3 up) -> M4x4 {
-    V3 f = noz(target - eye);
-    V3 s = noz(cross(f, up));
-    V3 u = cross(s, f);
+auto identity_look_at(V3* out_eye, V3* out_target, V3* out_up) -> void {
+    *out_eye    = {0, 0, 0};
+    *out_target = {0, 0,-1};
+    *out_up     = {0, 1, 0};
+}
+
+auto m4x4_look_at_vk(V3 cam_pos, V3 target, V3 up) -> M4x4 {
+    V3 view_dir  = noz(target - cam_pos);
+    V3 right_dir = noz(cross(view_dir, up));
+    V3 up_dir    = cross(right_dir, view_dir);
+
+    /*
+      / right_dir  p.x \
+      |  up_dir    p.y |
+      | view_dir   p.z |
+      \  0  0  0    1  /
+
+     */
 
     M4x4 result = m4x4_identity();
-    result._00 = s.x;
-    result._10 = s.y;
-    result._20 = s.z;
-    result._01 = u.x;
-    result._11 = u.y;
-    result._21 = u.z;
-    result._02 =-f.x;
-    result._12 =-f.y;
-    result._22 =-f.z;
-    result._30 =-dot(s, eye);
-    result._31 =-dot(u, eye);
-    result._32 = dot(f, eye);
+    // 1st row
+    result._00 =  right_dir.x;
+    result._10 =  right_dir.y;
+    result._20 =  right_dir.z;
+    // 2nd row
+    result._01 =  up_dir.x;
+    result._11 =  up_dir.y;
+    result._21 =  up_dir.z;
+    // 3rd row
+    result._02 = -view_dir.x;
+    result._12 = -view_dir.y;
+    result._22 = -view_dir.z;
+
+    // 4th column
+    result._30 = -dot(right_dir, cam_pos);
+    result._31 = -dot(   up_dir, cam_pos);
+    result._32 =  dot( view_dir, cam_pos);
 
     return result;
 }
+
+auto m4x4_look_at(V3 cam_pos, V3 target, V3 up) -> M4x4
+{
+    V3 view_dir  = noz(target - cam_pos);
+    V3 right_dir = noz(cross(view_dir, up));
+    V3 up_dir    = cross(right_dir, view_dir);
+
+    /*
+      / right_dir  p.x \
+      |  up_dir    p.y |
+      | view_dir   p.z |
+      \  0  0  0    1  /
+
+     */
+
+    M4x4 result = m4x4_identity();
+    // 1st row
+    result._00 =  right_dir.x;
+    result._10 =  right_dir.y;
+    result._20 =  right_dir.z;
+    // 2nd row
+    result._01 =  up_dir.x;
+    result._11 =  up_dir.y;
+    result._21 =  up_dir.z;
+    // 3rd row
+    result._02 =  view_dir.x;
+    result._12 =  view_dir.y;
+    result._22 =  view_dir.z;
+
+    // 4th column
+    result._30 = -dot(right_dir, cam_pos);
+    result._31 = -dot(   up_dir, cam_pos);
+    result._32 = -dot( view_dir, cam_pos);
+
+    return result;
+}
+
+auto quick_invert_transformation_mat_without_scale(M4x4 mat) -> M4x4 {
+    M3x3 rot_sheer;
+    V3   trans;
+
+    m4x4_decompose(mat, &rot_sheer, &trans);
+    rot_sheer = m3x3_transpose(rot_sheer);
+    trans     = rot_sheer * trans;
+    // log_info("trans: %{f32[3]}", trans.elements);
+
+    return m4x4_compose(rot_sheer, trans);
+}
+
+auto look_at_from_m4x4(M4x4 view_mat, V3* out_eye, V3* out_target, V3* out_up) -> void {
+    V3 eye, target, up;
+    identity_look_at(&eye, &target, &up);
+
+    // M4x4 inverse_view = view_mat;
+    M4x4 inverse_view = quick_invert_transformation_mat_without_scale(view_mat);
+
+    V4 t_eye    = inverse_view * v4(eye,    1);
+    V4 t_target = t_eye - V4{view_mat._02, view_mat._12, view_mat._22, view_mat._32};
+    V4 t_up     =         V4{view_mat._01, view_mat._11, view_mat._21, view_mat._31};
+
+    t_eye  = t_eye * (1.0f/t_eye.w);
+
+    *out_eye    =    t_eye.xyz;
+    *out_target = t_target.xyz;
+    *out_up     = noz(t_up.xyz);
+
+    {
+        /**
+           // NOTE(Felix): V4 t_target = t_eye - view_mat.columns[2];
+           [  INFO ] before: [-0.620281,  0.188659, -0.761354, -0.000000,
+                               0.784380,  0.149190, -0.602072, -0.000000,
+                               0.000000,  0.970644,  0.240519, -0.000000,
+                               0.016580, -0.085323, -0.249506,  1.000000]
+
+           [  INFO ] after:  [ 0.620281,  0.784380, 0.000000, 0.000000,
+                              -0.188659,  0.149190, 0.970644, 0.000000,
+                               0.761354, -0.602072, 0.240519, 0.000000,
+                               0.016580,  0.085323, 0.249506, 1.000000]
+
+            // NOTE(Felix): V4 t_target = t_eye - V4{view_mat._02, view_mat._12, view_mat._22, view_mat._32};
+            [  INFO ] before: [-0.620281,  0.188659, -0.761354, -0.000000,
+                                0.784380,  0.149190, -0.602072, -0.000000,
+                                0.000000,  0.970644,  0.240519, -0.000000,
+                                0.016580, -0.085323, -0.249506,  1.000000]
+
+            [  INFO ] after:  [ 0.620281, 0.188659, -0.761354, 0.000000,
+                               -0.784380, 0.149190, -0.602072, 0.000000,
+                               -0.000000, 0.970644,  0.240519, 0.000000,
+                               -0.149601, 0.072769, -0.205261, 1.000000]
+
+            // NOTE(Felix): transpose before
+            [  INFO ] before: [-0.620281,  0.188659, -0.761354, -0.000000,
+                                0.784380,  0.149190, -0.602072, -0.000000,
+                                0.000000,  0.970644,  0.240519, -0.000000,
+                                0.016580, -0.085323, -0.249506,  1.000000]
+
+            [  INFO ] after:  [ 0.620281,  0.188659, -0.761354,  0.000000,
+                               -0.784380,  0.149190, -0.602072,  0.000000,
+                               -0.000000,  0.970644,  0.240519,  0.000000,
+                                0.016580,  0.085323,  0.249506,  1.000000]
+
+            [  INFO ] before: [-0.620281,  0.188659, -0.761354, -0.000000,
+                                0.784380,  0.149190, -0.602072, -0.000000,
+                                0.000000,  0.970644,  0.240519, -0.000000,
+                                0.016580, -0.085323, -0.249506,  1.000000]
+
+            [  INFO ] after:  [ 0.620281,  0.188659,  0.761354, 0.000000,
+                               -0.784380,  0.149190,  0.602072, 0.000000,
+                               -0.000000,  0.970644, -0.240519, 0.000000,
+                                0.016580,  0.085323, -0.249506, 1.000000]
+
+
+         */
+        M4x4 la = m4x4_look_at(*out_eye, *out_target, *out_up);
+        log_info("before: %{f32[16]}", view_mat.elements);
+        log_info("after:  %{f32[16]}", la.elements);
+        // debug_break();
+    }
+}
+
+
 
 auto m4x4_perspective(f32 fov_y, f32 aspect, f32 clip_near, f32 clip_far) -> M4x4 {
     f32 const tan_half_fov_y = tanf(fov_y / 2.0f);

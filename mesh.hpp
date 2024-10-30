@@ -52,7 +52,7 @@ union Face {
     };
     u32 elements[3];
 
-    inline u32 &operator[](const int &index) {
+    inline u32 &operator[](const int& index) {
         return elements[index];
     }
 };
