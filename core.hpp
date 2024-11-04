@@ -531,51 +531,6 @@ char* heap_copy_limited_c_string(const char* str, u32 len, Allocator_Base* alloc
 const char* string_from_wstring(const wchar_t* w_string, Allocator_Base* allocator);
 
 // ----------------------------------------------------------------------------
-//                              IO
-// ----------------------------------------------------------------------------
-#include <filesystem>
-// NOTE(Felix): Sorry... I hate lower case type names
-typedef std::filesystem::path                 Path;
-typedef std::filesystem::directory_iterator   Dir_Iterator;
-typedef std::filesystem::directory_entry      Dir_Entry;
-
-struct File_Read {
-    bool             success;
-    Allocated_String contents;
-};
-
-struct File_Info {
-    bool exists;
-    bool is_directory;
-    s64  size;
-    s64  modification_time;
-};
-
-auto read_entire_file(const char* filename, Allocator_Base* allocator = nullptr) -> File_Read;
-
-auto move_file(const char* old_name, const char* new_name) -> bool;
-auto delete_file(const char* path) -> bool;
-auto copy_file(const char* src, const char* dest) -> bool;
-
-struct File_Walk_Info {
-    bool recursive;
-    bool walk_files;
-    bool walk_directories;
-    bool walk_symlinks;
-    bool walk_directory_symlinks;
-};
-
-template <typename lambda>
-auto walk_files(const char* dir_name, lambda callback, File_Walk_Info) -> bool;
-
-auto file_exists(const char* path) -> bool;
-auto file_info(const char* path) -> File_Info;
-auto is_directory(const char* path) -> bool;
-auto delete_directory(const char* dirname) -> bool;
-auto create_directory_if_not_exists(const char* path) -> bool;
-auto get_absolute_path(const char* relative_path) -> Allocated_String;
-
-// ----------------------------------------------------------------------------
 //                              print
 // ----------------------------------------------------------------------------
 extern FILE* ftb_stdout;
@@ -1371,6 +1326,60 @@ struct String_Split {
 
 };
 
+
+// ----------------------------------------------------------------------------
+//                              IO
+// ----------------------------------------------------------------------------
+#include <filesystem>
+// NOTE(Felix): Sorry... I hate lower case type names
+typedef std::filesystem::path                 Path;
+typedef std::filesystem::directory_iterator   Dir_Iterator;
+typedef std::filesystem::directory_entry      Dir_Entry;
+
+struct File_Read {
+    bool             success;
+    Allocated_String contents;
+};
+
+struct File_Info {
+    bool exists;
+    bool is_directory;
+    s64  size;
+    s64  modification_time;
+};
+
+struct Path_Info {
+    File_Info        file_info;
+    Allocated_String full_path;
+    Allocated_String local_name;
+};
+
+auto read_entire_file(const char* filename, Allocator_Base* allocator = nullptr) -> File_Read;
+
+auto move_file(const char* old_name, const char* new_name) -> bool;
+auto delete_file(const char* path) -> bool;
+auto copy_file(const char* src, const char* dest) -> bool;
+
+struct File_Walk_Info {
+    bool recursive;
+    bool walk_files;
+    bool walk_directories;
+    bool walk_symlinks;
+    bool walk_directory_symlinks;
+};
+
+template <typename lambda>
+auto walk_files(const char* dir_name, lambda callback, File_Walk_Info) -> bool;
+
+auto file_exists(const char* path) -> bool;
+auto file_info(const char* path) -> File_Info;
+auto is_directory(const char* path) -> bool;
+auto delete_directory(const char* dirname) -> bool;
+auto create_directory_if_not_exists(const char* path) -> bool;
+auto get_absolute_path(const char* relative_path) -> Allocated_String;
+auto get_path_components(const char* dir, Array_List<File_Info>* out_file_infos) -> void;
+
+
 // ----------------------------------------------------------------------------
 //                               Stacktraces
 // ----------------------------------------------------------------------------
@@ -1638,39 +1647,113 @@ auto create_directory_if_not_exists_1_deep(const char* path) -> bool {
     return (error == 0) || (errno == EEXIST);
 }
 
-auto create_directory_if_not_exists(const char* dir) -> bool {
-    Scratch_Arena scratch = scratch_arena_start((Linear_Allocator*)grab_temp_allocator());
-    defer { scratch_arena_end(scratch); };
-
-    Allocated_String buffer = Allocated_String::from(dir, scratch.arena);
-    char*            cursor = buffer.data;
-
-    if (buffer.data[buffer.length - 1] == '/')
-        buffer.data[buffer.length - 1] = '\0';
-
-    for (cursor = buffer.data + 1; *cursor != '\0'; cursor++) {
-        if (*cursor == '/') {
-            *cursor = '\0';
-
-            if (!create_directory_if_not_exists_1_deep(buffer.data)) {
-                return false;
-            }
-
-            *cursor = '/';
-        }
-    }
-
-    if (!create_directory_if_not_exists_1_deep(buffer.data))
-        return false;
-
-    return true;
-}
 
 
 auto get_absolute_path(const char* relative_path) -> Allocated_String;
+
 #else
 
+auto create_directory_if_not_exists_1_deep(const char* path) -> bool {
+    BOOL success = CreateDirectory(path, NULL);
+    return (success != 0) || (GetLastError() == ERROR_ALREADY_EXISTS);
+}
+
 #endif
+
+
+#ifdef FTB_WINDOWS
+#  define IS_PATH_SEPARATOR(c) ((c) == '/' || (c) == '\\')
+#else
+#  define IS_PATH_SEPARATOR(c) ((c) == '/')
+#endif
+
+
+// auto for_path_component(const char* dir, bool (*callback)(String, void*), void* payload = nullptr) -> bool {
+//     Scratch_Arena scratch = scratch_arena_start((Linear_Allocator*)grab_temp_allocator());
+//     defer { scratch_arena_end(scratch); };
+
+//     Allocated_String buffer = Allocated_String::from(dir, scratch.arena);
+
+//     if (buffer.data[buffer.length - 1] == '/')
+//         buffer.data[buffer.length - 1] = '\0';
+
+//     char* cursor;
+//     for (cursor = buffer.data + 1; *cursor != '\0'; ++cursor) {
+//         if (IS_PATH_SEPARATOR(*cursor)) {
+//             *cursor = '\0';
+
+//             buffer.length = cursor - buffer.data - 1; // don't count \0 as part of string
+//             if (!callback(buffer, payload))
+//                 return false;
+
+//             *cursor = '/';
+//         }
+//     }
+
+//     buffer.length = cursor - buffer.data - 1; // don't count \0 as part of string
+//     if (!callback(buffer, payload))
+//         return false;
+
+//     return true;
+// }
+
+// auto create_directory_if_not_exists(const char* dir) -> bool {
+//     return for_path_component(dir, [](String path, void* user_data) -> bool {
+//         return create_directory_if_not_exists_1_deep(path.data);
+//     });
+// }
+
+// auto get_local_name(const char* dir, Allocator_Base* string_allocator) -> Allocated_String {
+
+// }
+
+// auto get_path_info(String dir, Allocator_Base* string_allocator) -> Path_Info {
+//     Path_Info pi = {
+//         .file_info = file_info(dir.data),
+//         .full_path = Allocated_String::from(dir.data, params->string_allocator),
+//     };
+
+//     // NOTE(Felix): if path ends with slash, remove for local_name
+//     s32 idx_local_end = dir.count-1;
+//     if (IS_PATH_SEPARATOR(dir.data[dir.length-1])) {
+//         --idx_local_end;
+//     }
+
+//     s32 idx_local_start = idx_local_end;
+//     while (idx_local_start >= 0) {
+//         if (IS_PATH_SEPARATOR(dir.data[idx_local_start])) {
+//             break;
+//         }
+//         --idx_local_start;
+//     }
+
+//     copy_string()
+
+//     return pi;
+// }
+
+// auto get_path_components(const char* dir, Array_List<Path_Info>* out_Path_infos,
+//                          Allocator_Base* string_allocator = nullptr)
+//     -> void
+// {
+//     if (string_allocator == nullptr)
+//         string_allocator = grab_current_allocator();
+
+//     struct Params {
+//         Array_List<Path_Info>* out_path_infos;
+//         Allocator_Base*        string_allocator;
+//     } params;
+//     params.out_path_infos   = out_path_infos;
+//     params.string_allocator = string_allocator;
+
+
+//     return for_path_component(dir, [](const char* path, void* params_vp) -> bool {
+//         Params* params = (Params*)params_vp;
+//         Path_Info pi = get_path_info(dir);
+//         params->out_path_infos->append(pi);
+//         return true; // continue iteration
+//     }, &params);
+// }
 
 
 
