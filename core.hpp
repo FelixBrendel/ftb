@@ -425,7 +425,6 @@ extern Allocator_Base* libc_allocator;
     if (Linear_Allocator LABEL(prev_temp_alloc, __LINE__) = *(Linear_Allocator*)push_allocator(grab_temp_allocator())) {} else \
     if (defer {*(Linear_Allocator*)pop_allocator() = LABEL(prev_temp_alloc, __LINE__);}) {} else
 
-
 #define with_temp_allocator with_allocator(grab_temp_allocator())
 
 
@@ -545,7 +544,36 @@ struct File_Read {
     Allocated_String contents;
 };
 
+struct File_Info {
+    bool exists;
+    bool is_directory;
+    s64  size;
+    s64  modification_time;
+};
+
 auto read_entire_file(const char* filename, Allocator_Base* allocator = nullptr) -> File_Read;
+
+auto move_file(const char* old_name, const char* new_name) -> bool;
+auto delete_file(const char* path) -> bool;
+auto copy_file(const char* src, const char* dest) -> bool;
+
+struct File_Walk_Info {
+    bool recursive;
+    bool walk_files;
+    bool walk_directories;
+    bool walk_symlinks;
+    bool walk_directory_symlinks;
+};
+
+template <typename lambda>
+auto walk_files(const char* dir_name, lambda callback, File_Walk_Info) -> bool;
+
+auto file_exists(const char* path) -> bool;
+auto file_info(const char* path) -> File_Info;
+auto is_directory(const char* path) -> bool;
+auto delete_directory(const char* dirname) -> bool;
+auto create_directory_if_not_exists(const char* path) -> bool;
+auto get_absolute_path(const char* relative_path) -> Allocated_String;
 
 // ----------------------------------------------------------------------------
 //                              print
@@ -1436,6 +1464,14 @@ struct Linear_Allocator {
     void deinit();
 };
 
+struct Scratch_Arena {
+    Allocator_Base* arena; // linear allocator
+    u64 size_at_creation;
+};
+
+auto scratch_arena_start(Linear_Allocator* linear_allocator) -> Scratch_Arena;
+auto scratch_arena_end(Scratch_Arena) -> void;
+
 
 // ----------------------------------------------------------------------------
 //                              Errors
@@ -1531,7 +1567,7 @@ auto read_entire_file(const char* filename, Allocator_Base* allocator) -> File_R
 	    panic_if(!ret.contents.data,
 		     "Could not allocate space for file contents (%u bytes) ",
 		     ret.contents.length+1);
-	    	    
+
             /* Read the entire file into memory. */
             ret.contents.length = fread(ret.contents.data, sizeof(char),
                                         ret.contents.length, fp);
@@ -1548,6 +1584,93 @@ auto read_entire_file(const char* filename, Allocator_Base* allocator) -> File_R
     ret.success = true;
     return ret;
 }
+
+#ifdef FTB_LINUX
+#include <sys/stat.h>
+auto move_file(const char* old_name, const char* new_name) -> bool {
+    return rename(old_name, new_name) == 0;
+}
+
+auto delete_file(const char* path) -> bool {
+    return remove(path) == 0;
+}
+
+// auto copy_file(const char* src, const char* dest) -> bool {
+//     panic("NYI");
+//     return false;
+// }
+
+// template <typename lambda>
+// auto auto walk_files(const char* dir_name, lambda callback, File_Walk_Info) -> bool
+// {
+
+
+// }
+
+auto file_exists(const char* path) -> bool {
+    return access(path, 0) == 0;
+}
+
+auto file_info(const char* path) -> File_Info {
+    File_Info fi = {};
+
+    struct stat stat_info;
+    s32 result = stat(path, &stat_info);
+
+    if (result != 0)
+        return {};
+
+    fi.exists            = true;
+    fi.size              = stat_info.st_size;
+    fi.modification_time = stat_info.st_mtime;
+    fi.is_directory      = (stat_info.st_mode & S_IFMT) == S_IFDIR;
+
+    return fi;
+}
+
+
+// auto delete_directory(const char* dirname) -> bool {
+//
+// }
+
+auto create_directory_if_not_exists_1_deep(const char* path) -> bool {
+    s32 error = mkdir(path, S_IRWXU);
+    return (error == 0) || (errno == EEXIST);
+}
+
+auto create_directory_if_not_exists(const char* dir) -> bool {
+    Scratch_Arena scratch = scratch_arena_start((Linear_Allocator*)grab_temp_allocator());
+    defer { scratch_arena_end(scratch); };
+
+    Allocated_String buffer = Allocated_String::from(dir, scratch.arena);
+    char*            cursor = buffer.data;
+
+    if (buffer.data[buffer.length - 1] == '/')
+        buffer.data[buffer.length - 1] = '\0';
+
+    for (cursor = buffer.data + 1; *cursor != '\0'; cursor++) {
+        if (*cursor == '/') {
+            *cursor = '\0';
+
+            if (!create_directory_if_not_exists_1_deep(buffer.data)) {
+                return false;
+            }
+
+            *cursor = '/';
+        }
+    }
+
+    if (!create_directory_if_not_exists_1_deep(buffer.data))
+        return false;
+
+    return true;
+}
+
+
+auto get_absolute_path(const char* relative_path) -> Allocated_String;
+#else
+
+#endif
 
 
 
@@ -2034,6 +2157,17 @@ void Linear_Allocator::deinit() {
     base.next_allocator->deallocate(data);
 }
 
+auto scratch_arena_start(Linear_Allocator* linear_allocator) -> Scratch_Arena {
+    return Scratch_Arena {
+        .arena            = &linear_allocator->base,
+        .size_at_creation = linear_allocator->count,
+    };
+}
+
+auto scratch_arena_end(Scratch_Arena scratch) -> void {
+    Linear_Allocator* linear = (Linear_Allocator*)scratch.arena;
+    linear->count = scratch.size_at_creation;
+}
 
 struct Allocator_Functions {
     void* (*allocate)(Allocator_Base*, u64 amount, u32 align);
@@ -2947,9 +3081,11 @@ Allocated_String Allocated_String::from(const char* str, Allocator_Base* allocat
         allocator = grab_current_allocator();
 
     r.allocator = allocator;
-    r.length = strlen(str);
-    r.data  = allocator->allocate<char>((u32)r.length+1);
+    r.length    = strlen(str);
+    r.data      = allocator->allocate<char>((u32)r.length+1);
+
     strcpy(r.data, str);
+    r.data[r.length] = '\0';
 
     return r;
 }
