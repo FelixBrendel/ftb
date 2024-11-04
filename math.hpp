@@ -307,6 +307,7 @@ auto m4x4_orientation(Quat orientation) -> M4x4;
 auto m4x4_translate(V3 tanslation) -> M4x4;
 auto m4x4_scale(V3 scale) -> M4x4;
 auto m4x4_model(V3 tanslation, Quat orientation, V3 scale) -> M4x4;
+auto m4x4_print(M4x4) -> void;
 
 auto m3x3_identity() -> M3x3;
 auto m3x3_orientation(Quat orientation) -> M3x3;
@@ -922,10 +923,11 @@ auto identity_look_at(V3* out_eye, V3* out_target, V3* out_up) -> void {
     *out_up     = {0, 1, 0};
 }
 
-auto m4x4_look_at_vk(V3 cam_pos, V3 target, V3 up) -> M4x4 {
-    V3 view_dir  = noz(target - cam_pos);
-    V3 right_dir = noz(cross(view_dir, up));
-    V3 up_dir    = cross(right_dir, view_dir);
+auto m4x4_look_at(V3 cam_pos, V3 target, V3 up) -> M4x4
+{
+    V3 view_dir  =  noz(target - cam_pos);
+    V3 right_dir =  noz(cross(view_dir, up));
+    V3 up_dir    = -cross(right_dir, view_dir);
 
     /*
       / right_dir  p.x \
@@ -957,50 +959,13 @@ auto m4x4_look_at_vk(V3 cam_pos, V3 target, V3 up) -> M4x4 {
     return result;
 }
 
-auto m4x4_look_at(V3 cam_pos, V3 target, V3 up) -> M4x4
-{
-    V3 view_dir  = noz(target - cam_pos);
-    V3 right_dir = noz(cross(view_dir, up));
-    V3 up_dir    = cross(right_dir, view_dir);
-
-    /*
-      / right_dir  p.x \
-      |  up_dir    p.y |
-      | view_dir   p.z |
-      \  0  0  0    1  /
-
-     */
-
-    M4x4 result = m4x4_identity();
-    // 1st row
-    result._00 =  right_dir.x;
-    result._10 =  right_dir.y;
-    result._20 =  right_dir.z;
-    // 2nd row
-    result._01 =  up_dir.x;
-    result._11 =  up_dir.y;
-    result._21 =  up_dir.z;
-    // 3rd row
-    result._02 =  view_dir.x;
-    result._12 =  view_dir.y;
-    result._22 =  view_dir.z;
-
-    // 4th column
-    result._30 = -dot(right_dir, cam_pos);
-    result._31 = -dot(   up_dir, cam_pos);
-    result._32 = -dot( view_dir, cam_pos);
-
-    return result;
-}
-
 auto quick_invert_transformation_mat_without_scale(M4x4 mat) -> M4x4 {
     M3x3 rot_sheer;
     V3   trans;
 
     m4x4_decompose(mat, &rot_sheer, &trans);
     rot_sheer = m3x3_transpose(rot_sheer);
-    trans     = rot_sheer * trans;
-    // log_info("trans: %{f32[3]}", trans.elements);
+    trans     = (rot_sheer * -1.0) * trans;
 
     return m4x4_compose(rot_sheer, trans);
 }
@@ -1023,59 +988,23 @@ auto look_at_from_m4x4(M4x4 view_mat, V3* out_eye, V3* out_target, V3* out_up) -
     *out_up     = noz(t_up.xyz);
 
     {
-        /**
-           // NOTE(Felix): V4 t_target = t_eye - view_mat.columns[2];
-           [  INFO ] before: [-0.620281,  0.188659, -0.761354, -0.000000,
-                               0.784380,  0.149190, -0.602072, -0.000000,
-                               0.000000,  0.970644,  0.240519, -0.000000,
-                               0.016580, -0.085323, -0.249506,  1.000000]
-
-           [  INFO ] after:  [ 0.620281,  0.784380, 0.000000, 0.000000,
-                              -0.188659,  0.149190, 0.970644, 0.000000,
-                               0.761354, -0.602072, 0.240519, 0.000000,
-                               0.016580,  0.085323, 0.249506, 1.000000]
-
-            // NOTE(Felix): V4 t_target = t_eye - V4{view_mat._02, view_mat._12, view_mat._22, view_mat._32};
-            [  INFO ] before: [-0.620281,  0.188659, -0.761354, -0.000000,
-                                0.784380,  0.149190, -0.602072, -0.000000,
-                                0.000000,  0.970644,  0.240519, -0.000000,
-                                0.016580, -0.085323, -0.249506,  1.000000]
-
-            [  INFO ] after:  [ 0.620281, 0.188659, -0.761354, 0.000000,
-                               -0.784380, 0.149190, -0.602072, 0.000000,
-                               -0.000000, 0.970644,  0.240519, 0.000000,
-                               -0.149601, 0.072769, -0.205261, 1.000000]
-
-            // NOTE(Felix): transpose before
-            [  INFO ] before: [-0.620281,  0.188659, -0.761354, -0.000000,
-                                0.784380,  0.149190, -0.602072, -0.000000,
-                                0.000000,  0.970644,  0.240519, -0.000000,
-                                0.016580, -0.085323, -0.249506,  1.000000]
-
-            [  INFO ] after:  [ 0.620281,  0.188659, -0.761354,  0.000000,
-                               -0.784380,  0.149190, -0.602072,  0.000000,
-                               -0.000000,  0.970644,  0.240519,  0.000000,
-                                0.016580,  0.085323,  0.249506,  1.000000]
-
-            [  INFO ] before: [-0.620281,  0.188659, -0.761354, -0.000000,
-                                0.784380,  0.149190, -0.602072, -0.000000,
-                                0.000000,  0.970644,  0.240519, -0.000000,
-                                0.016580, -0.085323, -0.249506,  1.000000]
-
-            [  INFO ] after:  [ 0.620281,  0.188659,  0.761354, 0.000000,
-                               -0.784380,  0.149190,  0.602072, 0.000000,
-                               -0.000000,  0.970644, -0.240519, 0.000000,
-                                0.016580,  0.085323, -0.249506, 1.000000]
-
-
-         */
-        M4x4 la = m4x4_look_at(*out_eye, *out_target, *out_up);
-        log_info("before: %{f32[16]}", view_mat.elements);
-        log_info("after:  %{f32[16]}", la.elements);
-        // debug_break();
+        println("before:");
+        m4x4_print(view_mat);
+        println("after:");
+        m4x4_print(m4x4_look_at(*out_eye, *out_target, *out_up));
+        println("");
+        exit(0);
     }
 }
 
+auto m4x4_print(M4x4 m) -> void {
+    println(" /                             \\");
+    println(" | % 5.3f % 5.3f % 5.3f % 5.3f |", m._00, m._10, m._20, m._30);
+    println(" | % 5.3f % 5.3f % 5.3f % 5.3f |", m._01, m._11, m._21, m._31);
+    println(" | % 5.3f % 5.3f % 5.3f % 5.3f |", m._02, m._12, m._22, m._32);
+    println(" | % 5.3f % 5.3f % 5.3f % 5.3f |", m._03, m._13, m._23, m._33);
+    println(" \\                             /");
+}
 
 
 auto m4x4_perspective(f32 fov_y, f32 aspect, f32 clip_near, f32 clip_far) -> M4x4 {
