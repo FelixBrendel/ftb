@@ -323,6 +323,12 @@ auto quat_from_XYZ(f32 x, f32 y, f32 z) -> Quat;
 auto quat_to_XYZ_Euler(Quat q) -> V3;
 auto quat_from_m4x4(M4x4 m) -> Quat;
 
+// ---------------------
+//  geometry functions
+// ---------------------
+auto closest_point_on_ray(Ray3 ray, V3 point) -> V3;
+
+
 #ifdef FTB_MATH_IMPL
 
 f32 pi     = 3.1415926535897932384626433832795f;
@@ -917,11 +923,16 @@ auto m4x4_from_axis_angle(V3 axis, f32 angle_in_rad) -> M4x4 {
     return r;
 }
 
-auto identity_look_at(V3* out_eye, V3* out_target, V3* out_up) -> void {
-    *out_eye    = {0, 0, 0};
-    *out_target = {0, 0,-1};
-    *out_up     = {0, 1, 0};
+
+auto m4x4_print(M4x4 m) -> void {
+    println(" ╭                             ╮");
+    println(" │ % 5.3f % 5.3f % 5.3f % 5.3f │", m._00, m._10, m._20, m._30);
+    println(" │ % 5.3f % 5.3f % 5.3f % 5.3f │", m._01, m._11, m._21, m._31);
+    println(" │ % 5.3f % 5.3f % 5.3f % 5.3f │", m._02, m._12, m._22, m._32);
+    println(" │ % 5.3f % 5.3f % 5.3f % 5.3f │", m._03, m._13, m._23, m._33);
+    println(" ╰                             ╯");
 }
+
 
 auto m4x4_look_at(V3 cam_pos, V3 target, V3 up) -> M4x4
 {
@@ -930,33 +941,46 @@ auto m4x4_look_at(V3 cam_pos, V3 target, V3 up) -> M4x4
     V3 up_dir    = -cross(right_dir, view_dir);
 
     /*
-      / right_dir  p.x \
-      |  up_dir    p.y |
-      | view_dir   p.z |
-      \  0  0  0    1  /
-
+     *  ╭                ╮
+     *  │ right_dir  p.x │
+     *  │  up_dir    p.y │
+     *  │  view_dir  p.z │
+     *  │  0  0  0    1  │
+     *  ╰                ╯
      */
 
     M4x4 result = m4x4_identity();
     // 1st row
-    result._00 =  right_dir.x;
-    result._10 =  right_dir.y;
-    result._20 =  right_dir.z;
+    result._00 = right_dir.x;
+    result._10 = right_dir.y;
+    result._20 = right_dir.z;
     // 2nd row
-    result._01 =  up_dir.x;
-    result._11 =  up_dir.y;
-    result._21 =  up_dir.z;
+    result._01 = up_dir.x;
+    result._11 = up_dir.y;
+    result._21 = up_dir.z;
     // 3rd row
-    result._02 = -view_dir.x;
-    result._12 = -view_dir.y;
-    result._22 = -view_dir.z;
+    result._02 = view_dir.x;
+    result._12 = view_dir.y;
+    result._22 = view_dir.z;
 
     // 4th column
     result._30 = -dot(right_dir, cam_pos);
     result._31 = -dot(   up_dir, cam_pos);
-    result._32 =  dot( view_dir, cam_pos);
+    result._32 = -dot( view_dir, cam_pos);
 
     return result;
+}
+
+
+auto identity_look_at(V3* out_eye, V3* out_target, V3* out_up) -> void {
+    *out_eye    = {0,  0,  0};
+    *out_target = {0,  0,  1}; // vulkan z goes into the screen
+    *out_up     = {0, -1,  0}; // vulkan y goes down in image space
+
+    // {
+    //     println("check ident:");
+    //     m4x4_print(m4x4_look_at(*out_eye, *out_target, *out_up));
+    // }
 }
 
 auto quick_invert_transformation_mat_without_scale(M4x4 mat) -> M4x4 {
@@ -987,25 +1011,15 @@ auto look_at_from_m4x4(M4x4 view_mat, V3* out_eye, V3* out_target, V3* out_up) -
     *out_target = t_target.xyz;
     *out_up     = noz(t_up.xyz);
 
-    {
-        println("before:");
-        m4x4_print(view_mat);
-        println("after:");
-        m4x4_print(m4x4_look_at(*out_eye, *out_target, *out_up));
-        println("");
-        exit(0);
-    }
+    // {
+    //     println("before:");
+    //     m4x4_print(view_mat);
+    //     println("after:");
+    //     m4x4_print(m4x4_look_at(*out_eye, *out_target, *out_up));
+    //     println("");
+    //     exit(0);
+    // }
 }
-
-auto m4x4_print(M4x4 m) -> void {
-    println(" /                             \\");
-    println(" | % 5.3f % 5.3f % 5.3f % 5.3f |", m._00, m._10, m._20, m._30);
-    println(" | % 5.3f % 5.3f % 5.3f % 5.3f |", m._01, m._11, m._21, m._31);
-    println(" | % 5.3f % 5.3f % 5.3f % 5.3f |", m._02, m._12, m._22, m._32);
-    println(" | % 5.3f % 5.3f % 5.3f % 5.3f |", m._03, m._13, m._23, m._33);
-    println(" \\                             /");
-}
-
 
 auto m4x4_perspective(f32 fov_y, f32 aspect, f32 clip_near, f32 clip_far) -> M4x4 {
     f32 const tan_half_fov_y = tanf(fov_y / 2.0f);
@@ -1014,8 +1028,8 @@ auto m4x4_perspective(f32 fov_y, f32 aspect, f32 clip_near, f32 clip_far) -> M4x
 
     result._00 = 1.0f / (aspect * tan_half_fov_y);
     result._11 = 1.0f / (tan_half_fov_y);
-    result._22 = clip_far / (clip_near - clip_far);
-    result._23 = -1.0f;
+    result._22 = clip_far / (clip_far - clip_near);
+    result._23 = 1.0f;
     result._32 = -(clip_far * clip_near) / (clip_far - clip_near);
 
     return result;
@@ -1269,6 +1283,12 @@ auto quat_to_XYZ_Euler(Quat q) -> V3 {
     angles.z = atan2f(siny_cosp, cosy_cosp);
 
     return angles;
+}
+
+auto closest_point_on_ray(Ray3 ray, V3 point) -> V3 {
+    V3 v = point - ray.offset;
+    f32 dotProd = dot(v, ray.direction);
+    return ray.offset + ray.direction * dotProd;
 }
 
 #endif // FTB_MATH_IMPL

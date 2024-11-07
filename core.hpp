@@ -410,9 +410,9 @@ Allocator_Base* grab_current_allocator();
 Allocator_Base* push_allocator(Allocator_Base*);
 Allocator_Base* pop_allocator();
 
-Allocator_Base* grab_temp_allocator();
-u64  get_temp_allocator_depth();
-void reset_temp_allocator(u64 depth);
+Allocator_Base* grab_temp_allocator(Allocator_Base* previous = nullptr);
+u64  get_temp_allocator_depth(Allocator_Base* previous);
+void reset_temp_allocator(Allocator_Base* previous, u64 depth);
 
 extern Allocator_Base* libc_allocator;
 
@@ -421,6 +421,7 @@ extern Allocator_Base* libc_allocator;
     MPP_DEFER(1,  pop_allocator();)
 
 
+// NOTE(Felix): These are deprecated
 #define in_scratch_buffer                                               \
     if (Linear_Allocator LABEL(prev_temp_alloc, __LINE__) = *(Linear_Allocator*)push_allocator(grab_temp_allocator())) {} else \
     if (defer {*(Linear_Allocator*)pop_allocator() = LABEL(prev_temp_alloc, __LINE__);}) {} else
@@ -506,20 +507,25 @@ struct String {
     bool operator==(String other);
     s32 operator<(String other);
     static String from(const char* str, Allocator_Base* allocator = nullptr);
+
+    // NOTE(Felix): does not do anny allocation, just puts it a String struct
+    //   with length
+    static String over(const char* str);
+
     void free(Allocator_Base* allocator = nullptr);
 };
 
-struct Allocated_String {
-    char* data;
-    u64 length;
+struct Allocated_String  {
+    String          string;
     Allocator_Base* allocator;
 
     operator bool() const {
-        return data != nullptr;
+        return string.data != nullptr;
     }
 
     bool operator==(Allocated_String other);
     s32 operator<(Allocated_String other);
+    static Allocated_String from(String str, Allocator_Base* allocator = nullptr);
     static Allocated_String from(const char* str, Allocator_Base* allocator = nullptr);
     void free();
 };
@@ -1248,8 +1254,8 @@ struct String_Builder {
 
         concat[cursor] = 0;
 
-        ret.data = concat;
-        ret.length = cursor+1;
+        ret.string.data = concat;
+        ret.string.length = cursor+1;
 
         return ret;
     };
@@ -1350,7 +1356,7 @@ struct File_Info {
 
 struct Path_Info {
     File_Info        file_info;
-    Allocated_String full_path;
+    Allocated_String base_path;
     Allocated_String local_name;
 };
 
@@ -1362,14 +1368,17 @@ auto copy_file(const char* src, const char* dest) -> bool;
 
 struct File_Walk_Info {
     bool recursive;
-    bool walk_files;
-    bool walk_directories;
-    bool walk_symlinks;
-    bool walk_directory_symlinks;
+    bool with_files;
+    bool with_directories;
 };
 
-template <typename lambda>
-auto walk_files(const char* dir_name, lambda callback, File_Walk_Info) -> bool;
+enum struct Walk_Status {
+    Continue,
+    Continue_Recurse,
+    Done,
+};
+
+auto walk_files(const char* dir_name, File_Walk_Info walk_info, void (*callback)(Path_Info, Walk_Status*, void*), void* user_data) -> void;
 
 auto file_exists(const char* path) -> bool;
 auto file_info(const char* path) -> File_Info;
@@ -1378,7 +1387,10 @@ auto delete_directory(const char* dirname) -> bool;
 auto create_directory_if_not_exists(const char* path) -> bool;
 auto get_absolute_path(const char* relative_path) -> Allocated_String;
 auto get_path_components(const char* dir, Array_List<File_Info>* out_file_infos) -> void;
-
+auto get_path_info(String dir, Allocator_Base* string_allocator) -> Path_Info;
+auto get_local_name(String dir, Allocator_Base* string_allocator) -> Allocated_String;
+auto get_base_path(String dir, Allocator_Base* string_allocator) -> Allocated_String;
+auto join_paths(String base, String extension, bool ensure_tailing_path_separator, Allocator_Base* string_allocator) -> Allocated_String;
 
 // ----------------------------------------------------------------------------
 //                               Stacktraces
@@ -1396,9 +1408,9 @@ struct Stacktrace {
         for (u32 i = 1; i < entries.count; ++i) {
             auto e = entries[i];
             println("  %s:%d (%s)",
-                    e.file.data,
+                    e.file.string.data,
                     e.line,
-                    e.function.data);
+                    e.function.string.data);
         }
     }
 };
@@ -1478,7 +1490,7 @@ struct Scratch_Arena {
     u64 size_at_creation;
 };
 
-auto scratch_arena_start(Linear_Allocator* linear_allocator) -> Scratch_Arena;
+auto scratch_arena_start(Scratch_Arena previous = {}) -> Scratch_Arena;
 auto scratch_arena_end(Scratch_Arena) -> void;
 
 
@@ -1560,8 +1572,8 @@ auto read_entire_file(const char* filename, Allocator_Base* allocator) -> File_R
         /* Go to the end of the file. */
         if (fseek(fp, 0L, SEEK_END) == 0) {
             /* Get the size of the file. */
-            ret.contents.length = ftell(fp) + 1;
-            if (ret.contents.length == 0) {
+            ret.contents.string.length = ftell(fp) + 1;
+            if (ret.contents.string.length == 0) {
                 ret.success = true;
                 return ret;
             }
@@ -1572,16 +1584,16 @@ auto read_entire_file(const char* filename, Allocator_Base* allocator) -> File_R
             }
 
             /* Allocate our buffer to that size. */
-            ret.contents.data = allocator->allocate<char>((u32)ret.contents.length+1);
-	    panic_if(!ret.contents.data,
-		     "Could not allocate space for file contents (%u bytes) ",
-		     ret.contents.length+1);
+            ret.contents.string.data = allocator->allocate<char>((u32)ret.contents.string.length+1);
+        panic_if(!ret.contents.string.data,
+             "Could not allocate space for file contents (%u bytes) ",
+             ret.contents.string.length+1);
 
             /* Read the entire file into memory. */
-            ret.contents.length = fread(ret.contents.data, sizeof(char),
-                                        ret.contents.length, fp);
+            ret.contents.string.length = fread(ret.contents.string.data, sizeof(char),
+                                               ret.contents.string.length, fp);
 
-            ret.contents.data[ret.contents.length] = '\0';
+            ret.contents.string.data[ret.contents.string.length] = '\0';
             if (ferror(fp) != 0) {
                 return { false };
             }
@@ -1609,9 +1621,8 @@ auto delete_file(const char* path) -> bool {
 //     return false;
 // }
 
-// template <typename lambda>
-// auto auto walk_files(const char* dir_name, lambda callback, File_Walk_Info) -> bool
-// {
+
+// auto walk_files(const char* dir_name, bool (*callback)(Path_Info, void*), File_Walk_Info walk_info, void* user_data) -> bool {
 
 
 // }
@@ -1647,11 +1658,132 @@ auto create_directory_if_not_exists_1_deep(const char* path) -> bool {
     return (error == 0) || (errno == EEXIST);
 }
 
-
-
 auto get_absolute_path(const char* relative_path) -> Allocated_String;
 
-#else
+#else // Not on linux
+
+auto fill_file_info_win32(File_Info* file_info, DWORD dwFileAttributes, FILETIME ftLastWriteTime, DWORD nFileSizeHigh, DWORD nFileSizeLow) {
+    file_info->is_directory = dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
+
+    ULARGE_INTEGER size;
+    size.LowPart    = nFileSizeLow;
+    size.HighPart   = nFileSizeHigh;
+    file_info->size = size.QuadPart;
+
+    ULARGE_INTEGER mod_time;
+    mod_time.LowPart  = ftLastWriteTime.dwLowDateTime;
+    mod_time.HighPart = ftLastWriteTime.dwHighDateTime;
+
+    const s64 WINDOWS_TICK       = 10000000;
+    const s64 SEC_TO_UNIX_EPOCH  = 11644473600LL;
+    file_info->modification_time = (mod_time.QuadPart / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
+}
+
+auto file_info(const char* path) -> File_Info {
+    File_Info fi = {};
+
+    HANDLE handle = CreateFileA(path, GENERIC_READ,
+                                FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,
+                                NULL, OPEN_EXISTING,
+                                FILE_ATTRIBUTE_READONLY|FILE_FLAG_BACKUP_SEMANTICS,
+                                NULL);
+
+    if (handle == INVALID_HANDLE_VALUE)
+        return {};
+
+    defer { CloseHandle(handle); };
+
+    BY_HANDLE_FILE_INFORMATION handle_info;
+    GetFileInformationByHandle(handle, &handle_info);
+
+    fi.exists       = true;
+    fill_file_info_win32(&fi, handle_info.dwFileAttributes, handle_info.ftLastWriteTime, handle_info.nFileSizeHigh, handle_info.nFileSizeLow);
+
+    return fi;
+}
+
+
+auto walk_files(const char* dir_name, File_Walk_Info walk_info, void (*callback)(Path_Info, Walk_Status*, void*), void* user_data) -> void {
+    Scratch_Arena work_list_scratch = scratch_arena_start();
+    defer { scratch_arena_end(work_list_scratch); };
+
+    Allocated_String dir_name_alloc_str = Allocated_String::from(dir_name, work_list_scratch.arena);
+
+    // if (dir_name_alloc_str.string.data[dir_name_alloc_str.string.length-1] == '/')
+    //     --dir_name_alloc_str.string.length;
+
+    Array_List<Allocated_String> dirs_to_do {};
+    dirs_to_do.init();
+    dirs_to_do.append(dir_name_alloc_str);
+    defer { dirs_to_do.deinit(); };
+
+    while (dirs_to_do.count != 0) {
+        Scratch_Arena scratch = scratch_arena_start(work_list_scratch);
+        defer { scratch_arena_end(scratch); };
+
+        Allocated_String dir = dirs_to_do.data[--dirs_to_do.count];
+
+        Allocated_String wildcard_search_str = join_paths(dir.string, string_from_literal("*"), false, scratch.arena);
+        // print_to_string(&wildcard_search_str, scratch.arena, "%{->Str}/*", &dir);
+
+
+        WIN32_FIND_DATAA find_data;
+        HANDLE find_handle = FindFirstFileA(wildcard_search_str.string.data, &find_data);
+        bool   success     = find_handle != INVALID_HANDLE_VALUE;
+
+        if (!success) {
+            continue;
+        }
+
+        defer { FindClose(find_handle); };
+
+        while (success) {
+            Scratch_Arena scratch = scratch_arena_start(work_list_scratch);
+            defer {
+                scratch_arena_end(scratch);
+                success = FindNextFileA(find_handle, &find_data);
+            };
+
+            Path_Info pi {};
+            pi.local_name = Allocated_String::from(find_data.cFileName, scratch.arena);
+            pi.base_path  = dir;
+
+            pi.file_info.exists = true;
+            fill_file_info_win32(&pi.file_info, find_data.dwFileAttributes, find_data.ftLastWriteTime,
+                                 find_data.nFileSizeHigh, find_data.nFileSizeLow);
+
+
+            // NOTE(Felix): yes '.' and '..' are returned from FindNextFile:
+            bool should_callback =
+                (pi.file_info.is_directory &&
+                 walk_info.with_directories &&
+                 (pi.local_name.string != string_from_literal(".") &&
+                  pi.local_name.string != string_from_literal("..")))
+                || (!pi.file_info.is_directory && walk_info.with_files);
+
+            if (!should_callback) {
+                continue;
+            }
+
+            Walk_Status status = walk_info.recursive ? Walk_Status::Continue_Recurse : Walk_Status::Continue;
+            callback(pi, &status, user_data);
+
+            if (status == Walk_Status::Done) {
+                return;
+            }
+
+            if (pi.file_info.is_directory && status == Walk_Status::Continue_Recurse) {
+
+                Allocated_String inner_path = join_paths(dir.string, pi.local_name.string, true, work_list_scratch.arena);
+                // print_to_string(&inner_path.string, work_list_scratch.arena,
+                                // "%{->Str}/%{->Str}", &dir, &pi.local_name);
+
+                dirs_to_do.append(inner_path);
+            }
+        }
+    }
+}
+
 
 auto create_directory_if_not_exists_1_deep(const char* path) -> bool {
     BOOL success = CreateDirectory(path, NULL);
@@ -1668,92 +1800,164 @@ auto create_directory_if_not_exists_1_deep(const char* path) -> bool {
 #endif
 
 
-// auto for_path_component(const char* dir, bool (*callback)(String, void*), void* payload = nullptr) -> bool {
-//     Scratch_Arena scratch = scratch_arena_start((Linear_Allocator*)grab_temp_allocator());
-//     defer { scratch_arena_end(scratch); };
+auto for_path_component(const char* dir, bool (*callback)(String, void*), void* payload = nullptr) -> bool {
+    Scratch_Arena scratch = scratch_arena_start();
+    defer { scratch_arena_end(scratch); };
 
-//     Allocated_String buffer = Allocated_String::from(dir, scratch.arena);
+    Allocated_String buffer = Allocated_String::from(dir, scratch.arena);
 
-//     if (buffer.data[buffer.length - 1] == '/')
-//         buffer.data[buffer.length - 1] = '\0';
+    if (buffer.string.data[buffer.string.length - 1] == '/')
+        buffer.string.data[buffer.string.length - 1] = '\0';
 
-//     char* cursor;
-//     for (cursor = buffer.data + 1; *cursor != '\0'; ++cursor) {
-//         if (IS_PATH_SEPARATOR(*cursor)) {
-//             *cursor = '\0';
+    char* cursor;
+    for (cursor = buffer.string.data + 1; *cursor != '\0'; ++cursor) {
+        if (IS_PATH_SEPARATOR(*cursor)) {
+            *cursor = '\0';
 
-//             buffer.length = cursor - buffer.data - 1; // don't count \0 as part of string
-//             if (!callback(buffer, payload))
-//                 return false;
+            buffer.string.length = cursor - buffer.string.data;
+            if (!callback(buffer.string, payload))
+                return false;
 
-//             *cursor = '/';
-//         }
-//     }
+            *cursor = '/';
+        }
+    }
 
-//     buffer.length = cursor - buffer.data - 1; // don't count \0 as part of string
-//     if (!callback(buffer, payload))
-//         return false;
+    buffer.string.length = cursor - buffer.string.data;
+    if (!callback(buffer.string, payload))
+        return false;
 
-//     return true;
-// }
+    return true;
+}
 
-// auto create_directory_if_not_exists(const char* dir) -> bool {
-//     return for_path_component(dir, [](String path, void* user_data) -> bool {
-//         return create_directory_if_not_exists_1_deep(path.data);
-//     });
-// }
+auto create_directory_if_not_exists(const char* dir) -> bool {
+    return for_path_component(dir, [](String path, void* user_data) -> bool {
+        return create_directory_if_not_exists_1_deep(path.data);
+    });
+}
 
-// auto get_local_name(const char* dir, Allocator_Base* string_allocator) -> Allocated_String {
+auto get_base_path_end_idx(String dir) -> u64 {
+    // NOTE(Felix): if path ends with slash, remove for local_name
+    u64 idx_local_end = dir.length - 1;
+    if (IS_PATH_SEPARATOR(dir.data[idx_local_end])) {
+        --idx_local_end;
+    }
 
-// }
+    bool separator_found = false;
+    u64 idx_local_start = idx_local_end;
+    while (idx_local_start > 1) {
+        if (IS_PATH_SEPARATOR(dir.data[idx_local_start-1])) {
+            separator_found = true;
+            break;
+        }
+        --idx_local_start;
+    }
 
-// auto get_path_info(String dir, Allocator_Base* string_allocator) -> Path_Info {
-//     Path_Info pi = {
-//         .file_info = file_info(dir.data),
-//         .full_path = Allocated_String::from(dir.data, params->string_allocator),
-//     };
+    if (!separator_found)
+        idx_local_start = dir.length;
 
-//     // NOTE(Felix): if path ends with slash, remove for local_name
-//     s32 idx_local_end = dir.count-1;
-//     if (IS_PATH_SEPARATOR(dir.data[dir.length-1])) {
-//         --idx_local_end;
-//     }
+    return idx_local_start;
+}
 
-//     s32 idx_local_start = idx_local_end;
-//     while (idx_local_start >= 0) {
-//         if (IS_PATH_SEPARATOR(dir.data[idx_local_start])) {
-//             break;
-//         }
-//         --idx_local_start;
-//     }
+auto get_base_path(String dir, Allocator_Base* string_allocator) -> Allocated_String {
+    u64 get_base_path_end = get_base_path_end_idx(dir);
 
-//     copy_string()
+    String local = {
+        .data   = dir.data,
+        .length = get_base_path_end,
+    };
 
-//     return pi;
-// }
+    return Allocated_String::from(local, string_allocator);
+}
 
-// auto get_path_components(const char* dir, Array_List<Path_Info>* out_Path_infos,
-//                          Allocator_Base* string_allocator = nullptr)
-//     -> void
-// {
-//     if (string_allocator == nullptr)
-//         string_allocator = grab_current_allocator();
+auto get_local_name(String dir, Allocator_Base* string_allocator) -> Allocated_String {
+    u64 get_base_path_end = get_base_path_end_idx(dir);
 
-//     struct Params {
-//         Array_List<Path_Info>* out_path_infos;
-//         Allocator_Base*        string_allocator;
-//     } params;
-//     params.out_path_infos   = out_path_infos;
-//     params.string_allocator = string_allocator;
+    String local = {
+        .data   = dir.data + get_base_path_end,
+        .length = dir.length - get_base_path_end,
+    };
+
+    return Allocated_String::from(local, string_allocator);
+}
 
 
-//     return for_path_component(dir, [](const char* path, void* params_vp) -> bool {
-//         Params* params = (Params*)params_vp;
-//         Path_Info pi = get_path_info(dir);
-//         params->out_path_infos->append(pi);
-//         return true; // continue iteration
-//     }, &params);
-// }
+auto get_path_info(String dir, Allocator_Base* string_allocator) -> Path_Info {
+    Path_Info pi = {
+        .file_info  = file_info(dir.data),
+        .base_path  = get_base_path(dir, string_allocator),
+        .local_name = get_local_name(dir, string_allocator),
+    };
+
+    return pi;
+}
+
+auto get_path_components(const char* dir, Array_List<Path_Info>* out_path_infos,
+                         Allocator_Base* string_allocator = nullptr)
+    -> void
+{
+    if (string_allocator == nullptr)
+        string_allocator = grab_current_allocator();
+
+    struct Params {
+        Array_List<Path_Info>* out_path_infos;
+        Allocator_Base*        string_allocator;
+    } params;
+    params.out_path_infos   = out_path_infos;
+    params.string_allocator = string_allocator;
+
+
+    for_path_component(dir, [](String path, void* params_vp) -> bool {
+        Params* params = (Params*)params_vp;
+        Path_Info pi = get_path_info(path, params->string_allocator);
+
+        params->out_path_infos->append(pi);
+
+        return true; // continue iteration
+    }, &params);
+}
+
+auto join_paths(String base, String extension, bool ensure_tailing_path_separator,
+                Allocator_Base* string_allocator)
+    -> Allocated_String
+{
+    bool base_ends_in_slash = IS_PATH_SEPARATOR(base.data[base.length-1]);
+    bool should_add_tailing_path_separator =
+        !IS_PATH_SEPARATOR(extension.data[extension.length-1])
+        && ensure_tailing_path_separator;
+
+    u64 new_str_length =
+        base.length      + (base_ends_in_slash ? 0 : 1) +
+        extension.length + (should_add_tailing_path_separator ? 1 : 0);
+
+    Allocated_String result {
+        .string = {
+            .data   = string_allocator->allocate<char>(new_str_length + 1),
+            .length = new_str_length,
+        },
+        .allocator = string_allocator
+    };
+
+    char* write_cursor = result.string.data;
+    strncpy(write_cursor, base.data, base.length);
+    write_cursor += base.length;
+
+    if (!base_ends_in_slash) {
+        *write_cursor = '/';
+        ++write_cursor;
+    }
+
+    strncpy(write_cursor, extension.data, extension.length);
+    write_cursor += extension.length;
+
+    if (should_add_tailing_path_separator) {
+        *write_cursor = '/';
+        ++write_cursor;
+    }
+
+    *write_cursor = '\0';
+
+    return result;
+}
 
 
 
@@ -1769,17 +1973,27 @@ LibC_Allocator internal_libc_allocator = LibC_Allocator{
     }
 };
 
-unsigned char tempback_buffer[1024*1024*128]; // 128MB
-Linear_Allocator temp_linear_allocator = {
+unsigned char tempback_buffer_1[1024*1024*128]; // 128MB
+Linear_Allocator temp_linear_allocator_1 = {
     .base {
         .type = Allocator_Type::Linear_Allocator,
     },
-    .data   = tempback_buffer,
-    .length = sizeof(tempback_buffer)
+    .data   = tempback_buffer_1,
+    .length = sizeof(tempback_buffer_1)
 };
 
-Allocator_Base* libc_allocator = (Allocator_Base*)&internal_libc_allocator;
-Allocator_Base* temp_allocator = (Allocator_Base*)&temp_linear_allocator;
+unsigned char tempback_buffer_2[1024*1024*128]; // 128MB
+Linear_Allocator temp_linear_allocator_2 = {
+    .base {
+        .type = Allocator_Type::Linear_Allocator,
+    },
+    .data   = tempback_buffer_2,
+    .length = sizeof(tempback_buffer_2)
+};
+
+Allocator_Base* libc_allocator   = (Allocator_Base*)&internal_libc_allocator;
+Allocator_Base* temp_allocator_1 = (Allocator_Base*)&temp_linear_allocator_1;
+Allocator_Base* temp_allocator_2 = (Allocator_Base*)&temp_linear_allocator_2;
 Allocator_Base* global_allocator_stack = (Allocator_Base*)&internal_libc_allocator;
 
 //
@@ -1789,15 +2003,21 @@ Allocator_Base* grab_current_allocator() {
     return global_allocator_stack;
 }
 
-Allocator_Base* grab_temp_allocator() {
-    return temp_allocator;
+Allocator_Base* grab_temp_allocator(Allocator_Base* previous) {
+    Allocator_Base* current = grab_current_allocator();
+
+    if (temp_allocator_1 != previous && temp_allocator_1 != current) return temp_allocator_1;
+    if (temp_allocator_2 != previous && temp_allocator_2 != current) return temp_allocator_2;
+
+    panic("No suitiable temp_allocator found");
+    return nullptr;
 }
 
-u64 get_temp_allocator_depth() {
+u64 get_temp_allocator_depth(Allocator_Base* temp_allocator) {
     return ((Linear_Allocator*)temp_allocator)->count;
 }
 
-void reset_temp_allocator(u64 depth) {
+void reset_temp_allocator(Allocator_Base* temp_allocator, u64 depth) {
     ((Linear_Allocator*)temp_allocator)->count = depth;
 }
 
@@ -2240,10 +2460,11 @@ void Linear_Allocator::deinit() {
     base.next_allocator->deallocate(data);
 }
 
-auto scratch_arena_start(Linear_Allocator* linear_allocator) -> Scratch_Arena {
+auto scratch_arena_start(Scratch_Arena previous) -> Scratch_Arena {
+    Linear_Allocator* temp_linear = (Linear_Allocator*)grab_temp_allocator(previous.arena);
     return Scratch_Arena {
-        .arena            = &linear_allocator->base,
-        .size_at_creation = linear_allocator->count,
+        .arena            = &temp_linear->base,
+        .size_at_creation = temp_linear->count,
     };
 }
 
@@ -3121,6 +3342,15 @@ s32 String::operator<(String other) {
     return strncmp(data, other.data, MIN(length, other.length));
 }
 
+String String::over(const char* str) {
+    String r;
+
+    r.length = strlen(str);
+    r.data   = (char*)str;
+
+    return r;
+}
+
 String String::from(const char* str, Allocator_Base* allocator) {
     String r;
 
@@ -3149,37 +3379,46 @@ void String::free(Allocator_Base* allocator) {
 
 bool Allocated_String::operator==(Allocated_String other) {
     return
-        length == other.length &&
-        strncmp(data, other.data, other.length) == 0;
+        string.length == other.string.length &&
+        strncmp(string.data, other.string.data, other.string.length) == 0;
 }
 
 s32 Allocated_String::operator<(Allocated_String other) {
-    return strncmp(data, other.data, MIN(length, other.length));
+    return strncmp(string.data, other.string.data, MIN(string.length, other.string.length));
 }
 
-Allocated_String Allocated_String::from(const char* str, Allocator_Base* allocator) {
+Allocated_String Allocated_String::from(String str, Allocator_Base* allocator) {
     Allocated_String r;
 
     if (!allocator)
         allocator = grab_current_allocator();
 
-    r.allocator = allocator;
-    r.length    = strlen(str);
-    r.data      = allocator->allocate<char>((u32)r.length+1);
+    r.allocator     = allocator;
+    r.string.length = str.length;
+    r.string.data   = allocator->allocate<char>((u32)r.string.length+1);
 
-    strcpy(r.data, str);
-    r.data[r.length] = '\0';
+    strncpy(r.string.data, str.data, str.length);
+    r.string.data[r.string.length] = '\0';
 
     return r;
 }
 
+Allocated_String Allocated_String::from(const char* str, Allocator_Base* allocator) {
+    String s = {
+        .data   = (char*)str,
+        .length = strlen(str),
+    };
+
+    return Allocated_String::from(s);
+}
+
 void Allocated_String::free() {
-    if (data) {
-        allocator->deallocate(data);
+    if (string.data) {
+        allocator->deallocate(string.data);
     }
 #ifdef FTB_INTERNAL_DEBUG
-    length = 0;
-    data = nullptr;
+    string.length = 0;
+    string.data = nullptr;
 #endif
 }
 

@@ -1053,14 +1053,14 @@ namespace json {
         write_pattern_to_file(t_file, pattern, user_data);
 
         Allocated_String ret {};
-        ret.length    = ftell(t_file) + 1;
+        ret.string.length    = ftell(t_file) + 1;
 
         rewind(t_file);
 
         ret.allocator = allocator;
-        ret.data      = allocator->allocate<char>((u32)ret.length);
-        ret.length    = fread(ret.data, sizeof(char), ret.length, t_file);
-        ret.data[ret.length] = '\0';
+        ret.string.data      = allocator->allocate<char>((u32)ret.string.length);
+        ret.string.length    = fread(ret.string.data, sizeof(char), ret.string.length, t_file);
+        ret.string.data[ret.string.length] = '\0';
 
         return ret;
     }

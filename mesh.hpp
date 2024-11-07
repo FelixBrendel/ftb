@@ -293,8 +293,8 @@ auto load_obj(const char* path) -> Mesh_Data {
         obj_str.free();
     };
 
-    char* cursor = obj_str.data;
-    char* eof    = obj_str.data+obj_str.length;
+    char* cursor = obj_str.string.data;
+    char* eof    = obj_str.string.data + obj_str.string.length;
     Mesh_Data data =  load_obj_from_in_memory_string(cursor, eof);
     if (data.vertices.count == 0)
         log_error("error while reading '%s'", path);
