@@ -1,7 +1,7 @@
 /*
  * BSD 2-Clause License
  *
- * Copyright (c) 2022, Felix Brendel
+ * Copyright (c) 2024, Felix Brendel
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -95,7 +95,6 @@
 
 #define array_length(arr)   (sizeof(arr) / sizeof(arr[0]))
 #define zero_out(thing)     memset(&(thing), 0, sizeof((thing)));
-#define deadbeef_out(thing) memset(&(thing), 0xdeadbeef, sizeof((thing)));
 
 #define CONCAT(x, y) x ## y
 #define LABEL(x, y) CONCAT(x, y)
@@ -148,9 +147,12 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
 #  define defer auto DEFER(__LINE__) = defer_dummy{} *[&]()
 #endif // defer
 
-#define create_guarded_block(before_code, after_code)   \
-    if ([&](){before_code; return false;}());           \
-    else if (defer {after_code}); else
+/* TODO(Felix): remove, the before code has weird semantics because it can
+     retrun a boolean. Better write cleanup code with straight defers
+ */
+// #define create_guarded_block(before_code, after_code)   \
+    // if ([&](){before_code; return false;}());           \
+    // else if (defer {after_code}); else
 
 
 #if defined(unix) || defined(__unix__) || defined(__unix)
@@ -178,8 +180,9 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
  * 1. All macros that take a message, use the ftb printer with all its printing
  *    functionality.
  *
- * 2. All macros which contain the word 'debug' are only active in debug builds
- *    (FTB_DEBUG defined). They compile away in other builds.
+ * 2. All macros which contain the word 'debug' (log_debug or debug_assert)
+ *    are only active in debug builds (FTB_DEBUG defined). They compile away
+ *    in other builds.
  *
  * 3. debug_break() triggers a debug breakpoint.
  *
@@ -203,7 +206,7 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
  * 7. Similar to panic_if there are more traditional 'assert' macros. The also
  *    call panic internally, but no error message has to be provided.
  *    - assert(cond)
- *    - debug_assert(cond)
+ *    - debug_assert(cond) [only active in debug builds]
  */
 
 #define print_source_code_location(file)                                \
@@ -237,7 +240,7 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
     } while(0)
 
 #ifdef FTB_DEBUG
-#  define debug_panic(...)    panic(__VA_ARGS__)
+#  define debug_panic(...)          panic(__VA_ARGS__)
 #  define debug_panic_if(cond, ...) panic_if(cond, __VA_ARGS__)
 #else
 #  define debug_panic(...)
@@ -269,7 +272,7 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
 #define assert(cond)         if(cond);else panic("Assertion error: (%s)", #cond)
 
 #ifdef FTB_DEBUG
-#  define debug_assert(cond) if(cond);else panic("Debug assertion error")
+#  define debug_assert(cond) if(cond);else panic("Debug assertion error: (%s)", #cond)
 #else
 #  define debug_assert(...)
 #endif
@@ -306,12 +309,6 @@ typedef double      f64;
 #define f64_epsilon 2.2204460492503131e-16
 #define f32_epsilon 1.19209290e-7f
 
-#ifdef UNICODE
-typedef wchar_t path_char;
-#else
-typedef char    path_char;
-#endif
-
 // ----------------------------------------------------------------------------
 //                              utf-8 things
 // ----------------------------------------------------------------------------
@@ -337,9 +334,6 @@ bool strncpy_utf8_0(char* dest, const char* src, u64 dest_size);
 // ----------------------------------------------------------------------------
 //                              base alloctors
 // ----------------------------------------------------------------------------
-typedef unsigned char byte;
-typedef unsigned int u32;
-
 void* allocate(u64 size_in_bytes, u32 alignment);
 void* allocate_0(u64 size_in_bytes, u32 alignment);
 void* resize(void* old, u64 size_in_bytes, u32 alignment);
@@ -411,8 +405,8 @@ Allocator_Base* push_allocator(Allocator_Base*);
 Allocator_Base* pop_allocator();
 
 Allocator_Base* grab_temp_allocator(Allocator_Base* previous = nullptr);
-u64  get_temp_allocator_depth(Allocator_Base* previous);
-void reset_temp_allocator(Allocator_Base* previous, u64 depth);
+u64  get_temp_allocator_depth(Allocator_Base* tmp);
+void reset_temp_allocator(Allocator_Base* tmp, u64 depth);
 
 extern Allocator_Base* libc_allocator;
 
@@ -420,13 +414,12 @@ extern Allocator_Base* libc_allocator;
     MPP_BEFORE(0, push_allocator((Allocator_Base*)&alloc_base_ptr)) \
     MPP_DEFER(1,  pop_allocator();)
 
+// TODO(Felix): These are deprecated
+// #define in_scratch_buffer                                               \
+    // if (Linear_Allocator LABEL(prev_temp_alloc, __LINE__) = *(Linear_Allocator*)push_allocator(grab_temp_allocator())) {} else \
+    // if (defer {*(Linear_Allocator*)pop_allocator() = LABEL(prev_temp_alloc, __LINE__);}) {} else
 
-// NOTE(Felix): These are deprecated
-#define in_scratch_buffer                                               \
-    if (Linear_Allocator LABEL(prev_temp_alloc, __LINE__) = *(Linear_Allocator*)push_allocator(grab_temp_allocator())) {} else \
-    if (defer {*(Linear_Allocator*)pop_allocator() = LABEL(prev_temp_alloc, __LINE__);}) {} else
-
-#define with_temp_allocator with_allocator(grab_temp_allocator())
+// #define with_temp_allocator with_allocator(grab_temp_allocator())
 
 
 // ----------------------------------------------------------------------------
@@ -505,14 +498,19 @@ struct String {
     }
 
     bool operator==(String other);
+    bool operator!=(String other);
     s32 operator<(String other);
-    static String from(const char* str, Allocator_Base* allocator = nullptr);
 
-    // NOTE(Felix): does not do anny allocation, just puts it a String struct
+    // NOTE(Felix): does not do any allocation, just puts it a String struct
     //   with length
     static String over(const char* str);
 
+    // TODO(Felix): remove them. The semantics of 'String' compared to
+    //   'Allocated_String' is, that the code that handles a 'String' should not
+    //   need to care how it was allocated and should not need to free it. If
+    //   the code should free/realloc/whatever Allocated_Strings should be used.
     void free(Allocator_Base* allocator = nullptr);
+    static String from(const char* str, Allocator_Base* allocator = nullptr);
 };
 
 struct Allocated_String  {
@@ -524,12 +522,12 @@ struct Allocated_String  {
     }
 
     bool operator==(Allocated_String other);
+    bool operator!=(Allocated_String other);
     s32 operator<(Allocated_String other);
     static Allocated_String from(String str, Allocator_Base* allocator = nullptr);
     static Allocated_String from(const char* str, Allocator_Base* allocator = nullptr);
     void free();
 };
-
 
 bool print_into_string(String string, const char* format, ...);
 char* heap_copy_c_string(const char* str, Allocator_Base* allocator = nullptr);
@@ -662,75 +660,75 @@ auto hex_dump(void* ptr, s64 count, u32 bytes_per_line = 16) -> void;
 // ----------------------------------------------------------------------------
 //                               Array lists
 // ----------------------------------------------------------------------------
-// NOTE(Felix): This is a macro, because we call alloca, which is stack-frame
-//   sensitive. So we really have to avoid calling alloca in another function
-//   (or constructor), with the macro the alloca is called in the callers
-//   stack-frame
-#define create_stack_array_list(type, length)     \
-    Stack_Array_List<type> { (type*)alloca(length * sizeof(type)), length, 0 }
+// // NOTE(Felix): This is a macro, because we call alloca, which is stack-frame
+// //   sensitive. So we really have to avoid calling alloca in another function
+// //   (or constructor), with the macro the alloca is called in the callers
+// //   stack-frame
+// #define create_stack_array_list(type, length)     \
+//     Stack_Array_List<type> { (type*)alloca(length * sizeof(type)), length, 0 }
 
 
-template <typename type>
-struct Stack_Array_List {
-    type* data;
-    u32 length;
-    u32 count;
+// template <typename type>
+// struct Stack_Array_List {
+//     type* data;
+//     u32 length;
+//     u32 count;
 
-    static Stack_Array_List<type> create_from(std::initializer_list<type> l) {
-        Stack_Array_List<type> ret(l.size());
+//     static Stack_Array_List<type> create_from(std::initializer_list<type> l) {
+//         Stack_Array_List<type> ret(l.size());
 
-        for (type t : l) {
-            ret.data[ret.count++] = t;
-        }
-        return ret;
-    }
+//         for (type t : l) {
+//             ret.data[ret.count++] = t;
+//         }
+//         return ret;
+//     }
 
-    void extend(std::initializer_list<type> l) {
-        for (type e : l) {
-            append(e);
-        }
-    }
+//     void extend(std::initializer_list<type> l) {
+//         for (type e : l) {
+//             append(e);
+//         }
+//     }
 
-    void clear() {
-        count = 0;
-    }
+//     void clear() {
+//         count = 0;
+//     }
 
-    type* begin() {
-        return data;
-    }
+//     type* begin() {
+//         return data;
+//     }
 
-    type* end() {
-        return data+(count);
-    }
+//     type* end() {
+//         return data+(count);
+//     }
 
-    void remove_index(u32 index) {
-#ifdef FTB_INTERNAL_DEBUG
-        if (index >= count)
-            fprintf(stderr, "ERROR: removing index that is not in use\n");
-#endif
-        data[index] = data[--count];
-    }
+//     void remove_index(u32 index) {
+// #ifdef FTB_INTERNAL_DEBUG
+//         if (index >= count)
+//             fprintf(stderr, "ERROR: removing index that is not in use\n");
+// #endif
+//         data[index] = data[--count];
+//     }
 
-    void append(type element) {
-#ifdef FTB_INTERNAL_DEBUG
-        if (count == length) {
-            fprintf(stderr, "ERROR: Stack_Array_List is full!\n");
-        }
-#endif
-        data[count] = element;
-        count++;
-    }
+//     void append(type element) {
+// #ifdef FTB_INTERNAL_DEBUG
+//         if (count == length) {
+//             fprintf(stderr, "ERROR: Stack_Array_List is full!\n");
+//         }
+// #endif
+//         data[count] = element;
+//         count++;
+//     }
 
-    type& operator[](u32 index) {
-#ifdef FTB_DEBUG
-        if (index >= length) {
-            fprintf(stderr, "ERROR: Stack_Array_List access out of bounds (not even allocated).\n");
-            debug_break();
-        }
-#endif
-        return data[index];
-    }
-};
+//     type& operator[](u32 index) {
+// #ifdef FTB_DEBUG
+//         if (index >= length) {
+//             fprintf(stderr, "ERROR: Stack_Array_List access out of bounds (not even allocated).\n");
+//             debug_break();
+//         }
+// #endif
+//         return data[index];
+//     }
+// };
 
 struct Untyped_Array_List {
     u32   element_size;
@@ -1364,7 +1362,7 @@ auto read_entire_file(const char* filename, Allocator_Base* allocator = nullptr)
 
 auto move_file(const char* old_name, const char* new_name) -> bool;
 auto delete_file(const char* path) -> bool;
-auto copy_file(const char* src, const char* dest) -> bool;
+// auto copy_file(const char* src, const char* dest) -> bool;
 
 struct File_Walk_Info {
     bool recursive;
@@ -1608,6 +1606,7 @@ auto read_entire_file(const char* filename, Allocator_Base* allocator) -> File_R
 
 #ifdef FTB_LINUX
 #include <sys/stat.h>
+#include <dirent.h>
 auto move_file(const char* old_name, const char* new_name) -> bool {
     return rename(old_name, new_name) == 0;
 }
@@ -1622,10 +1621,72 @@ auto delete_file(const char* path) -> bool {
 // }
 
 
-// auto walk_files(const char* dir_name, bool (*callback)(Path_Info, void*), File_Walk_Info walk_info, void* user_data) -> bool {
+auto walk_files(const char* dir_name, File_Walk_Info walk_info, void (*callback)(Path_Info, Walk_Status*, void*), void* user_data) -> void {
+    Scratch_Arena work_list_scratch = scratch_arena_start();
+    defer { scratch_arena_end(work_list_scratch); };
+    Allocated_String dir_name_alloc_str = Allocated_String::from(dir_name, work_list_scratch.arena);
+
+    Array_List<Allocated_String> dirs_to_do {};
+    dirs_to_do.init();
+    dirs_to_do.append(dir_name_alloc_str);
+    defer { dirs_to_do.deinit(); };
+    bool first_dir = true;
+
+    while (dirs_to_do.count != 0) {
+        Scratch_Arena scratch = scratch_arena_start(work_list_scratch);
+        defer { scratch_arena_end(scratch); };
+
+        Allocated_String dir = dirs_to_do.data[--dirs_to_do.count];
+        DIR* dir_handle = opendir(dir.string.data);
+        bool success = dir_handle != nullptr;
+
+        if (!success)
+            continue;
+
+        defer { closedir(dir_handle); };
+
+        while (true) {
+            Scratch_Arena scratch = scratch_arena_start(work_list_scratch);
+            defer { scratch_arena_end(scratch); };
+
+            struct dirent* dir_ent = readdir(dir_handle);
+            if (dir_ent == nullptr)
+                break;
+
+            Path_Info pi {};
+            pi.local_name = Allocated_String::from(dir_ent->d_name, scratch.arena);
+            pi.base_path  = dir;
+
+            Allocated_String full_path = join_paths(dir.string, pi.local_name.string, false, scratch.arena);
+            pi.file_info = file_info(full_path.string.data);
+
+            // NOTE(Felix): Yes '.' and '..' are returned from readdir
+            bool should_callback =
+                (pi.file_info.is_directory &&
+                 walk_info.with_directories &&
+                 (pi.local_name.string != string_from_literal(".") &&
+                  pi.local_name.string != string_from_literal("..")))
+                || (!pi.file_info.is_directory && walk_info.with_files);
 
 
-// }
+            if (!should_callback) {
+                continue;
+            }
+
+            Walk_Status status = walk_info.recursive ? Walk_Status::Continue_Recurse : Walk_Status::Continue;
+            callback(pi, &status, user_data);
+
+            if (status == Walk_Status::Done) {
+                return;
+            }
+
+            if (pi.file_info.is_directory && status == Walk_Status::Continue_Recurse) {
+                Allocated_String inner_path = join_paths(dir.string, pi.local_name.string, true, work_list_scratch.arena);
+                dirs_to_do.append(inner_path);
+            }
+        }
+    }
+}
 
 auto file_exists(const char* path) -> bool {
     return access(path, 0) == 0;
@@ -3338,6 +3399,10 @@ bool String::operator==(String other) {
         strncmp(data, other.data, other.length) == 0;
 }
 
+bool String::operator!=(String other) {
+    return !(*this == other);
+}
+
 s32 String::operator<(String other) {
     return strncmp(data, other.data, MIN(length, other.length));
 }
@@ -3378,9 +3443,11 @@ void String::free(Allocator_Base* allocator) {
 }
 
 bool Allocated_String::operator==(Allocated_String other) {
-    return
-        string.length == other.string.length &&
-        strncmp(string.data, other.string.data, other.string.length) == 0;
+    return this->string == other.string;
+}
+
+bool Allocated_String::operator!=(Allocated_String other) {
+    return !(this->string == other.string);
 }
 
 s32 Allocated_String::operator<(Allocated_String other) {
