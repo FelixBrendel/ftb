@@ -1334,12 +1334,6 @@ struct String_Split {
 // ----------------------------------------------------------------------------
 //                              IO
 // ----------------------------------------------------------------------------
-#include <filesystem>
-// NOTE(Felix): Sorry... I hate lower case type names
-typedef std::filesystem::path                 Path;
-typedef std::filesystem::directory_iterator   Dir_Iterator;
-typedef std::filesystem::directory_entry      Dir_Entry;
-
 struct File_Read {
     bool             success;
     Allocated_String contents;
@@ -1402,13 +1396,14 @@ struct Stacktrace_Entry {
 struct Stacktrace {
     Array_List<Stacktrace_Entry> entries;
 
-    void print() {
+    void print(FILE* file = ftb_stdout) {
         for (u32 i = 1; i < entries.count; ++i) {
             auto e = entries[i];
-            println("  %s:%d (%s)",
-                    e.file.string.data,
-                    e.line,
-                    e.function.string.data);
+            print_to_file(file, "  %s:%d (%s)\n",
+                          e.file.string.data,
+                          e.line,
+                          e.function.string.data);
+            fflush(file);
         }
     }
 };
@@ -3732,11 +3727,13 @@ auto get_stacktrace(Allocator_Base* allocator, s32 skip_bottom_n) -> Stacktrace 
 }
 
 auto print_stacktrace(FILE* file) -> void {
-    in_scratch_buffer {
-        fprintf(file, "Stacktrace: \n");
-        auto st = get_stacktrace(grab_current_allocator(), 3);
-        st.print();
-    }
+    Scratch_Arena scratch = scratch_arena_start();
+    defer { scratch_arena_end(scratch); };
+
+    fprintf(file, "Stacktrace: \n");
+    Stacktrace st = get_stacktrace(scratch.arena, 3);
+    st.print(file);
+
 }
 
 #  else // not windows

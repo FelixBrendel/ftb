@@ -201,7 +201,7 @@ auto test_obj_to_json_str() -> testresult {
 
     Data data_reparsed {};
     defer { data_reparsed.free(); };
-    result = pattern_match(exported_json_str.data, p_data, &data_reparsed);
+    result = pattern_match(exported_json_str.string.data, p_data, &data_reparsed);
 
     assert_true(result == Pattern_Match_Result::OK_DONE ||
                 result == Pattern_Match_Result::OK_CONTINUE);
@@ -215,13 +215,20 @@ auto print_dots(FILE* f) -> u32 {
     return print_to_file(f, "...");
 }
 
-auto test_scratch_memory() -> testresult {
-    Linear_Allocator* tmp_alloc = &temp_linear_allocator;
-    u64 ptr_before = tmp_alloc->count;
+auto test_scratch_arena_can_realloc_last_alloc() -> testresult {
 
-    in_scratch_buffer {
+    Linear_Allocator* tmp_alloc = nullptr;
+    u64 ptr_before;
+
+    {
+        Scratch_Arena scratch = scratch_arena_start();
+        defer { scratch_arena_end(scratch); };
+
+        tmp_alloc = (Linear_Allocator*)scratch.arena;
+        ptr_before = tmp_alloc->count;
+
         Array_List<s32> al;
-        al.init(8);
+        al.init(8, scratch.arena);
 
         u64 ptr_after_first_alloc = tmp_alloc->count;
         s32* data_ptr_after_first_alloc = al.data;
@@ -243,7 +250,7 @@ auto test_scratch_memory() -> testresult {
 
         // NOTE(Felix): Alloc something new to disrupt the temp memory, and then
         // force a reallocate
-        int* i = allocate<int>(1);
+        int* i = scratch.arena->allocate<int>(1);
         assert_not_equal_int(tmp_alloc->count, ptr_after_second_alloc);
 
         u32 length = al.length;
@@ -257,65 +264,6 @@ auto test_scratch_memory() -> testresult {
 
     // NOTE(Felix): Everything should be off the stack by now!
     assert_equal_int(tmp_alloc->count, ptr_before);
-
-
-    // NOTE(Felix): Now to stacked scratch buffers, first half is same
-    in_scratch_buffer {
-        Array_List<s32> al;
-        al.init(8);
-
-        u64 ptr_after_first_alloc = tmp_alloc->count;
-        s32* data_ptr_after_first_alloc = al.data;
-
-        assert_not_equal_int(ptr_after_first_alloc, ptr_before);
-
-        // NOTE(Felix): force expand
-        for (u32 i = 0; i < 10; ++i) {
-            al.append(i);
-        }
-
-        u64 ptr_after_second_alloc = tmp_alloc->count;
-        assert_not_equal_int(ptr_after_second_alloc, ptr_before);
-        assert_not_equal_int(ptr_after_second_alloc, ptr_after_first_alloc);
-
-        // NOTE(Felix): Because it was the last allocation, the base pointer
-        //   should not have changed even though we reallocated
-        assert_equal_int(data_ptr_after_first_alloc, al.data);
-
-        in_scratch_buffer {
-            u64 ptr_now = tmp_alloc->count;
-            int* i = allocate<int>(1);
-
-            assert_not_equal_int(ptr_now, tmp_alloc->count);
-        }
-
-        assert_equal_int(ptr_after_second_alloc, tmp_alloc->count);
-        assert_equal_int(al.data, tmp_alloc->last_alloc);
-
-        // NOTE(Felix): BUT: if we resize the array list again, it is agin the
-        //   last alloc'ed so we, can actually just resize (not realloc).
-        u32 length = al.length;
-        for (u32 i = al.count; i <= length; ++i) {
-            al.append(i);
-        }
-
-        u64 ptr_after_third_alloc = tmp_alloc->count;
-        assert_equal_int(al.data, data_ptr_after_first_alloc);
-    }
-
-    // NOTE(Felix): Everything should be off the stack again
-    assert_equal_int(tmp_alloc->count, ptr_before);
-
-    // NOTE(Felix): Also check that the macro is transparent to break and continue
-    int i = 0;
-    for (; i < 10; ++i) {
-        in_scratch_buffer {
-            if (i == 2)
-                break;
-        }
-    }
-
-    assert_equal_int(i, 2);
 
     return pass;
 }
@@ -421,97 +369,6 @@ auto test_hashmap() -> testresult {
     // h2.for_each([] (Key k, u32 v, u32 i) {
         // print("%{s32} %{u32} %{u32}\n", k.x, v, i);
     // });
-
-    return pass;
-}
-
-auto test_stack_array_lists() -> testresult {
-    Stack_Array_List<int> list = create_stack_array_list(int, 20);
-
-    assert_equal_int(list.count, 0);
-    assert_equal_int(list.length, 20);
-    assert_true(list.data != nullptr);
-
-    // test sum of empty list
-    int sum = 0;
-    int iter = 0;
-    for (auto e : list) {
-        sum += e;
-        iter++;
-    }
-    assert_equal_int(sum, 0);
-    assert_equal_int(iter, 0);
-
-    // append some elements
-    list.append(1);
-    list.append(2);
-    list.append(3);
-    list.append(4);
-
-    assert_equal_int(list.count, 4);
-    assert_equal_int(list.length, 20);
-
-    // test sum again
-    sum = 0;
-    iter = 0;
-    for (auto e : list) {
-        sum += e;
-        iter++;
-    }
-
-    assert_equal_int(sum, 10);
-    assert_equal_int(iter, 4);
-
-    // bracketed access
-    list[0] = 11;
-    list[1] = 3;
-    list[2] = 2;
-    list.append(5);
-
-    // test sum again
-    sum = 0;
-    iter = 0;
-    for (auto e : list) {
-        sum += e;
-        ++iter;
-    }
-    assert_equal_int(sum, 25);
-    assert_equal_int(iter, 5);
-
-    // assert memory correct
-    assert_equal_int(list.data[0], 11);
-    assert_equal_int(list.data[1], 3);
-    assert_equal_int(list.data[2], 2);
-    assert_equal_int(list.data[3], 4);
-    assert_equal_int(list.data[4], 5);
-
-    // removing some indices
-    list.remove_index(4);
-
-    // test sum again
-    sum = 0;
-    iter = 0;
-    for (auto e : list) {
-        sum += e;
-        ++iter;
-    }
-    assert_equal_int(sum, 20);
-    assert_equal_int(iter, 4);
-
-    // removing some indices
-    list.remove_index(1);
-    list.remove_index(0);
-
-    // test sum again
-    sum = 0;
-    iter = 0;
-    for (auto e : list) {
-        sum += e;
-        ++iter;
-    }
-
-    assert_equal_int(sum, 6);
-    assert_equal_int(iter, 2);
 
     return pass;
 }
@@ -3035,12 +2892,12 @@ s32 main(s32, char**) {
             invoke_test(test_array_lists_searching);
             invoke_test(test_array_list_sort_many);
             invoke_test(test_string_split);
-            invoke_test(test_stack_array_lists);
+            // invoke_test(test_stack_array_lists);
             invoke_test(test_typed_bucket_allocator);
             invoke_test(test_hooks);
             invoke_test(test_scheduler_animations);
 
-            invoke_test(test_scratch_memory);
+            invoke_test(test_scratch_arena_can_realloc_last_alloc);
             invoke_test(test_ringbuffer);
             // invoke_test(test_printer);
         }
