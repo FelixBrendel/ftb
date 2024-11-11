@@ -1600,8 +1600,9 @@ auto read_entire_file(const char* filename, Allocator_Base* allocator) -> File_R
 }
 
 #ifdef FTB_LINUX
-#include <sys/stat.h>
-#include <dirent.h>
+#  include <sys/stat.h>
+#  include <errno.h>
+#  include <dirent.h>
 auto move_file(const char* old_name, const char* new_name) -> bool {
     return rename(old_name, new_name) == 0;
 }
