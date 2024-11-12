@@ -233,10 +233,16 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
 
 #define one_statement(statements) do {statements} while(0)
 
-#define panic_if(cond, ...)                     \
-    do {                                        \
-        if(!(cond)){}                           \
-        else panic(__VA_ARGS__);                \
+#define panic_if(cond, ...)                                             \
+    do {                                                                \
+        if(!(cond)){}                                                   \
+        else {                                                          \
+            ::print_to_file(                                            \
+                stderr,                                                 \
+                "%{color<}[ PANIC ] Error condition: %s%{>color}\n",    \
+                console_red, #cond);                                    \
+            panic(__VA_ARGS__);                                         \
+        }                                                               \
     } while(0)
 
 #ifdef FTB_DEBUG
@@ -352,6 +358,7 @@ inline Type* resize(void* old, u64 amount) {
     return (Type*)resize(old, amount * sizeof(Type), alignof(Type));
 }
 
+
 #define ALLOCATOR_TYPES_ENUM_START 0x80
 #define ALLOCATORS                              \
     /* actual allocators */                     \
@@ -362,6 +369,7 @@ inline Type* resize(void* old, u64 amount) {
                                                 \
     /* allocator overlays */                    \
     ALLOCATOR(Printing_Allocator)               \
+    ALLOCATOR(Panicking_Allocator)               \
     ALLOCATOR(Bookkeeping_Allocator)            \
     ALLOCATOR(Resettable_Allocator)             \
     ALLOCATOR(Leak_Detecting_Allocator)         \
@@ -413,6 +421,21 @@ extern Allocator_Base* libc_allocator;
 #define with_allocator(alloc_base_ptr)                              \
     MPP_BEFORE(0, push_allocator((Allocator_Base*)&alloc_base_ptr)) \
     MPP_DEFER(1,  pop_allocator();)
+
+
+inline void* allocate(u64 size_in_bytes, u32 alignment) {
+    return grab_current_allocator()->allocate(size_in_bytes, alignment);
+}
+
+inline void* allocate_0(u64 size_in_bytes, u32 alignment) {
+    return grab_current_allocator()->allocate_0(size_in_bytes, alignment);
+}
+inline void* resize(void* old, u64 size_in_bytes, u32 alignment) {
+    return grab_current_allocator()->resize(old, size_in_bytes, alignment);
+}
+inline void  deallocate(void* old) {
+    grab_current_allocator()->deallocate(old);
+}
 
 // TODO(Felix): These are deprecated
 // #define in_scratch_buffer                                               \
@@ -1347,6 +1370,12 @@ struct File_Info {
 };
 
 struct Path_Info {
+    // TODO(Felix): Only store the full path, but the index where the local
+    //   name starts.. More use cases fullfilled and less allocations. Have a
+    //   helper function(String)->s64 which returns the index where the local
+    //   name starts. Right now for create_directory_if_not_exists, we need
+    //   the base_path, so we calculate the path_info, so we need 2
+    //   allocations. Even when using scratch arena this is wasteful
     File_Info        file_info;
     Allocated_String base_path;
     Allocated_String local_name;
@@ -1461,6 +1490,13 @@ struct Bookkeeping_Allocator {
 
     void init(Allocator_Base* next_allocator = nullptr);
     void print_statistics();
+};
+
+// NOTE(Felix): Allocator that checks every allocation and panics if an
+//   allocation returned the nullptr;
+struct Panicking_Allocator {
+    Allocator_Base base;
+    // NOTE(Felix): no special fields needed
 };
 
 struct Linear_Allocator {
@@ -2095,24 +2131,6 @@ Allocator_Base* pop_allocator() {
     return old_top;
 }
 
-
-inline void* allocate(u64 size_in_bytes, u32 alignment) {
-    return grab_current_allocator()->allocate(size_in_bytes, alignment);
-}
-
-
-inline void* allocate_0(u64 size_in_bytes, u32 alignment) {
-    return grab_current_allocator()->allocate_0(size_in_bytes, alignment);
-}
-
-inline void* resize(void* old, u64 size_in_bytes, u32 alignment) {
-    return grab_current_allocator()->resize(old, size_in_bytes, alignment);
-}
-
-void  deallocate(void* old) {
-    grab_current_allocator()->deallocate(old);
-}
-
 //
 // LibC Allocator functions
 //
@@ -2360,6 +2378,36 @@ void Resettable_Allocator::deallocate_everyting_still_allocated() {
     while (allocated_prts.count > 0) {
         base.next_allocator->deallocate(allocated_prts[--allocated_prts.count]);
     }
+}
+
+
+//
+// Panicing Allocator functions
+//
+void* Panicking_Allocator_allocate(Allocator_Base* base, u64 size_in_bytes, u32 align) {
+    void* res = base->next_allocator->allocate(size_in_bytes, align);
+    if (!res)
+        panic("Unsucessful allocation (size: %llu, align: %u)", size_in_bytes, align);
+
+    return res;
+}
+
+void* Panicking_Allocator_allocate_0(Allocator_Base* base, u64 size_in_bytes, u32 align) {
+    void* res = base->next_allocator->allocate_0(size_in_bytes, align);
+    if (!res)
+        panic("Unsucessful allocation (zeroed; size: %llu, align: %u)", size_in_bytes, align);
+    return res;
+}
+
+void* Panicking_Allocator_resize(Allocator_Base* base, void* old, u64 size_in_bytes, u32 align) {
+    void* res = base->next_allocator->resize(old, size_in_bytes, align);
+    if (!res)
+        panic("Unsucessful allocation (resize; size: %llu, align: %u)", size_in_bytes, align);
+    return res;
+}
+
+void Panicking_Allocator_deallocate(Allocator_Base* base, void* data) {
+     base->next_allocator->deallocate(data);
 }
 
 

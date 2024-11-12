@@ -417,8 +417,8 @@ Window_Type create_window(IV2 size, const char* title) {
     s32 window_top  = 0;
     bool success = SystemParametersInfo(SPI_GETWORKAREA, 0, &work_area, 0);
     if (success) {
-        window_left = work_area.left;
-        window_top = work_area.top;
+        window_left = work_area.left + round_to_int(0.5f * (work_area.right   - work_area.left - size.x));
+        window_top  = work_area.top  + round_to_int(0.5f * (work_area.bottom  - work_area.top  - size.y));
     }
 
     RECT rect {
