@@ -534,6 +534,7 @@ struct String {
     //   the code should free/realloc/whatever Allocated_Strings should be used.
     void free(Allocator_Base* allocator = nullptr);
     static String from(const char* str, Allocator_Base* allocator = nullptr);
+    bool starts_with(String other);
 };
 
 struct Allocated_String  {
@@ -1519,7 +1520,8 @@ struct Scratch_Arena {
     u64 size_at_creation;
 };
 
-auto scratch_arena_start(Scratch_Arena previous = {}) -> Scratch_Arena;
+auto scratch_arena_start(Allocator_Base* previous = nullptr) -> Scratch_Arena;
+auto scratch_arena_start(Scratch_Arena previous) -> Scratch_Arena;
 auto scratch_arena_end(Scratch_Arena) -> void;
 
 
@@ -1902,24 +1904,39 @@ auto for_path_component(const char* dir, bool (*callback)(String, void*), void* 
     if (buffer.string.data[buffer.string.length - 1] == '/')
         buffer.string.data[buffer.string.length - 1] = '\0';
 
-    char* cursor;
+#define DO_CALLBACK(cursor)                                 \
+    do {                                                    \
+        buffer.string.length = cursor - buffer.string.data; \
+        if (!callback(buffer.string, payload))              \
+            return false;                                   \
+    } while (0)                                             \
+
+
+    // NOTE(Felix): special case for linux paths starting with /,
+    //   treat it as a separate path component
+    char* cursor = buffer.string.data+1;
+    if (IS_PATH_SEPARATOR(buffer.string.data[0])) {
+        char reset_char = *cursor;
+        *cursor = '\0';
+
+        DO_CALLBACK(cursor);
+
+        *cursor = reset_char;
+    }
+
     for (cursor = buffer.string.data + 1; *cursor != '\0'; ++cursor) {
         if (IS_PATH_SEPARATOR(*cursor)) {
             *cursor = '\0';
-
-            buffer.string.length = cursor - buffer.string.data;
-            if (!callback(buffer.string, payload))
-                return false;
-
+            DO_CALLBACK(cursor);
             *cursor = '/';
         }
     }
 
-    buffer.string.length = cursor - buffer.string.data;
-    if (!callback(buffer.string, payload))
-        return false;
+    DO_CALLBACK(cursor);
 
     return true;
+
+#undef DO_CALLBACK
 }
 
 auto create_directory_if_not_exists(const char* dir) -> bool {
@@ -1928,7 +1945,45 @@ auto create_directory_if_not_exists(const char* dir) -> bool {
     });
 }
 
-auto get_base_path_end_idx(String dir) -> u64 {
+/*
+ * Find the index in the string where the base_path ends (exclusive) and where
+ * the local_name starts (inclusive). This is important since other vital
+ * functions build on it. Some examples (because it might be unintuitive to
+ * remember the semantics for different path types)
+ *
+ *   - /home/felix/test/dir/file.txt
+ *                          ^
+ *                          |> local = file.txt
+ *
+ *   - /
+ *     ^
+ *     |> local = / (edge case: slash in resulting local name)
+ *
+ *   - /test
+ *      ^
+ *      |> local = test
+ *
+ *   - C:
+ *     ^
+ *     |> local = C:
+ *
+ *   - C:\Users
+ *       ^
+ *       |> local = Users
+ *
+ *   - ~
+ *     ^
+ *     |> local = ~:
+ *
+ *   - ~/test
+ *      ^
+ *      |> local = test:
+ */
+auto get_base_path_end_idx(String dir) -> s64 {
+    // NOTE(Felix): special case for linux paths starting with /,
+    if (dir.length == 1 && IS_PATH_SEPARATOR(dir.data[0]))
+        return 0;
+
     // NOTE(Felix): if path ends with slash, remove for local_name
     u64 idx_local_end = dir.length - 1;
     if (IS_PATH_SEPARATOR(dir.data[idx_local_end])) {
@@ -1936,8 +1991,8 @@ auto get_base_path_end_idx(String dir) -> u64 {
     }
 
     bool separator_found = false;
-    u64 idx_local_start = idx_local_end;
-    while (idx_local_start > 1) {
+    s64 idx_local_start = idx_local_end;
+    while (idx_local_start > 0) {
         if (IS_PATH_SEPARATOR(dir.data[idx_local_start-1])) {
             separator_found = true;
             break;
@@ -1945,18 +2000,15 @@ auto get_base_path_end_idx(String dir) -> u64 {
         --idx_local_start;
     }
 
-    if (!separator_found)
-        idx_local_start = dir.length;
-
     return idx_local_start;
 }
 
 auto get_base_path(String dir, Allocator_Base* string_allocator) -> Allocated_String {
-    u64 get_base_path_end = get_base_path_end_idx(dir);
+    s64 get_base_path_end = get_base_path_end_idx(dir);
 
     String local = {
         .data   = dir.data,
-        .length = get_base_path_end,
+        .length = (u64)get_base_path_end,
     };
 
     return Allocated_String::from(local, string_allocator);
@@ -2565,12 +2617,16 @@ void Linear_Allocator::deinit() {
     base.next_allocator->deallocate(data);
 }
 
-auto scratch_arena_start(Scratch_Arena previous) -> Scratch_Arena {
-    Linear_Allocator* temp_linear = (Linear_Allocator*)grab_temp_allocator(previous.arena);
+auto scratch_arena_start(Allocator_Base* previous) -> Scratch_Arena {
+    Linear_Allocator* temp_linear = (Linear_Allocator*)grab_temp_allocator(previous);
     return Scratch_Arena {
         .arena            = &temp_linear->base,
         .size_at_creation = temp_linear->count,
     };
+}
+
+auto scratch_arena_start(Scratch_Arena previous) -> Scratch_Arena {
+    return scratch_arena_start(previous.arena);
 }
 
 auto scratch_arena_end(Scratch_Arena scratch) -> void {
@@ -3275,21 +3331,28 @@ auto hex_dump(void* ptr, s64 count, u32 bytes_per_line) -> void {
     u8* bytes = (u8*)ptr;
 
     u8* line_start = bytes;
-    bool start_of_line = true;
+    // bool start_of_line = true;
+    u32 printed_bytes_this_line = 0;
     for (u32 byte_idx = 0; byte_idx < count; ++byte_idx) {
-        if (start_of_line) {
+        if (printed_bytes_this_line == 0) {
             print("%02x ", (bytes[byte_idx]) &0xff);
-            start_of_line = false;
+            ++printed_bytes_this_line;
+
         }
-        else
+        else {
             raw_print("%02x ", (bytes[byte_idx]) &0xff);
+            ++printed_bytes_this_line;
+        }
 
         if ((byte_idx+1) % bytes_per_line == 0 || byte_idx+1==count) {
+            for (u32 p = printed_bytes_this_line; p < bytes_per_line; ++p) {
+                raw_print("   ");
+            }
             raw_print("| ",
                       (bytes+byte_idx)-line_start,
                      line_start);
 
-            for (u32 char_idx = 0; char_idx < (bytes+byte_idx)-line_start; ++char_idx) {
+            for (u32 char_idx = 0; char_idx < printed_bytes_this_line; ++char_idx) {
                 char c = line_start[char_idx];
                 if (c > 32 && c < 126) {
                     raw_print("%c", c);
@@ -3301,7 +3364,7 @@ auto hex_dump(void* ptr, s64 count, u32 bytes_per_line) -> void {
             raw_print("\n");
 
             line_start = bytes+byte_idx+1;
-            start_of_line = true;
+            printed_bytes_this_line = 0;
         }
     }
 
@@ -3451,6 +3514,18 @@ s32 String::operator<(String other) {
     return strncmp(data, other.data, MIN(length, other.length));
 }
 
+bool String::starts_with(String other) {
+    if (length < other.length)
+        return false;
+
+    String shortened = {
+        .data   = data,
+        .length = other.length
+    };
+
+    return shortened == other;
+}
+
 String String::over(const char* str) {
     String r;
 
@@ -3520,7 +3595,7 @@ Allocated_String Allocated_String::from(const char* str, Allocator_Base* allocat
         .length = strlen(str),
     };
 
-    return Allocated_String::from(s);
+    return Allocated_String::from(s, allocator);
 }
 
 void Allocated_String::free() {

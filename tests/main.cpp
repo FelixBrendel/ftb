@@ -2846,6 +2846,77 @@ auto test_ringbuffer() -> testresult {
     return pass;
 }
 
+testresult test_path_components() {
+    Scratch_Arena scratch = scratch_arena_start();
+    defer { scratch_arena_end(scratch); };
+
+    Array_List<Path_Info> path_infos;
+    path_infos.init(16, scratch.arena);
+
+    get_path_components("/home/felix/test/dir/file.txt", &path_infos, scratch.arena);
+    assert_equal_int(path_infos.count, 6);
+    assert_equal_string(path_infos[0].local_name.string, string_from_literal("/"));
+    assert_equal_string(path_infos[0].base_path.string,  string_from_literal(""));
+
+    assert_equal_string(path_infos[1].local_name.string, string_from_literal("home"));
+    assert_equal_string(path_infos[1].base_path.string,  string_from_literal("/"));
+
+    assert_equal_string(path_infos[2].local_name.string, string_from_literal("felix"));
+    assert_equal_string(path_infos[2].base_path.string,  string_from_literal("/home/"));
+
+    assert_equal_string(path_infos[3].local_name.string, string_from_literal("test"));
+    assert_equal_string(path_infos[3].base_path.string,  string_from_literal("/home/felix/"));
+
+    assert_equal_string(path_infos[4].local_name.string, string_from_literal("dir"));
+    assert_equal_string(path_infos[4].base_path.string,  string_from_literal("/home/felix/test/"));
+
+    assert_equal_string(path_infos[5].local_name.string, string_from_literal("file.txt"));
+    assert_equal_string(path_infos[5].base_path.string,  string_from_literal("/home/felix/test/dir/"));
+
+
+    path_infos.clear();
+    get_path_components("C:\\Users\\Felix\\test\\file.txt", &path_infos, scratch.arena);
+    assert_equal_int(path_infos.count, 5);
+    assert_equal_string(path_infos[0].local_name.string, string_from_literal("C:"));
+    assert_equal_string(path_infos[0].base_path.string,  string_from_literal(""));
+
+    assert_equal_string(path_infos[1].local_name.string, string_from_literal("Users"));
+    assert_equal_string(path_infos[1].base_path.string,  string_from_literal("C:/"));
+
+    assert_equal_string(path_infos[2].local_name.string, string_from_literal("Felix"));
+    assert_equal_string(path_infos[2].base_path.string,  string_from_literal("C:/Users/"));
+
+    assert_equal_string(path_infos[3].local_name.string, string_from_literal("test"));
+    assert_equal_string(path_infos[3].base_path.string,  string_from_literal("C:/Users/Felix/"));
+
+    assert_equal_string(path_infos[4].local_name.string, string_from_literal("file.txt"));
+    assert_equal_string(path_infos[4].base_path.string,  string_from_literal("C:/Users/Felix/test/"));
+
+
+    path_infos.clear();
+    get_path_components("~/test/dir/file.txt", &path_infos, scratch.arena);
+    assert_equal_int(path_infos.count, 4);
+    assert_equal_string(path_infos[0].local_name.string, string_from_literal("~"));
+    assert_equal_string(path_infos[0].base_path.string,  string_from_literal(""));
+
+    assert_equal_string(path_infos[1].local_name.string, string_from_literal("test"));
+    assert_equal_string(path_infos[1].base_path.string,  string_from_literal("~/"));
+
+    assert_equal_string(path_infos[2].local_name.string, string_from_literal("dir"));
+    assert_equal_string(path_infos[2].base_path.string,  string_from_literal("~/test/"));
+
+    assert_equal_string(path_infos[3].local_name.string, string_from_literal("file.txt"));
+    assert_equal_string(path_infos[3].base_path.string,  string_from_literal("~/test/dir/"));
+
+
+    // log_info("");
+    // for(auto& p : path_infos) {
+    //     log_info("base:%{->Str}   local:%{->Str}", &p.base_path, &p.local_name);
+    // }
+
+    return pass;
+}
+
 s32 main(s32, char**) {
     testresult result;
 
@@ -2862,6 +2933,7 @@ s32 main(s32, char**) {
         with_allocator(ld) {
             defer { ld.print_leak_statistics(); };
 
+            invoke_test(test_path_components);
             invoke_test(test_obj_to_json_str);
 
             invoke_test(test_json_simple_object_new_syntax);
