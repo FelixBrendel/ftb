@@ -343,9 +343,9 @@ namespace json {
         eaten += eat_whitespace_and_comments(string+eaten);
 
         while (string[eaten] != '}') {
-            panic_if(string[eaten] != '\"',
-                     "expecting a string here but got '%s'",
-                     string+eaten);
+            // panic_if(string[eaten] != '\"',
+                     // "expecting a string here but got '%s'",
+                     // string+eaten);
 
             u32 sub_eaten = 0;
             Parser_Context call_ctx = ctx;
@@ -635,22 +635,33 @@ namespace json {
                                                      u32* out_eaten, Allocator_Base* allocator)
     {
         const char* string = ctx.position_in_string;
-        // NOTE(Felix): expecting `string` to start on ", this function will eat
-        //   just past the last char of the value associated to the member. All
-        //   patterns should be Object_Member_Name, since this is the only
-        //   pattern here
-        panic_if (*string != '"',
-                  "expecting to land on a \" here, but I'm on: %s",
-                  string);
 
+        u32 eaten = 0;
         *out_eaten = 0;
-        u32 eaten = 0; // eat_string expects to start on the quote
-
-        u32 member_name_len     = eat_string(string+eaten)-2; // subtract the "
-        const char* member_name = string+eaten+1;
         u32 value_lengh = 0;
 
-        eaten += member_name_len+2; // overstep string and both "
+        u32         member_name_len;
+        const char* member_name;
+
+        if (string[eaten] == '"') {
+            // NOTE(Felix): expecting `string` to start on ", this function will eat
+            //   just past the last char of the value associated to the member. All
+            //   patterns should be Object_Member_Name, since this is the only
+            //   pattern here
+
+            member_name_len = eat_string(string+eaten)-2; // subtract the "
+            member_name = string+eaten+1;
+            value_lengh = 0;
+
+            eaten += member_name_len+2; // overstep string and both "
+        } else {
+            // NOTE(Felix): accept unquoted symbols as keys (just pretend
+            //   they are strings (json5))
+            member_name_len = eat_identifier(string+eaten);
+            member_name     = string+eaten;
+
+            eaten += member_name_len;
+        }
         eaten += eat_whitespace_and_comments(string+eaten);
 
         panic_if(string[eaten] != ':',

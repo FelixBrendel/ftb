@@ -18,7 +18,9 @@ bool is_number_char(const char c);
 bool is_quotes_char(const char c);
 bool is_whitespace(const char c);
 
-u32 read_string(const char* str, String* out_string);
+
+u32 read_identifier(const char* str, String* out_string, Allocator_Base* allocator = nullptr);
+u32 read_string(const char* str, String* out_string, Allocator_Base* allocator = nullptr);
 u32 read_int(const char* str, s32* out_int);
 u32 read_long(const char* str, s64* out_int);
 u32 read_bool(const char* str, bool* out_bool);
@@ -28,6 +30,7 @@ u32 eat_line(const char* str);
 u32 eat_construct(const char* string, char delimiter);
 u32 eat_whitespace(const char* str);
 u32 eat_string(const char* str);
+u32 eat_identifier(const char* str);
 u32 eat_number(const char* str);
 
 #ifdef FTB_PARSING_IMPL
@@ -120,6 +123,20 @@ u32 eat_number(const char* str) {
     return eaten;
 }
 
+u32 eat_identifier(const char* str) {
+    u32 eaten = 0;
+
+    if (is_alpha_char(str[eaten]) || str[eaten] == '_') {
+        ++eaten;
+        while (is_alpha_char(str[eaten]) || is_number_char(str[eaten]) || str[eaten] == '_') {
+            ++eaten;
+        }
+        return eaten;
+    } else {
+        return 0;
+    }
+}
+
 u32 eat_string(const char* str) {
     // NOTE(Felix): Assumes we are on a " or '
     char to_search = *str;
@@ -145,13 +162,30 @@ u32 eat_string(const char* str) {
     return eaten;
 }
 
-u32 read_string(const char* str, String* out_string) {
+u32 read_string(const char* str, String* out_string, Allocator_Base* allocator) {
+    if (allocator == nullptr)
+        allocator = grab_current_allocator();
+
     // NOTE(Felix): Assumes we are on a " or '
     u32 length = eat_string(str);
 
     // TODO(Felix): unescape string
-    out_string->data = heap_copy_limited_c_string(str+1, length-2); // quotes are not part of the string
+    out_string->data = heap_copy_limited_c_string(str+1, length-2, allocator); // quotes are not part of the string
     out_string->length = length-2;
+
+    return length;
+}
+
+u32 read_identifier(const char* str, String* out_string, Allocator_Base* allocator) {
+    if (allocator == nullptr)
+        allocator = grab_current_allocator();
+
+    // NOTE(Felix): Assumes we are on the first letter
+    u32 length = eat_identifier(str);
+
+    // TODO(Felix): unescape string
+    out_string->data = heap_copy_limited_c_string(str, length, allocator);
+    out_string->length = length;
 
     return length;
 }

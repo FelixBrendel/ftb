@@ -1736,6 +1736,58 @@ auto test_defer_runs_after_return() -> testresult {
 }
 
 
+auto test_json_simple_object_json5() -> testresult {
+    using namespace json;
+    const char* json_object = R"JSON(
+        {
+          int:    123,
+          float:  123.123,
+          bool:   true,
+          string: "Hello",
+          object: {
+             member : 1
+          }
+        }
+)JSON";
+
+    struct Test {
+        s32    i;
+        f32    f;
+        bool   b;
+        String s;
+        s32    m;
+    };
+
+    Pattern p = json::object({
+        {"int",    json::p_s32 (offsetof(Test, i))},
+        {"float",  json::p_f32 (offsetof(Test, f))},
+        {"bool",   json::p_bool(offsetof(Test, b))},
+        {"string", json::p_str (offsetof(Test, s))},
+        {"object", json::object({
+                    {"member", p_s32(offsetof(Test, m))}
+                })},
+    });
+
+    Test t;
+    Pattern_Match_Result result = pattern_match(json_object, p, &t);
+
+    defer {
+        t.s.free();
+    };
+
+
+    assert_equal_int(result, Pattern_Match_Result::OK_CONTINUE);
+
+    assert_equal_int(t.i, 123);
+    assert_equal_f32(t.f, 123.123);
+    assert_equal_int(t.b, true);
+    assert_equal_int(t.m, 1);
+    assert_equal_int(strncmp("Hello", t.s.data, 5), 0);
+
+    return pass;
+}
+
+
 auto test_json_simple_object_new_syntax() -> testresult {
     using namespace json;
     const char* json_object = R"JSON(
@@ -2936,6 +2988,7 @@ s32 main(s32, char**) {
             invoke_test(test_path_components);
             invoke_test(test_obj_to_json_str);
 
+            invoke_test(test_json_simple_object_json5);
             invoke_test(test_json_simple_object_new_syntax);
             invoke_test(test_json_mvg);
             invoke_test(test_json_bug);
