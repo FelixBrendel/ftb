@@ -308,6 +308,8 @@ auto m4x4_translate(V3 tanslation) -> M4x4;
 auto m4x4_scale(V3 scale) -> M4x4;
 auto m4x4_model(V3 tanslation, Quat orientation, V3 scale) -> M4x4;
 auto m4x4_print(M4x4) -> void;
+auto m3x3_print(M3x3 m) -> void;
+auto v3_print(V3 v) -> void;
 
 auto m3x3_identity() -> M3x3;
 auto m3x3_orientation(Quat orientation) -> M3x3;
@@ -933,6 +935,20 @@ auto m4x4_print(M4x4 m) -> void {
     println(" ╰                             ╯");
 }
 
+auto m3x3_print(M3x3 m) -> void {
+    println(" ╭                      ╮");
+    println(" │ % 5.3f % 5.3f % 5.3f │", m._00, m._10, m._20);
+    println(" │ % 5.3f % 5.3f % 5.3f │", m._01, m._11, m._21);
+    println(" │ % 5.3f % 5.3f % 5.3f │", m._02, m._12, m._22);
+    println(" ╰                      ╯");
+}
+
+auto v3_print(V3 v) -> void {
+    println(" ╭                      ╮T");
+    println(" │ % 5.3f % 5.3f % 5.3f │", v.x, v.y, v.z);
+    println(" ╰                      ╯");
+}
+
 
 auto m4x4_look_at(V3 cam_pos, V3 target, V3 up) -> M4x4
 {
@@ -998,8 +1014,7 @@ auto look_at_from_m4x4(M4x4 view_mat, V3* out_eye, V3* out_target, V3* out_up) -
     V3 eye, target, up;
     identity_look_at(&eye, &target, &up);
 
-    // M4x4 inverse_view = view_mat;
-    M4x4 inverse_view = quick_invert_transformation_mat_without_scale(view_mat);
+    M4x4 inverse_view =  quick_invert_transformation_mat_without_scale(view_mat);
 
     V4 t_eye    = inverse_view * v4(eye,    1);
     V4 t_target = t_eye - V4{view_mat._02, view_mat._12, view_mat._22, view_mat._32};
@@ -1017,7 +1032,7 @@ auto look_at_from_m4x4(M4x4 view_mat, V3* out_eye, V3* out_target, V3* out_up) -
     //     println("after:");
     //     m4x4_print(m4x4_look_at(*out_eye, *out_target, *out_up));
     //     println("");
-    //     exit(0);
+    //     // exit(0);
     // }
 }
 
