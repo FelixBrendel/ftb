@@ -1413,6 +1413,7 @@ auto get_path_info(String dir, Allocator_Base* string_allocator) -> Path_Info;
 auto get_local_name(String dir, Allocator_Base* string_allocator) -> Allocated_String;
 auto get_base_path(String dir, Allocator_Base* string_allocator) -> Allocated_String;
 auto join_paths(String base, String extension, bool ensure_tailing_path_separator, Allocator_Base* string_allocator) -> Allocated_String;
+auto join_paths(std::initializer_list<String> components, bool ensure_tailing_path_separator, Allocator_Base* string_allocator) -> Allocated_String;
 
 // ----------------------------------------------------------------------------
 //                               Stacktraces
@@ -2061,47 +2062,108 @@ auto get_path_components(const char* dir, Array_List<Path_Info>* out_path_infos,
     }, &params);
 }
 
-auto join_paths(String base, String extension, bool ensure_tailing_path_separator,
+auto join_paths(std::initializer_list<String> components, bool ensure_tailing_path_separator,
                 Allocator_Base* string_allocator)
     -> Allocated_String
 {
-    bool base_ends_in_slash = IS_PATH_SEPARATOR(base.data[base.length-1]);
-    bool should_add_tailing_path_separator =
-        !IS_PATH_SEPARATOR(extension.data[extension.length-1])
-        && ensure_tailing_path_separator;
+    s32  slashes_to_add    = 0;
+    u64  new_string_length = 0;
 
-    u64 new_str_length =
-        base.length      + (base_ends_in_slash ? 0 : 1) +
-        extension.length + (should_add_tailing_path_separator ? 1 : 0);
+    {
+        u32 iteration_index = 0;
+        for (String s : components) {
+            new_string_length += s.length;
+
+            bool ends_in_slash = IS_PATH_SEPARATOR(s.data[s.length-1]);
+            bool last_iteration = iteration_index == components.size()-1;
+
+            if ((!last_iteration && !ends_in_slash) ||
+                (last_iteration && !ends_in_slash && ensure_tailing_path_separator))
+            {
+                ++slashes_to_add;
+            }
+
+            ++iteration_index;
+        }
+    }
 
     Allocated_String result {
         .string = {
-            .data   = string_allocator->allocate<char>(new_str_length + 1),
-            .length = new_str_length,
+            .data   = string_allocator->allocate<char>(new_string_length + slashes_to_add + 1),
+            .length = new_string_length,
         },
         .allocator = string_allocator
     };
 
     char* write_cursor = result.string.data;
-    strncpy(write_cursor, base.data, base.length);
-    write_cursor += base.length;
 
-    if (!base_ends_in_slash) {
-        *write_cursor = '/';
-        ++write_cursor;
-    }
+    {
+        u32 iteration_index = 0;
+        for (String s : components) {
+            bool ends_in_slash  = IS_PATH_SEPARATOR(s.data[s.length-1]);
+            bool last_iteration = iteration_index == components.size()-1;
 
-    strncpy(write_cursor, extension.data, extension.length);
-    write_cursor += extension.length;
+            strncpy(write_cursor, s.data, s.length);
+            write_cursor += s.length;
 
-    if (should_add_tailing_path_separator) {
-        *write_cursor = '/';
-        ++write_cursor;
+            if ((!last_iteration && !ends_in_slash) ||
+                (last_iteration && !ends_in_slash && ensure_tailing_path_separator))
+            {
+                *write_cursor = '/';
+                ++write_cursor;
+            }
+
+            ++iteration_index;
+        }
     }
 
     *write_cursor = '\0';
 
     return result;
+}
+
+auto join_paths(String base, String extension, bool ensure_tailing_path_separator,
+                Allocator_Base* string_allocator)
+    -> Allocated_String
+{
+    return join_paths({base, extension}, ensure_tailing_path_separator, string_allocator);
+    // bool base_ends_in_slash = IS_PATH_SEPARATOR(base.data[base.length-1]);
+    // bool should_add_tailing_path_separator =
+    //     !IS_PATH_SEPARATOR(extension.data[extension.length-1])
+    //     && ensure_tailing_path_separator;
+
+    // u64 new_str_length =
+    //     base.length      + (base_ends_in_slash ? 0 : 1) +
+    //     extension.length + (should_add_tailing_path_separator ? 1 : 0);
+
+    // Allocated_String result {
+    //     .string = {
+    //         .data   = string_allocator->allocate<char>(new_str_length + 1),
+    //         .length = new_str_length,
+    //     },
+    //     .allocator = string_allocator
+    // };
+
+    // char* write_cursor = result.string.data;
+    // strncpy(write_cursor, base.data, base.length);
+    // write_cursor += base.length;
+
+    // if (!base_ends_in_slash) {
+    //     *write_cursor = '/';
+    //     ++write_cursor;
+    // }
+
+    // strncpy(write_cursor, extension.data, extension.length);
+    // write_cursor += extension.length;
+
+    // if (should_add_tailing_path_separator) {
+    //     *write_cursor = '/';
+    //     ++write_cursor;
+    // }
+
+    // *write_cursor = '\0';
+
+    // return result;
 }
 
 

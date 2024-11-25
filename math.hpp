@@ -328,6 +328,7 @@ auto quat_from_m4x4(M4x4 m) -> Quat;
 // ---------------------
 //  geometry functions
 // ---------------------
+auto closest_t_on_ray(Ray3 ray, V3 point) -> f32;
 auto closest_point_on_ray(Ray3 ray, V3 point) -> V3;
 
 
@@ -1300,10 +1301,15 @@ auto quat_to_XYZ_Euler(Quat q) -> V3 {
     return angles;
 }
 
-auto closest_point_on_ray(Ray3 ray, V3 point) -> V3 {
+auto closest_t_on_ray(Ray3 ray, V3 point) -> f32 {
     V3 v = point - ray.offset;
     f32 dotProd = dot(v, ray.direction);
-    return ray.offset + ray.direction * dotProd;
+    return dotProd;
+}
+
+auto closest_point_on_ray(Ray3 ray, V3 point) -> V3 {
+    f32 t = closest_t_on_ray(ray, point);
+    return ray.offset + ray.direction * t;
 }
 
 #endif // FTB_MATH_IMPL
