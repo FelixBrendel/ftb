@@ -96,8 +96,8 @@
 #define array_length(arr)   (sizeof(arr) / sizeof(arr[0]))
 #define zero_out(thing)     memset(&(thing), 0, sizeof((thing)));
 
-#define CONCAT(x, y) x ## y
-#define LABEL(x, y) CONCAT(x, y)
+#define FTB_CONCAT(x, y) x ## y
+#define LABEL(x, y) FTB_CONCAT(x, y)
 
 #define MPI_LABEL(id1,id2)                              \
     LABEL(MPI_LABEL_ ## id1 ## _ ## id2 ## _, __LINE__)
