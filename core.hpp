@@ -174,6 +174,30 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
     MPP_BEFORE(2, var = val;)                                           \
     MPP_DEFER(3, var = LABEL(fluid_let_, __LINE__);)
 
+
+#define EXPECT_OR_RETURN_MSG(expr, ...)         \
+    if((expr));                                 \
+    else do {                                   \
+            log_error(__VA_ARGS__);             \
+            log_trace();                        \
+            return {0};                         \
+        } while(0)
+
+#ifdef FTB_DEBUG
+#  define EXPECT_OR_RETURN(expr)                \
+    if((expr));                                 \
+    else return {0}
+#else
+#  define EXPECT_OR_RETURN(expr)                        \
+    if((expr));                                         \
+    else do {                                           \
+            log_debug("Failing because '%s' @ %s:%ld"); \
+            log_trace();                                \
+            return {0};                                 \
+        } while(0)
+#endif
+
+
 /*
  * NOTE(Felix): About logs, asserts and panics
  *
