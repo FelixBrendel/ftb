@@ -1708,10 +1708,10 @@ auto walk_files(const char* dir_name, File_Walk_Info walk_info, void (*callback)
                 break;
 
             Path_Info pi {};
-            pi.full_path = join_paths(dir.string, dir_ent->d_name,
-                                                    false, scratch.arena);
+            pi.full_path = join_paths(dir.string, String::over(dir_ent->d_name),
+                                      false, scratch.arena);
             pi.file_info.exists = true;
-            pi.file_info = file_info(full_path.string.data);
+            pi.file_info = file_info(pi.full_path.string.data);
             pi.recalculate_indices();
 
             // NOTE(Felix): Yes, '.' and '..' are returned from readdir
