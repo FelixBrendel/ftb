@@ -96,8 +96,8 @@
 #define array_length(arr)   (sizeof(arr) / sizeof(arr[0]))
 #define zero_out(thing)     memset(&(thing), 0, sizeof((thing)));
 
-#define CONCAT(x, y) x ## y
-#define LABEL(x, y) CONCAT(x, y)
+#define FTB_CONCAT(x, y) x ## y
+#define LABEL(x, y) FTB_CONCAT(x, y)
 
 #define MPI_LABEL(id1,id2)                              \
     LABEL(MPI_LABEL_ ## id1 ## _ ## id2 ## _, __LINE__)
@@ -460,13 +460,6 @@ inline void* resize(void* old, u64 size_in_bytes, u32 alignment) {
 inline void  deallocate(void* old) {
     grab_current_allocator()->deallocate(old);
 }
-
-// TODO(Felix): These are deprecated
-// #define in_scratch_buffer                                               \
-    // if (Linear_Allocator LABEL(prev_temp_alloc, __LINE__) = *(Linear_Allocator*)push_allocator(grab_temp_allocator())) {} else \
-    // if (defer {*(Linear_Allocator*)pop_allocator() = LABEL(prev_temp_alloc, __LINE__);}) {} else
-
-// #define with_temp_allocator with_allocator(grab_temp_allocator())
 
 
 // ----------------------------------------------------------------------------
@@ -1395,15 +1388,16 @@ struct File_Info {
 };
 
 struct Path_Info {
-    // TODO(Felix): Only store the full path, but the index where the local
-    //   name starts.. More use cases fullfilled and less allocations. Have a
-    //   helper function(String)->s64 which returns the index where the local
-    //   name starts. Right now for create_directory_if_not_exists, we need
-    //   the base_path, so we calculate the path_info, so we need 2
-    //   allocations. Even when using scratch arena this is wasteful
     File_Info        file_info;
-    Allocated_String base_path;
-    Allocated_String local_name;
+    Allocated_String full_path;
+
+    s64 idx_of_local_name_start;
+    s64 idx_of_file_extension_start;
+
+    String get_base_path();
+    String get_local_name();
+    String get_file_extension();
+    void recalculate_indices();
 };
 
 auto read_entire_file(const char* filename, Allocator_Base* allocator = nullptr) -> File_Read;
@@ -1431,6 +1425,7 @@ auto file_info(const char* path) -> File_Info;
 auto is_directory(const char* path) -> bool;
 auto delete_directory(const char* dirname) -> bool;
 auto create_directory_if_not_exists(const char* path) -> bool;
+auto create_directory_if_not_exists(String) -> bool;
 auto get_absolute_path(const char* relative_path) -> Allocated_String;
 auto get_path_components(const char* dir, Array_List<File_Info>* out_file_infos) -> void;
 auto get_path_info(String dir, Allocator_Base* string_allocator) -> Path_Info;
@@ -1713,34 +1708,36 @@ auto walk_files(const char* dir_name, File_Walk_Info walk_info, void (*callback)
                 break;
 
             Path_Info pi {};
-            pi.local_name = Allocated_String::from(dir_ent->d_name, scratch.arena);
-            pi.base_path  = dir;
-
-            Allocated_String full_path = join_paths(dir.string, pi.local_name.string, false, scratch.arena);
+            pi.full_path = join_paths(dir.string, dir_ent->d_name,
+                                                    false, scratch.arena);
+            pi.file_info.exists = true;
             pi.file_info = file_info(full_path.string.data);
+            pi.recalculate_indices();
 
-            // NOTE(Felix): Yes '.' and '..' are returned from readdir
-            bool should_callback =
-                (pi.file_info.is_directory &&
-                 walk_info.with_directories &&
-                 (pi.local_name.string != string_from_literal(".") &&
-                  pi.local_name.string != string_from_literal("..")))
-                || (!pi.file_info.is_directory && walk_info.with_files);
-
-
-            if (!should_callback) {
+            // NOTE(Felix): Yes, '.' and '..' are returned from readdir
+            if (pi.get_local_name() == string_from_literal(".") ||
+                pi.get_local_name() == string_from_literal(".."))
+            {
                 continue;
             }
 
-            Walk_Status status = walk_info.recursive ? Walk_Status::Continue_Recurse : Walk_Status::Continue;
-            callback(pi, &status, user_data);
+            bool should_callback =
+                (pi.file_info.is_directory && walk_info.with_directories)
+                || (!pi.file_info.is_directory && walk_info.with_files);
 
-            if (status == Walk_Status::Done) {
-                return;
+            Walk_Status status = walk_info.recursive ? Walk_Status::Continue_Recurse : Walk_Status::Continue;
+
+            if (should_callback) {
+                callback(pi, &status, user_data);
+
+                if (status == Walk_Status::Done) {
+                    return;
+                }
+
             }
 
             if (pi.file_info.is_directory && status == Walk_Status::Continue_Recurse) {
-                Allocated_String inner_path = join_paths(dir.string, pi.local_name.string, true, work_list_scratch.arena);
+                Allocated_String inner_path = Allocated_String::from(pi.full_path.string, work_list_scratch.arena);
                 dirs_to_do.append(inner_path);
             }
         }
@@ -1829,9 +1826,6 @@ auto walk_files(const char* dir_name, File_Walk_Info walk_info, void (*callback)
 
     Allocated_String dir_name_alloc_str = Allocated_String::from(dir_name, work_list_scratch.arena);
 
-    // if (dir_name_alloc_str.string.data[dir_name_alloc_str.string.length-1] == '/')
-    //     --dir_name_alloc_str.string.length;
-
     Array_List<Allocated_String> dirs_to_do {};
     dirs_to_do.init();
     dirs_to_do.append(dir_name_alloc_str);
@@ -1842,9 +1836,7 @@ auto walk_files(const char* dir_name, File_Walk_Info walk_info, void (*callback)
         defer { scratch_arena_end(scratch); };
 
         Allocated_String dir = dirs_to_do.data[--dirs_to_do.count];
-
         Allocated_String wildcard_search_str = join_paths(dir.string, string_from_literal("*"), false, scratch.arena);
-        // print_to_string(&wildcard_search_str, scratch.arena, "%{->Str}/*", &dir);
 
 
         WIN32_FIND_DATAA find_data;
@@ -1853,11 +1845,13 @@ auto walk_files(const char* dir_name, File_Walk_Info walk_info, void (*callback)
 
         if (!success) {
             continue;
+            log_warning("no success for '%s'", wildcard_search_str.string.data);
         }
 
         defer { FindClose(find_handle); };
 
         while (success) {
+
             Scratch_Arena scratch = scratch_arena_start(work_list_scratch);
             defer {
                 scratch_arena_end(scratch);
@@ -1865,39 +1859,43 @@ auto walk_files(const char* dir_name, File_Walk_Info walk_info, void (*callback)
             };
 
             Path_Info pi {};
-            pi.local_name = Allocated_String::from(find_data.cFileName, scratch.arena);
-            pi.base_path  = dir;
+            pi.full_path = join_paths(dir.string, String::over(find_data.cFileName),
+                                      false, scratch.arena);
 
             pi.file_info.exists = true;
             fill_file_info_win32(&pi.file_info, find_data.dwFileAttributes, find_data.ftLastWriteTime,
                                  find_data.nFileSizeHigh, find_data.nFileSizeLow);
 
+            pi.recalculate_indices();
 
-            // NOTE(Felix): yes '.' and '..' are returned from FindNextFile:
-            bool should_callback =
-                (pi.file_info.is_directory &&
-                 walk_info.with_directories &&
-                 (pi.local_name.string != string_from_literal(".") &&
-                  pi.local_name.string != string_from_literal("..")))
-                || (!pi.file_info.is_directory && walk_info.with_files);
-
-            if (!should_callback) {
+            // NOTE(Felix): Yes, '.' and '..' are returned from FindNextFile:
+            if (pi.get_local_name() == string_from_literal(".") ||
+                pi.get_local_name() == string_from_literal(".."))
+            {
                 continue;
             }
 
-            Walk_Status status = walk_info.recursive ? Walk_Status::Continue_Recurse : Walk_Status::Continue;
-            callback(pi, &status, user_data);
+            bool should_callback =
+                (pi.file_info.is_directory && walk_info.with_directories)
+                || (!pi.file_info.is_directory && walk_info.with_files);
 
-            if (status == Walk_Status::Done) {
-                return;
+            Walk_Status status = walk_info.recursive ? Walk_Status::Continue_Recurse : Walk_Status::Continue;
+
+            if (should_callback) {
+                callback(pi, &status, user_data);
+
+                if (status == Walk_Status::Done) {
+                    return;
+                }
             }
 
+
             if (pi.file_info.is_directory && status == Walk_Status::Continue_Recurse) {
-
-                Allocated_String inner_path = join_paths(dir.string, pi.local_name.string, true, work_list_scratch.arena);
-                // print_to_string(&inner_path.string, work_list_scratch.arena,
-                                // "%{->Str}/%{->Str}", &dir, &pi.local_name);
-
+                // NOTE(Felix): It seems necessary to copy here, because pi is
+                //   in scratch which will be resettet every walked file, so
+                //   to remember it for later, we need to move it to the other
+                //   arena
+                Allocated_String inner_path = Allocated_String::from(pi.full_path.string, work_list_scratch.arena);
                 dirs_to_do.append(inner_path);
             }
         }
@@ -1970,11 +1968,38 @@ auto create_directory_if_not_exists(const char* dir) -> bool {
     });
 }
 
+
+String Path_Info::get_base_path() {
+    String base_path = {
+        .data   = full_path.string.data,
+        .length = (u64)idx_of_local_name_start,
+    };
+
+    return base_path;
+}
+
+String Path_Info::get_local_name() {
+    String local_name = {
+        .data   = full_path.string.data + idx_of_local_name_start,
+        .length = full_path.string.length - idx_of_local_name_start,
+    };
+    return local_name;
+}
+
+
+String Path_Info::get_file_extension() {
+    String local_name = {
+        .data   = full_path.string.data + idx_of_file_extension_start,
+        .length = full_path.string.length - idx_of_file_extension_start,
+    };
+    return local_name;
+}
+
 /*
- * Find the index in the string where the base_path ends (exclusive) and where
- * the local_name starts (inclusive). This is important since other vital
- * functions build on it. Some examples (because it might be unintuitive to
- * remember the semantics for different path types)
+ * Find the index in the string where the base_path ends (exclusive) and
+ * where the local_name starts (inclusive). This is important since other
+ * vital functions build on it. Some examples (because it might be
+ * unintuitive to remember the semantics for different path types)
  *
  *   - /home/felix/test/dir/file.txt
  *                          ^
@@ -2004,59 +2029,50 @@ auto create_directory_if_not_exists(const char* dir) -> bool {
  *      ^
  *      |> local = test:
  */
-auto get_base_path_end_idx(String dir) -> s64 {
-    // NOTE(Felix): special case for linux paths starting with /,
-    if (dir.length == 1 && IS_PATH_SEPARATOR(dir.data[0]))
-        return 0;
+void Path_Info::recalculate_indices() {
+    // NOTE(Felix): special case for linux paths only consisting of a / (root)
+    if (full_path.string.length == 1 && IS_PATH_SEPARATOR(full_path.string.data[0])) {
+        this->idx_of_local_name_start = 0;
+        this->idx_of_file_extension_start = 0;
+        return;
+    }
+
+    bool extension_found = false;
+    u64 idx_local_end = full_path.string.length - 1;
 
     // NOTE(Felix): if path ends with slash, remove for local_name
-    u64 idx_local_end = dir.length - 1;
-    if (IS_PATH_SEPARATOR(dir.data[idx_local_end])) {
+    if (IS_PATH_SEPARATOR(full_path.string.data[idx_local_end])) {
+        // NOTE(Felix): If path ends with slash we don't have a file
+        // extension
+        this->idx_of_file_extension_start = idx_local_end;
+        extension_found = true;
+
         --idx_local_end;
     }
 
     bool separator_found = false;
     s64 idx_local_start = idx_local_end;
     while (idx_local_start > 0) {
-        if (IS_PATH_SEPARATOR(dir.data[idx_local_start-1])) {
+        if (IS_PATH_SEPARATOR(full_path.string.data[idx_local_start-1])) {
             separator_found = true;
             break;
+        } else if (!extension_found && full_path.string.data[idx_local_start-1] == '.') {
+            this->idx_of_file_extension_start = idx_local_start;
+            extension_found = true;
         }
         --idx_local_start;
     }
 
-    return idx_local_start;
+    this->idx_of_local_name_start = idx_local_start;
 }
-
-auto get_base_path(String dir, Allocator_Base* string_allocator) -> Allocated_String {
-    s64 get_base_path_end = get_base_path_end_idx(dir);
-
-    String local = {
-        .data   = dir.data,
-        .length = (u64)get_base_path_end,
-    };
-
-    return Allocated_String::from(local, string_allocator);
-}
-
-auto get_local_name(String dir, Allocator_Base* string_allocator) -> Allocated_String {
-    u64 get_base_path_end = get_base_path_end_idx(dir);
-
-    String local = {
-        .data   = dir.data + get_base_path_end,
-        .length = dir.length - get_base_path_end,
-    };
-
-    return Allocated_String::from(local, string_allocator);
-}
-
 
 auto get_path_info(String dir, Allocator_Base* string_allocator) -> Path_Info {
     Path_Info pi = {
         .file_info  = file_info(dir.data),
-        .base_path  = get_base_path(dir, string_allocator),
-        .local_name = get_local_name(dir, string_allocator),
+        .full_path  = Allocated_String::from(dir, string_allocator),
     };
+
+    pi.recalculate_indices();
 
     return pi;
 }
@@ -2114,7 +2130,7 @@ auto join_paths(std::initializer_list<String> components, bool ensure_tailing_pa
     Allocated_String result {
         .string = {
             .data   = string_allocator->allocate<char>(new_string_length + slashes_to_add + 1),
-            .length = new_string_length,
+            .length = new_string_length + slashes_to_add,
         },
         .allocator = string_allocator
     };
