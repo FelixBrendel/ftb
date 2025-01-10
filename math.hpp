@@ -191,6 +191,9 @@ auto clamp(f32 from, f32 x, f32 to) -> f32;
 auto clamp01(f32 x) -> f32;
 auto clamped_linerp(f32 from, f32 t, f32 to) -> f32;
 
+auto rand_0_1() -> f32;
+auto rand_int(s32 lower, s32 upper) -> int;
+
 // ---------------------
 //   vector functions
 // ---------------------
@@ -333,6 +336,7 @@ auto closest_point_on_ray(Ray3 ray, V3 point) -> V3;
 
 
 #ifdef FTB_MATH_IMPL
+#include <random>
 
 f32 pi     = 3.1415926535897932384626433832795f;
 f32 two_pi = 6.283185307179586476925286766559f;
@@ -1310,6 +1314,21 @@ auto closest_t_on_ray(Ray3 ray, V3 point) -> f32 {
 auto closest_point_on_ray(Ray3 ray, V3 point) -> V3 {
     f32 t = closest_t_on_ray(ray, point);
     return ray.offset + ray.direction * t;
+}
+
+std::random_device rd;
+std::mt19937 e2(rd());
+std::uniform_real_distribution<> dist_0_1(0.0f, 1.0f);
+
+static inline auto rand_0_1() -> f32 {
+    // return ((f32)rand())/RAND_MAX;
+
+    return (f32)dist_0_1(e2);
+}
+
+auto rand_int(s32 lower_incl, s32 upper_incl) -> int {
+    s32 dist = upper_incl-lower_incl;
+    return lower_incl + round_to_int(rand_0_1() * dist);
 }
 
 #endif // FTB_MATH_IMPL
