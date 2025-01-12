@@ -966,7 +966,8 @@ struct Array_List {
     }
 
 
-    void append(type element) {
+	// NOTE(Felix): Return the index for the thing that was inserted
+    u64 append(type element) {
         if (count == length) {
 #ifdef FTB_INTERNAL_DEBUG
             if (length == 0) {
@@ -979,7 +980,7 @@ struct Array_List {
             data = allocator->resize<type>(data, length);
         }
         data[count] = element;
-        count++;
+        return count++;		
     }
 
     void assure_allocated(u32 allocated_elements) {

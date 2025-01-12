@@ -13,6 +13,7 @@
 #  define FTB_SOA_SORT_IMPL
 #endif
 #define FTB_JSON_IMPL
+#define FTB_MESH_IMPL
 #define FTB_PARSING_IMPL
 
 #include "../math.hpp"
@@ -35,6 +36,7 @@ inline bool hm_objects_match(Key a, Key b);
 #include "../scheduler.hpp"
 #include "../soa_sort.hpp"
 #include "../kd_tree.hpp"
+#include "../mesh.hpp"
 
 
 auto my_int_cmp = [](const int* a, const int* b) -> s32 {
@@ -2470,6 +2472,147 @@ testresult test_json_bug() {
     return pass;
 }
 
+auto test_half_edge() -> testresult {
+	Scratch_Arena scratch = scratch_arena_start();
+    defer { scratch_arena_end(scratch); };
+
+    String obj_str = string_from_literal(R"OBJ(
+v 1.0 4.0 0.0
+v 3.0 4.0 0.0
+v 0.0 2.0 0.0
+v 2.0 2.0 0.0
+v 4.0 2.0 0.0
+v 1.0 0.0 0.0
+v 3.0 0.0 0.0
+f 1 3 4
+f 1 4 2
+f 2 4 5
+f 3 6 4
+f 4 6 7
+f 4 7 5
+)OBJ");
+
+    Mesh_Data mesh = load_obj_from_in_memory_string(obj_str.data, obj_str.data+obj_str.length);
+
+	/*
+	 *
+	 *                                   e19→
+	 *                   v0────────────────────────────────v3
+	 *                   ╱╲              ←e5               ╱╲
+	 *                  ╱  ╲                              ╱  ╲
+	 *                 ╱    ╲                            ╱    ╲
+	 *                ╱      ╲                          ╱      ╲
+	 *               ╱        ╲           f1           ╱        ╲
+	 *              ╱          ╲                      ╱          ╲
+	 *             ╱            ╲                    ╱            ╲
+	 *            ╱              ╲e3              ↗ ╱              ╲
+	 *         ↗ ╱e0             ↖╲↘             e4╱                ╲
+	 *       e18╱ ↙              e2╲              ╱e6               ↖╲e20
+	 *         ╱                    ╲            ╱ ↙                e8╲↘
+	 *        ╱         f0           ╲          ╱          f2          ╲
+	 *       ╱                        ╲        ╱                        ╲
+	 *      ╱                          ╲      ╱                          ╲
+	 *     ╱                            ╲    ╱                            ╲
+	 *    ╱                              ╲  ╱                              ╲
+	 *   ╱              e1→               ╲╱               e7→              ╲
+	 *  v1────────────────────────────────v2────────────────────────────────v4
+	 *   ╲             ←e11               ╱╲              ←e17              ╱
+	 *    ╲                              ╱  ╲                              ╱
+	 *     ╲                            ╱    ╲                            ╱
+	 *      ╲                          ╱      ╲                          ╱
+	 *       ╲                        ╱        ╲                        ╱
+	 *        ╲         f3           ╱          ╲          f5          ╱
+	 *         ╲                    ╱            ╲                    ╱
+	 *         ↖╲e9              ↗ ╱              ╲e15             ↗ ╱e23
+	 *        e21╲↘            e10╱               ↖╲↘            e14╱↙
+	 *            ╲              ╱e12            e14╲              ╱
+	 *             ╲            ╱ ↙                  ╲            ╱
+	 *              ╲          ╱          f4          ╲          ╱
+	 *               ╲        ╱                        ╲        ╱
+	 *                ╲      ╱                          ╲      ╱
+	 *                 ╲    ╱                            ╲    ╱
+	 *                  ╲  ╱                              ╲  ╱
+	 *                   ╲╱               e13→             ╲╱
+	 *                   v5────────────────────────────────v6
+	 *                                   ←e22
+	 *
+	 */
+
+    // Mesh_Data mesh = load_obj("./obj/test.obj");
+	Half_Edge_Mesh he_mesh = Half_Edge_Mesh::from(mesh);
+
+    defer {
+        mesh.deinit();
+		he_mesh.deinit();
+    };
+
+	assert_equal_int(he_mesh.vertices.count, 7);
+	assert_equal_int(he_mesh.faces.count,    6);
+	assert_equal_int(he_mesh.edges.count,   24);
+
+	u32 edges_without_face = 0;
+	for (auto& e : he_mesh.edges) {
+		if (e.face == Half_Edge_Mesh::ABSENT_FACE)
+			++edges_without_face;
+
+		assert_not_equal_int(e.twin, Half_Edge_Mesh::ABSENT_EDGE);
+	}
+
+	assert_equal_int(edges_without_face, 6);
+
+
+	// each edges twin's twin should be the starting edge again
+	for (u32 e_idx = 0; e_idx < he_mesh.edges.count; ++e_idx) {
+		Half_Edge_Mesh::Edge edge = he_mesh.edges[e_idx];
+
+		u32 twin_idx = edge.twin;
+		Half_Edge_Mesh::Edge twin = he_mesh.edges[twin_idx];
+
+		assert_equal_int(e_idx, twin.twin);
+	}
+
+	Array_List<Half_Edge_Mesh::Edge_Idx> edges = {};
+	edges.init(128, scratch.arena);
+
+	Array_List<Half_Edge_Mesh::Face_Idx> faces = {};
+	faces.init(128, scratch.arena);
+
+	Integer_Pair vert_to_expected_vert_neighbor_count[] = {
+		{0, 3}, {1, 3}, {2, 6},
+		{3, 3}, {4, 3}, {5, 3},
+		{6, 3},
+	};
+	for (auto p : vert_to_expected_vert_neighbor_count) {
+		he_mesh.get_all_vertex_neighbors(p.x, &edges);
+		assert_equal_int(edges.count, p.y);
+		edges.clear();
+	}
+
+	Integer_Pair vert_to_expected_face_neighbory_count[] = {
+		{0, 2}, {1, 2}, {2, 6},
+		{3, 2}, {4, 2}, {5, 2},
+		{6, 2},
+	};
+	for (auto p : vert_to_expected_face_neighbory_count) {
+		he_mesh.get_all_face_neighbors_of_vertex(p.x, &faces);
+		assert_equal_int(faces.count, p.y);
+		faces.clear();
+	}
+
+	Integer_Pair face_to_expected_face_neighbory_count[] = {
+		{0, 2}, {1, 2}, {2, 2},
+		{3, 2}, {4, 2}, {5, 2},
+	};
+	for (auto p : face_to_expected_face_neighbory_count) {
+		he_mesh.get_all_face_neighbors_of_face(p.x, &faces);
+		assert_equal_int(faces.count, p.y);
+		faces.clear();
+	}
+
+
+    return pass;
+}
+
 auto test_json_bug_again() -> testresult {
     const char* json = R"JSON({
   "servingLines" : [ {
@@ -3031,6 +3174,8 @@ testresult test_path_components() {
     return pass;
 }
 
+
+
 s32 main(s32, char**) {
     testresult result;
 
@@ -3047,48 +3192,50 @@ s32 main(s32, char**) {
         with_allocator(ld) {
             defer { ld.print_leak_statistics(); };
 
-            invoke_test(test_join_paths);
-            invoke_test(test_walk_files);
-            invoke_test(test_path_components);
-            invoke_test(test_obj_to_json_str);
+			invoke_test(test_half_edge);
 
-            invoke_test(test_json_simple_object_json5);
-            invoke_test(test_json_simple_object_new_syntax);
-            invoke_test(test_json_mvg);
-            invoke_test(test_json_bug);
-            invoke_test(test_json_extract_value_from_list);
-            // invoke_test(test_json_parse_from_quoted_value);
-            // invoke_test(test_json_object_as_hash_map);
-            invoke_test(test_json_wildcard_match_and_parser_context);
+            // invoke_test(test_join_paths);
+            // invoke_test(test_walk_files);
+            // invoke_test(test_path_components);
+            // invoke_test(test_obj_to_json_str);
 
-            invoke_test(test_json_config);
-            invoke_test(test_json_bug_again);
+            // invoke_test(test_json_simple_object_json5);
+            // invoke_test(test_json_simple_object_new_syntax);
+            // invoke_test(test_json_mvg);
+            // invoke_test(test_json_bug);
+            // invoke_test(test_json_extract_value_from_list);
+            // // invoke_test(test_json_parse_from_quoted_value);
+            // // invoke_test(test_json_object_as_hash_map);
+            // invoke_test(test_json_wildcard_match_and_parser_context);
 
-            invoke_test(test_defer_runs_after_return);
-            invoke_test(test_pool_allocator);
-            invoke_test(test_growable_pool_allocator);
-            invoke_test(test_bucket_list);
-            invoke_test(test_bucket_list_leak);
-            invoke_test(test_bucket_queue);
-            invoke_test(test_math);
-            invoke_test(test_math_matrix_compose);
-            invoke_test(test_hashmap);
-            invoke_test(test_sort);
-            invoke_test(test_kd_tree);
-            invoke_test(test_array_lists_adding_and_removing);
-            invoke_test(test_array_lists_sorting);
-            invoke_test(test_array_lists_sorted_insert_and_remove);
-            invoke_test(test_array_lists_searching);
-            invoke_test(test_array_list_sort_many);
-            invoke_test(test_string_split);
-            // invoke_test(test_stack_array_lists);
-            invoke_test(test_typed_bucket_allocator);
-            invoke_test(test_hooks);
-            invoke_test(test_scheduler_animations);
+            // invoke_test(test_json_config);
+            // invoke_test(test_json_bug_again);
 
-            invoke_test(test_scratch_arena_can_realloc_last_alloc);
-            invoke_test(test_ringbuffer);
-            // invoke_test(test_printer);
+            // invoke_test(test_defer_runs_after_return);
+            // invoke_test(test_pool_allocator);
+            // invoke_test(test_growable_pool_allocator);
+            // invoke_test(test_bucket_list);
+            // invoke_test(test_bucket_list_leak);
+            // invoke_test(test_bucket_queue);
+            // invoke_test(test_math);
+            // invoke_test(test_math_matrix_compose);
+            // invoke_test(test_hashmap);
+            // invoke_test(test_sort);
+            // invoke_test(test_kd_tree);
+            // invoke_test(test_array_lists_adding_and_removing);
+            // invoke_test(test_array_lists_sorting);
+            // invoke_test(test_array_lists_sorted_insert_and_remove);
+            // invoke_test(test_array_lists_searching);
+            // invoke_test(test_array_list_sort_many);
+            // invoke_test(test_string_split);
+            // // invoke_test(test_stack_array_lists);
+            // invoke_test(test_typed_bucket_allocator);
+            // invoke_test(test_hooks);
+            // invoke_test(test_scheduler_animations);
+
+            // invoke_test(test_scratch_arena_can_realloc_last_alloc);
+            // invoke_test(test_ringbuffer);
+            // // invoke_test(test_printer);
         }
 
     }

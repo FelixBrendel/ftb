@@ -33,17 +33,36 @@
 #include <stdlib.h>
 #include "core.hpp"
 
+struct Integer_Pair {
+	s32 x;
+	s32 y;
+};
+
 #ifndef FTB_HASHMAP_IMPL
+
 
 u64 hm_hash(const char* str);
 u64 hm_hash(char* str);
 u64 hm_hash(void* ptr);
+u64 hm_hash(u64   value);
+u64 hm_hash(Integer_Pair ip);
 
 bool hm_objects_match(const char* a, const char* b);
 bool hm_objects_match(char* a, char* b);
 bool hm_objects_match(void* a, void* b);
+bool hm_objects_match(u64   a, u64 b);
+bool hm_objects_match(Integer_Pair i1, Integer_Pair i2);
 
 #else // implementations
+
+static inline u64 hm_hash(Integer_Pair ip) {
+	// cantor pairing
+	return (u64)(0.5f * (ip.x + ip.y) * (ip.x + ip.y + 1) + ip.y);
+}
+
+static inline bool hm_objects_match(Integer_Pair i1, Integer_Pair i2) {
+	return i1.x == i2.x && i1.y == i2.y;
+}
 
 static u64 hm_hash(const char* str) {
     u64 value = str[0] << 7;
@@ -63,8 +82,12 @@ static u64 hm_hash(char* str) {
     return value ^ i;
 }
 
+static u64 hm_hash(u64 value) {
+    return (value * 2654435761) % 4294967296;
+}
+
 static u64 hm_hash(void* ptr) {
-    return ((u64)ptr * 2654435761) % 4294967296;
+    return hm_hash((u64)ptr);
 }
 
 static inline bool hm_objects_match(const char* a, const char* b) {
@@ -76,6 +99,10 @@ static inline bool hm_objects_match(char* a, char* b) {
 }
 
 static inline bool hm_objects_match(void* a, void* b) {
+    return a == b;
+}
+
+static inline bool hm_objects_match(u64 a, u64 b) {
     return a == b;
 }
 #endif //FTB_HASHMAP_IMPL
@@ -306,6 +333,40 @@ struct Hash_Map {
         u64 hash_val = hm_hash((key_type)key);
         set_object(key, obj, hash_val);
     }
+
+	void print_occupancy(u32 line_width = 80) {
+		char dist_chars[] = "0123456789abcdefghijklmniopqrstuvwxyz";
+		u32 sum_of_dists = 0;
+		for (u64 i = 0; i < current_capacity; ++i) {
+			if (i % line_width == 0) {
+				println("");
+			}
+			if (data[i].occupancy == HM_Cell::Occupancy::Avaliable) {
+				raw_print(".");
+			} else if (data[i].occupancy == HM_Cell::Occupancy::Deleted) {
+				raw_print("+");
+			} else {
+				u64 desired_index = data[i].hash & (current_capacity - 1);
+				u32 dist;
+				if (desired_index <= i) {
+					dist = i - desired_index;
+				} else {
+					dist = (i+current_capacity) - desired_index;
+				}
+
+				dist = min(dist, sizeof(dist_chars)-1);
+
+				raw_print("%c", dist_chars[dist]);
+				sum_of_dists += dist;
+			}
+		}
+
+		println("");
+		println("Avg linear probing dist: %.2f",
+				cell_count != 0
+				? 1.0f*sum_of_dists/cell_count
+				: 0.0);
+	}
 
     void dump_occupancy(const char* path) {
         FILE* out = fopen(path, "w");
