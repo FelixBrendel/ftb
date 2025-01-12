@@ -174,6 +174,30 @@ template <class F> deferrer<F> operator*(defer_dummy, F f) { return {f}; }
     MPP_BEFORE(2, var = val;)                                           \
     MPP_DEFER(3, var = LABEL(fluid_let_, __LINE__);)
 
+
+#define EXPECT_OR_RETURN_MSG(expr, ...)         \
+    if((expr));                                 \
+    else do {                                   \
+            log_error(__VA_ARGS__);             \
+            log_trace();                        \
+            return {0};                         \
+        } while(0)
+
+#ifdef FTB_DEBUG
+#  define EXPECT_OR_RETURN(expr)                \
+    if((expr));                                 \
+    else return {0}
+#else
+#  define EXPECT_OR_RETURN(expr)                        \
+    if((expr));                                         \
+    else do {                                           \
+            log_debug("Failing because '%s' @ %s:%ld"); \
+            log_trace();                                \
+            return {0};                                 \
+        } while(0)
+#endif
+
+
 /*
  * NOTE(Felix): About logs, asserts and panics
  *
@@ -1685,10 +1709,10 @@ auto walk_files(const char* dir_name, File_Walk_Info walk_info, void (*callback)
                 break;
 
             Path_Info pi {};
-            pi.full_path = join_paths(dir.string, dir_ent->d_name,
-                                                    false, scratch.arena);
+            pi.full_path = join_paths(dir.string, String::over(dir_ent->d_name),
+                                      false, scratch.arena);
             pi.file_info.exists = true;
-            pi.file_info = file_info(full_path.string.data);
+            pi.file_info = file_info(pi.full_path.string.data);
             pi.recalculate_indices();
 
             // NOTE(Felix): Yes, '.' and '..' are returned from readdir

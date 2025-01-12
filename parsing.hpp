@@ -56,7 +56,7 @@ inline bool is_whitespace(const char c) {
 
 u32 eat_line(const char* str) {
     u32 eaten = 0;
-    while (*str != '\n') {
+    while (*str != '\n' && *str != '\0') {
         ++str;
         ++eaten;
     }
