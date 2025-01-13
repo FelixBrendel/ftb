@@ -3194,48 +3194,48 @@ s32 main(s32, char**) {
 
 			invoke_test(test_half_edge);
 
-            // invoke_test(test_join_paths);
-            // invoke_test(test_walk_files);
-            // invoke_test(test_path_components);
-            // invoke_test(test_obj_to_json_str);
+            invoke_test(test_join_paths);
+            invoke_test(test_walk_files);
+            invoke_test(test_path_components);
+            invoke_test(test_obj_to_json_str);
 
-            // invoke_test(test_json_simple_object_json5);
-            // invoke_test(test_json_simple_object_new_syntax);
-            // invoke_test(test_json_mvg);
-            // invoke_test(test_json_bug);
-            // invoke_test(test_json_extract_value_from_list);
-            // // invoke_test(test_json_parse_from_quoted_value);
-            // // invoke_test(test_json_object_as_hash_map);
-            // invoke_test(test_json_wildcard_match_and_parser_context);
+            invoke_test(test_json_simple_object_json5);
+            invoke_test(test_json_simple_object_new_syntax);
+            invoke_test(test_json_mvg);
+            invoke_test(test_json_bug);
+            invoke_test(test_json_extract_value_from_list);
+            // invoke_test(test_json_parse_from_quoted_value);
+            // invoke_test(test_json_object_as_hash_map);
+            invoke_test(test_json_wildcard_match_and_parser_context);
 
-            // invoke_test(test_json_config);
-            // invoke_test(test_json_bug_again);
+            invoke_test(test_json_config);
+            invoke_test(test_json_bug_again);
 
-            // invoke_test(test_defer_runs_after_return);
-            // invoke_test(test_pool_allocator);
-            // invoke_test(test_growable_pool_allocator);
-            // invoke_test(test_bucket_list);
-            // invoke_test(test_bucket_list_leak);
-            // invoke_test(test_bucket_queue);
-            // invoke_test(test_math);
-            // invoke_test(test_math_matrix_compose);
-            // invoke_test(test_hashmap);
-            // invoke_test(test_sort);
-            // invoke_test(test_kd_tree);
-            // invoke_test(test_array_lists_adding_and_removing);
-            // invoke_test(test_array_lists_sorting);
-            // invoke_test(test_array_lists_sorted_insert_and_remove);
-            // invoke_test(test_array_lists_searching);
-            // invoke_test(test_array_list_sort_many);
-            // invoke_test(test_string_split);
-            // // invoke_test(test_stack_array_lists);
-            // invoke_test(test_typed_bucket_allocator);
-            // invoke_test(test_hooks);
-            // invoke_test(test_scheduler_animations);
+            invoke_test(test_defer_runs_after_return);
+            invoke_test(test_pool_allocator);
+            invoke_test(test_growable_pool_allocator);
+            invoke_test(test_bucket_list);
+            invoke_test(test_bucket_list_leak);
+            invoke_test(test_bucket_queue);
+            invoke_test(test_math);
+            invoke_test(test_math_matrix_compose);
+            invoke_test(test_hashmap);
+            invoke_test(test_sort);
+            invoke_test(test_kd_tree);
+            invoke_test(test_array_lists_adding_and_removing);
+            invoke_test(test_array_lists_sorting);
+            invoke_test(test_array_lists_sorted_insert_and_remove);
+            invoke_test(test_array_lists_searching);
+            invoke_test(test_array_list_sort_many);
+            invoke_test(test_string_split);
+            // invoke_test(test_stack_array_lists);
+            invoke_test(test_typed_bucket_allocator);
+            invoke_test(test_hooks);
+            invoke_test(test_scheduler_animations);
 
-            // invoke_test(test_scratch_arena_can_realloc_last_alloc);
-            // invoke_test(test_ringbuffer);
-            // // invoke_test(test_printer);
+            invoke_test(test_scratch_arena_can_realloc_last_alloc);
+            invoke_test(test_ringbuffer);
+            // invoke_test(test_printer);
         }
 
     }

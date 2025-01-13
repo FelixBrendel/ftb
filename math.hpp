@@ -1320,7 +1320,7 @@ std::random_device rd;
 std::mt19937 e2(rd());
 std::uniform_real_distribution<> dist_0_1(0.0f, 1.0f);
 
-static inline auto rand_0_1() -> f32 {
+auto rand_0_1() -> f32 {
     // return ((f32)rand())/RAND_MAX;
 
     return (f32)dist_0_1(e2);
