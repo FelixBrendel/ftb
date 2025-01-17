@@ -1004,7 +1004,7 @@ struct Array_List {
             data = allocator->resize<type>(data, length);
         }
         data[count] = element;
-        return count++;		
+        return count++;
     }
 
     void assure_allocated(u32 allocated_elements) {
@@ -1037,6 +1037,10 @@ struct Array_List {
     void reserve(u32 additional_elements) {
         assure_allocated(additional_elements+count);
         count += additional_elements;
+    }
+
+    bool is_empty() const {
+        return count == 0;
     }
 
     operator bool() const {
@@ -1137,6 +1141,7 @@ struct Array_List {
     //     return sorted_find(elem, (compare_function_t)compare_fun,
     //                        left, right);
     // }
+
 
     bool is_sorted(compare_function_t compare_fun) {
         for (s32 i = 1; i < count; ++i) {
