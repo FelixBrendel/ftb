@@ -554,6 +554,8 @@ struct String {
     bool starts_with(String other);
 };
 
+String operator ""_ftb(const char*, size_t);
+
 struct Allocated_String  {
     String          string;
     Allocator_Base* allocator;
@@ -2262,7 +2264,9 @@ Allocator_Base* grab_temp_allocator(Allocator_Base* previous) {
     if (temp_allocator_1 != previous && temp_allocator_1 != current) return temp_allocator_1;
     if (temp_allocator_2 != previous && temp_allocator_2 != current) return temp_allocator_2;
 
-    panic("No suitiable temp_allocator found");
+    panic("No suitiable temp_allocator found\n t1: %x\n t2: %x\n p:  %x\n c:  %x",
+          temp_allocator_1, temp_allocator_2, previous, current);
+
     return nullptr;
 }
 
@@ -3667,6 +3671,13 @@ void String::free(Allocator_Base* allocator) {
     length = 0;
     data = nullptr;
 #endif
+}
+
+String operator ""_ftb(const char* data, size_t length) {
+    return String{
+        .data   = (char*)data,
+        .length = length,
+    };
 }
 
 bool Allocated_String::operator==(Allocated_String other) {
