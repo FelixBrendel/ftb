@@ -280,7 +280,7 @@ struct Half_Edge_Mesh {
 
     void split_sharp_edges(f32 min_split_angle_in_deg) {
 
-        for (s32 edge_idx = 0; edge_idx < edges.count; ++edge_idx) {
+        for (s32 edge_idx = 0; edge_idx < (s32)edges.count; ++edge_idx) {
             Edge& edge = edges[edge_idx];
 
             // NOTE(Felix): don't process the same edge multiple times
@@ -451,7 +451,7 @@ struct Half_Edge_Mesh {
         }
 
         // NOTE(Felix): fill all the absent edges twins (boundary)
-        for (Edge_Idx e_idx = 0; e_idx < he_mesh.edges.count; ++e_idx) {
+        for (Edge_Idx e_idx = 0; e_idx < (s32)he_mesh.edges.count; ++e_idx) {
             Edge& edge = he_mesh.edges[e_idx];
 
             if (edge.twin != ABSENT_EDGE)

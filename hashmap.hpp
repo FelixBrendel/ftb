@@ -55,16 +55,16 @@ bool hm_objects_match(Integer_Pair i1, Integer_Pair i2);
 
 #else // implementations
 
-static inline u64 hm_hash(Integer_Pair ip) {
+u64 hm_hash(Integer_Pair ip) {
     // cantor pairing
     return (u64)(0.5f * (ip.x + ip.y) * (ip.x + ip.y + 1) + ip.y);
 }
 
-static inline bool hm_objects_match(Integer_Pair i1, Integer_Pair i2) {
+bool hm_objects_match(Integer_Pair i1, Integer_Pair i2) {
     return i1.x == i2.x && i1.y == i2.y;
 }
 
-static u64 hm_hash(const char* str) {
+u64 hm_hash(const char* str) {
     u64 value = str[0] << 7;
     s64 i = 0;
     while (str[i]) {
@@ -73,7 +73,7 @@ static u64 hm_hash(const char* str) {
     return value ^ i;
 }
 
-static u64 hm_hash(char* str) {
+u64 hm_hash(char* str) {
     u64 value = str[0] << 7;
     s64 i = 0;
     while (str[i]) {
@@ -82,27 +82,27 @@ static u64 hm_hash(char* str) {
     return value ^ i;
 }
 
-static u64 hm_hash(u64 value) {
+u64 hm_hash(u64 value) {
     return (value * 2654435761) % 4294967296;
 }
 
-static u64 hm_hash(void* ptr) {
+u64 hm_hash(void* ptr) {
     return hm_hash((u64)ptr);
 }
 
-static inline bool hm_objects_match(const char* a, const char* b) {
+bool hm_objects_match(const char* a, const char* b) {
     return strcmp(a, b) == 0;
 }
 
-static inline bool hm_objects_match(char* a, char* b) {
+bool hm_objects_match(char* a, char* b) {
     return strcmp(a, b) == 0;
 }
 
-static inline bool hm_objects_match(void* a, void* b) {
+bool hm_objects_match(void* a, void* b) {
     return a == b;
 }
 
-static inline bool hm_objects_match(u64 a, u64 b) {
+bool hm_objects_match(u64 a, u64 b) {
     return a == b;
 }
 #endif //FTB_HASHMAP_IMPL

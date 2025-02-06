@@ -415,7 +415,7 @@ namespace json {
         // maybe run enter hook
         if (pattern.hooks.enter_hook) {
             enter_message =
-                pattern.hooks.enter_hook(matched_obj, callback_data,
+                pattern.hooks.enter_hook(matched_obj, pattern.hooks.callback_data,
                                          {thing_at_point}, call_ctx);
         }
 
@@ -503,7 +503,7 @@ namespace json {
         // maybe run leave hook
         if (pattern.hooks.leave_hook) {
             leave_message =
-                pattern.hooks.leave_hook(matched_obj, callback_data, {thing_at_point}, call_ctx);
+                pattern.hooks.leave_hook(matched_obj, pattern.hooks.callback_data, {thing_at_point}, call_ctx);
         }
 
         if (enter_message == Pattern_Match_Result::MATCHING_ERROR ||
