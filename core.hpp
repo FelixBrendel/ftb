@@ -537,9 +537,9 @@ struct String {
         return data != nullptr;
     }
 
-    bool operator==(String other);
-    bool operator!=(String other);
-    s32 operator<(String other);
+    bool operator==(const String other) const;
+    bool operator!=(const String other) const;
+    s32  operator<(const String other) const;
 
     // NOTE(Felix): does not do any allocation, just puts it a String struct
     //   with length
@@ -3612,17 +3612,17 @@ namespace {
 // ----------------------------------------------------------------------------
 //                              string implementation
 // ----------------------------------------------------------------------------
-bool String::operator==(String other) {
+bool String::operator==(const String other) const {
     return
         length == other.length &&
         strncmp(data, other.data, other.length) == 0;
 }
 
-bool String::operator!=(String other) {
+bool String::operator!=(const String other) const {
     return !(*this == other);
 }
 
-s32 String::operator<(String other) {
+s32 String::operator<(const String other) const {
     return strncmp(data, other.data, MIN(length, other.length));
 }
 
@@ -3674,7 +3674,7 @@ void String::free(Allocator_Base* allocator) {
 }
 
 String operator ""_ftb(const char* data, size_t length) {
-    return String{
+    return String {
         .data   = (char*)data,
         .length = length,
     };
