@@ -1804,6 +1804,17 @@ auto fill_file_info_win32(File_Info* file_info, DWORD dwFileAttributes, FILETIME
     file_info->modification_time = (mod_time.QuadPart / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
 }
 
+auto file_exists(const char* path) -> bool {
+    HANDLE handle = CreateFileA(path, GENERIC_READ,
+                                FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,
+                                NULL, OPEN_EXISTING,
+                                FILE_ATTRIBUTE_READONLY|FILE_FLAG_BACKUP_SEMANTICS,
+                                NULL);
+
+    return handle != INVALID_HANDLE_VALUE;
+}
+
+
 auto file_info(const char* path) -> File_Info {
     File_Info fi = {};
 
