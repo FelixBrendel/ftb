@@ -318,12 +318,12 @@ namespace json {
                                                      void* callback_data, u32* out_eaten,
                                                      Allocator_Base* allocator);
 
-    u32 read_into(void* destination, Data_Type dtype, const char* source) {
+    u32 read_into(void* destination, Data_Type dtype, const char* source, Allocator_Base* allocator) {
         switch (dtype) {
             case Data_Type::Integer: return read_int(source,  (s32*)destination);
             case Data_Type::Long:    return read_long(source, (s64*)destination);
             case Data_Type::Boolean: return read_bool(source, (bool*)destination);
-            case Data_Type::String:  return read_string(source, (String*)destination);
+            case Data_Type::String:  return read_string(source, (String*)destination, allocator);
             case Data_Type::Float:   return read_float(source, (f32*)destination);
             default: panic("dtype %u not implemented", (u8)dtype - (u8)(1<<7));
         }
@@ -458,7 +458,7 @@ namespace json {
                     if (thing_at_point == pattern.type) {
                         eaten += read_into((void*)(((u8*)matched_obj)+pattern.value.destination_offset),
                                            pattern.value.destination_type,
-                                           string+eaten);
+                                           string+eaten, allocator);
                     } else if (thing_at_point == Json_Type::String) {
                         // NOTE(Felix): if types don't match, but in the supplied
                         //   json we are looking at a string, then try to read the
@@ -467,7 +467,7 @@ namespace json {
                             ++eaten; // overstep quotation marks
                             eaten += read_into((void*)(((u8*)matched_obj)+pattern.value.destination_offset),
                                                pattern.value.destination_type,
-                                               string+eaten);
+                                               string+eaten, allocator);
                             ++eaten; // overstep quotation marks
                         }
                     } else if (pattern.value.destination_type == Data_Type::String &&
@@ -476,7 +476,7 @@ namespace json {
                         // NOTE(Felix): if we're on a number but should read into a string
                         u32 str_len = eat_number(string+eaten);
                         String* str = (String*)(((u8*)matched_obj)+pattern.value.destination_offset);
-                        str->data   = heap_copy_limited_c_string(string+eaten, str_len);
+                        str->data   = heap_copy_limited_c_string(string+eaten, str_len, allocator);
                         str->length = str_len;
                         eaten += str_len;
                     }
@@ -799,6 +799,7 @@ namespace json {
     Pattern_Match_Result pattern_match(const char* string, Pattern pattern,
                                        void* matched_obj, void* callback_data,
                                        Allocator_Base* allocator) {
+        
         if (!string) {
             return Pattern_Match_Result::MATCHING_ERROR;
         }

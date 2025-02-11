@@ -393,7 +393,7 @@ inline Type* resize(void* old, u64 amount) {
                                                 \
     /* allocator overlays */                    \
     ALLOCATOR(Printing_Allocator)               \
-    ALLOCATOR(Panicking_Allocator)               \
+    ALLOCATOR(Panicking_Allocator)              \
     ALLOCATOR(Bookkeeping_Allocator)            \
     ALLOCATOR(Resettable_Allocator)             \
     ALLOCATOR(Leak_Detecting_Allocator)         \
@@ -435,6 +435,8 @@ Allocator_Base* grab_current_allocator();
 // NOTE(Felix): returns the newly pushed ones, needed for the in_scratch_bffer macro
 Allocator_Base* push_allocator(Allocator_Base*);
 Allocator_Base* pop_allocator();
+
+void log_allocator(Allocator_Base* allocator); // for debugging
 
 Allocator_Base* grab_temp_allocator(Allocator_Base* previous = nullptr);
 u64  get_temp_allocator_depth(Allocator_Base* tmp);
@@ -2269,6 +2271,23 @@ Allocator_Base* grab_current_allocator() {
     return global_allocator_stack;
 }
 
+void log_allocator(Allocator_Base* allocator) {
+    log_info("Allocator at %X", allocator);
+    if (allocator) {
+        switch (allocator->type) {
+#         define ALLOCATOR(name) case Allocator_Type::name: log_info(" - Type: %s", #name); break;
+            ALLOCATORS
+#         undef ALLOCATOR
+            default: log_info(" - Type: INVALID");
+        }
+
+        log_info(" - Next:");
+        with_print_prefix("   | ") {
+            log_allocator(allocator->next_allocator);
+        }
+    }
+}
+
 Allocator_Base* grab_temp_allocator(Allocator_Base* previous) {
     Allocator_Base* current = grab_current_allocator();
 
@@ -2674,7 +2693,10 @@ void* Linear_Allocator_allocate_0(Allocator_Base* base, u64 size_in_bytes, u32 a
 void* Linear_Allocator_resize(Allocator_Base* base, void* old, u64 amount, u32 align) {
     Linear_Allocator* self = (Linear_Allocator*)base;
 
-    assert(old); // NOTE(Felix): Don't support resizing nullptr yet
+    if (!old) {
+        // NOTE(Felix): When resizing nullptr, just allocate fresh
+        return Linear_Allocator_allocate(base, amount, align);
+    }
 
     // size was written onto the 8 bytes preceding the actual memory
     u64* old_size_ptr = (((u64*)old)-1);
