@@ -500,18 +500,20 @@ struct Maybe : type {
 };
 
 
-#define DEFINE_BASIC_TYPE_MAYBE(type)           \
-    template <>                                 \
-    struct Maybe<type> : Maybe<Empty> {         \
-        type value;                             \
-        void operator=(type v) {                \
-            value = v;                          \
-            __exists = true;                    \
-        }                                       \
-        type operator* () {                     \
-            return value;                       \
-        }                                       \
-    }                                           \
+#define DEFINE_BASIC_TYPE_MAYBE(type)             \
+    template <>                                   \
+    struct Maybe<type> : Maybe<Empty> {           \
+        type value;                               \
+        Maybe() {__exists=false;}                 \
+        Maybe(type v) {value = v; __exists=true;} \
+        void operator=(type v) {                  \
+            value = v;                            \
+            __exists = true;                      \
+        }                                         \
+        type operator* () {                       \
+            return value;                         \
+        }                                         \
+    }                                             \
 
 DEFINE_BASIC_TYPE_MAYBE(bool);
 DEFINE_BASIC_TYPE_MAYBE(u8);
