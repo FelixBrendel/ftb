@@ -34,11 +34,11 @@ u32 eat_identifier(const char* str);
 u32 eat_number(const char* str);
 
 #ifdef FTB_PARSING_IMPL
-inline bool is_quotes_char(const char c) {
+bool is_quotes_char(const char c) {
     return c == '\'' || c == '"';
 }
 
-inline bool is_number_char(const char c) {
+bool is_number_char(const char c) {
     return c >= '0' && c <= '9';
 }
 
