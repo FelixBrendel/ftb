@@ -78,6 +78,7 @@
 #ifdef FTB_WINDOWS
 #  include <Windows.h> // for colored prints
 #else
+#  include <unistd.h> // for files: access
 #  include <signal.h> // for sigtrap
 #endif
 

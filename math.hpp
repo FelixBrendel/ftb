@@ -1248,12 +1248,13 @@ auto quat_from_XYZ(f32 x, f32 y, f32 z) -> Quat {
     f32 cy = cosf(deg_to_rad(y) / 2);
     f32 cz = cosf(deg_to_rad(z) / 2);
 
-    return Quat {
-        .x = sx*cy*cz - cx*sy*sz,
-        .y = cx*sy*cz + sx*cy*sz,
-        .z = cx*cy*sz - sx*sy*cz,
-        .w = cx*cy*cz + sx*sy*sz
-    };
+    Quat result;
+    result.x = sx*cy*cz - cx*sy*sz;
+    result.y = cx*sy*cz + sx*cy*sz;
+    result.z = cx*cy*sz - sx*sy*cz;
+    result.w = cx*cy*cz + sx*sy*sz;
+
+    return result;
 }
 
 auto quat_from_m4x4(M4x4 m) -> Quat {
