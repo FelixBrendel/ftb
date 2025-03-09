@@ -1,3 +1,7 @@
+// TODO:
+// - scheduler scheduling its own reset
+
+
 #define _CRT_SECURE_NO_WARNINGS
 #include <cstddef>
 #include <stdint.h>
@@ -227,12 +231,12 @@ auto test_scratch_arena_can_realloc_last_alloc() -> testresult {
         defer { scratch_arena_end(scratch); };
 
         tmp_alloc = (Linear_Allocator*)scratch.arena;
-        ptr_before = tmp_alloc->count;
+        ptr_before = tmp_alloc->last_segment->count;
 
         Array_List<s32> al;
         al.init(8, scratch.arena);
 
-        u64 ptr_after_first_alloc = tmp_alloc->count;
+        u64 ptr_after_first_alloc = tmp_alloc->last_segment->count;
         s32* data_ptr_after_first_alloc = al.data;
 
         assert_not_equal_int(ptr_after_first_alloc, ptr_before);
@@ -242,7 +246,7 @@ auto test_scratch_arena_can_realloc_last_alloc() -> testresult {
             al.append(i);
         }
 
-        u64 ptr_after_second_alloc = tmp_alloc->count;
+        u64 ptr_after_second_alloc = tmp_alloc->last_segment->count;
         assert_not_equal_int(ptr_after_second_alloc, ptr_before);
         assert_not_equal_int(ptr_after_second_alloc, ptr_after_first_alloc);
 
@@ -253,19 +257,19 @@ auto test_scratch_arena_can_realloc_last_alloc() -> testresult {
         // NOTE(Felix): Alloc something new to disrupt the temp memory, and then
         // force a reallocate
         int* i = scratch.arena->allocate<int>(1);
-        assert_not_equal_int(tmp_alloc->count, ptr_after_second_alloc);
+        assert_not_equal_int(tmp_alloc->last_segment->count, ptr_after_second_alloc);
 
         u32 length = al.length;
         for (u32 i = al.count; i <= length; ++i) {
             al.append(i);
         }
 
-        u64 ptr_after_third_alloc = tmp_alloc->count;
+        u64 ptr_after_third_alloc = tmp_alloc->last_segment->count;
         assert_not_equal_int(ptr_after_second_alloc, ptr_after_third_alloc);
     }
 
     // NOTE(Felix): Everything should be off the stack by now!
-    assert_equal_int(tmp_alloc->count, ptr_before);
+    assert_equal_int(tmp_alloc->last_segment->count, ptr_before);
 
     return pass;
 }
@@ -1450,6 +1454,82 @@ auto test_kd_tree() -> testresult {
 #endif
 }
 
+auto test_bucket_list_in_linear_allocator() -> testresult {
+    // NOTE(Felix): This function tests:
+    // ** 1) Bucket allocators can use a linear allocator to back the memory
+    // ** 2) It first fills up the linear segment the linear allocator has and
+    //    then requires the linear allocator to get a new segment and then it
+    //    is correclty used by the bucket list
+
+    Bookkeeping_Allocator bk_outside; // sees all allocs made from the linear allocator
+    bk_outside.init();
+
+    Linear_Allocator la;
+    u32 bucket_size  = 4;
+    u32 bucket_count = 3;
+
+    // allocating one bucket too few so we gotta get a new segment for the third bucket
+    la.init(sizeof(s32)*bucket_size*(bucket_count-1) + bucket_count*sizeof(s32*) + 6*sizeof(u64), &bk_outside.base);
+    defer { la.deinit(); };
+
+    Bookkeeping_Allocator bk_inside; // sees all allocs made from the bucket_list
+    bk_inside.init(&la.base);
+
+    Bucket_List<s32> bl;
+    bl.init(bucket_size, bucket_count, &bk_inside.base);
+
+    auto total_alloc_calls = [](Bookkeeping_Allocator ba) -> u32 {
+        return ba.num_allocate_0_calls + ba.num_allocate_calls;
+    };
+
+    assert_equal_int(total_alloc_calls(bk_inside), 2);  // two inside allocations (bucket array and 1st data array)
+
+    assert_equal_int(total_alloc_calls(bk_outside), 1); // Lin allocator only saw one allocation so far
+    bl.append(1);
+    bl.append(2);
+    assert_equal_int(bl.count_elements(), 2);            // make sure it has the correct number of elements
+    bl.append(3);
+    assert_equal_int(total_alloc_calls(bk_outside), 1);  // stil only 1 outside allocation so far
+
+    f32* f1 = la.base.allocate<f32>(1); // allocate something unrelated from the linear allocator
+    assert_true((((u8*)f1) > ((u8*)bl.buckets[bl.next_bucket_index]))); // f1 is after the first bucket
+
+    bl.append(4);                                        // fill the current bucket allocate new one
+    assert_equal_int(total_alloc_calls(bk_inside),  3);  // the new data array
+
+    assert_true((((u8*)f1) < ((u8*)bl.buckets[bl.next_bucket_index]))); // f1 is before the second bucket
+    assert_equal_int(total_alloc_calls(bk_outside), 1);  // no new outside allocation, still fits in the same linear segment
+    bl.append(5);
+    bl.append(6);
+    bl.append(7);
+    assert_equal_int(bl.count_elements(), 7);            // make sure it has the correct number of elements
+    assert_equal_int(total_alloc_calls(bk_inside),  3);  // still same allocations
+    assert_equal_int(total_alloc_calls(bk_outside), 1);  // still same allocations
+
+    bl.append(8);
+    assert_equal_int(total_alloc_calls(bk_inside),  4);  // Now next data array necessary
+    assert_equal_int(total_alloc_calls(bk_outside), 2);  // Now new linear segment necessary
+
+    // make sure the new data array is allocated in the new segment
+    u8* bucket_ptr = (u8*)bl.buckets[bl.next_bucket_index];
+    assert_true(bucket_ptr >= (u8*)la.last_segment->data);
+    assert_true(bucket_ptr < (u8*)la.last_segment->data + la.last_segment->length);
+
+    assert_equal_int(bl.count_elements(), 8);            // make sure it has the correct number of elements
+
+
+    bl.clear();
+    assert_equal_int(bl.count_elements(), 0);            // make sure it is empty
+    assert_equal_int(bl.next_bucket_index, 0);           // make sure it is empty
+    assert_equal_int(bl.next_index_in_latest_bucket, 0); // make sure it is empty
+
+    assert_equal_int(bk_inside.num_deallocate_calls,  0);
+    bl.deinit();
+    assert_equal_int(bk_inside.num_deallocate_calls,  4);
+
+    return pass;
+}
+
 auto test_bucket_list() -> testresult {
     Bucket_List<int> list;
     list.init(/*bucket size  = */ 2,
@@ -1515,6 +1595,104 @@ auto test_bucket_list_leak() -> testresult {
     int* new_bucket = l.buckets[1];
 
     assert_equal_int(old_bucket, new_bucket);
+
+    return pass;
+}
+
+auto test_linear_allocator_growing_and_resetting() -> testresult {
+    // - lin allocator + grow
+    // - lin allocator + grow + reset should not leak
+
+
+    Bookkeeping_Allocator bk;
+    bk.init();
+    Allocator_Base* bk_alloc = &bk.base;
+
+    Linear_Allocator la;
+    u64 desired_seg_size = sizeof(u64)*4;
+    la.init(desired_seg_size, bk_alloc);
+    Allocator_Base* lin_alloc = &la.base;
+
+    assert_equal_int(la.standard_segment_size, desired_seg_size); // initted correcty
+    assert_equal_int(bk.num_allocate_calls, 1);                // only 1 external allocation
+    {
+        defer { la.deinit(); };
+
+        auto count_segment_chain_length = [](Linear_Allocator lin_alloc) -> u32 {
+            u32 length = 1;
+            Linear_Segment* cursor = lin_alloc.last_segment;
+            while (cursor->prev_segment != nullptr) {
+                cursor = cursor->prev_segment;
+                ++length;
+            }
+            return length;
+        };
+
+        assert_equal_int(la.last_segment->length, desired_seg_size); // correct segment size
+        assert_equal_int(la.last_segment->prev_segment, nullptr);    // not grown yet
+        u64* num1 = lin_alloc->allocate<u64>(1);
+        assert_not_equal_int(num1, nullptr);
+        assert_equal_int(count_segment_chain_length(la), 1); // not grown yet
+        u64* num2 = lin_alloc->allocate<u64>(1);
+        assert_not_equal_int(num2, nullptr);
+        assert_equal_int(count_segment_chain_length(la), 1); // not grown yet
+
+        // NOTE(Felix): Not grown yet, but we allocate the last allocation
+        // **** size before the actual data, so the allocator should be full
+        //      now, and next allocation should allocate the next block;
+        assert_equal_int(la.last_segment->count, la.last_segment->length);
+
+        u64* num3 = lin_alloc->allocate<u64>(1);
+        assert_not_equal_int(num3, nullptr);                    // got a pointer
+        assert_equal_int(bk.num_allocate_calls, 2);             // only 2 external allocations now
+        assert_equal_int(bk.num_deallocate_calls, 0);           // nothing freed yet
+        assert_equal_int(count_segment_chain_length(la), 2);    // did grow once
+        assert_equal_int(la.last_segment->length, desired_seg_size); // correct segment size
+
+        u64* num4 = lin_alloc->allocate<u64>(1);
+        assert_not_equal_int(num4, nullptr);                                 // got a pointer
+        assert_equal_int(count_segment_chain_length(la), 2);                 // did grow once
+        assert_equal_int(la.last_segment->count, la.last_segment->length);   // should be full again
+
+        u64* num5 = lin_alloc->allocate<u64>(1);
+        assert_not_equal_int(num5, nullptr);                   // got a pointer
+        assert_equal_int(bk.num_allocate_calls, 3);            // only 3 external allocations now
+        assert_equal_int(bk.num_deallocate_calls, 0);          // nothing freed yet
+        assert_equal_int(count_segment_chain_length(la), 3);   // did grow twice
+        assert_equal_int(la.last_segment->length, desired_seg_size); // correct segment size
+
+        u64* num6 = lin_alloc->allocate<u64>(1);
+        assert_not_equal_int(num6, nullptr);                   // got a pointer
+        assert_equal_int(count_segment_chain_length(la), 3);   // did grow twice
+
+        u64* num7 = lin_alloc->allocate<u64>(1);
+        assert_not_equal_int(num7, nullptr);                   // got a pointer
+        assert_equal_int(bk.num_allocate_calls, 4);            // 4 external allocations now                                          // only 3 external allocations now
+        assert_equal_int(count_segment_chain_length(la), 4);   // did grow 3 times
+        assert_equal_int(la.last_segment->length, desired_seg_size); // correct segment size
+
+        // last segment only half full now but allocate oversized so we need a
+        // full new segment
+        struct Big {
+            u64 big_numbers[16];
+        };
+
+        Big* big = lin_alloc->allocate<Big>(1);
+        assert_not_equal_int(big, nullptr);                    // got a pointer
+        assert_equal_int(bk.num_allocate_calls, 5);            // 5 external allocations now
+        assert_equal_int(la.last_segment->length, sizeof(Big)+sizeof(u64)); // correct segment size
+        assert_equal_int(la.last_segment->count, la.last_segment->length);  // directly full
+
+
+        la.reset();
+        assert_equal_int(bk.num_deallocate_calls, 4);             // freed both additional segments
+        assert_equal_int(la.last_segment->prev_segment, nullptr); // only one segment now
+        assert_equal_int(la.last_segment->count, 0);              // only one segment now
+
+    }
+
+    // everything allocated by the lin alloc is freed again
+    assert_equal_int(bk.num_allocate_calls, bk.num_deallocate_calls);
 
     return pass;
 }
@@ -3177,63 +3355,78 @@ testresult test_path_components() {
 
 
 s32 main(s32, char**) {
-    testresult result;
-
     Leak_Detecting_Allocator ld;
     ld.init(true);
+
     Bookkeeping_Allocator bk;
     bk.init();
-    defer {
-        ld.deinit();
-    };
+    defer { ld.deinit(); };
+
     with_allocator(bk) {
         defer { bk.print_statistics(); };
 
         with_allocator(ld) {
             defer { ld.print_leak_statistics(); };
 
-			invoke_test(test_half_edge);
+            create_test_counters();
+            defer { print_test_summary(); };
 
-            invoke_test(test_join_paths);
-            invoke_test(test_walk_files);
-            invoke_test(test_path_components);
-            invoke_test(test_obj_to_json_str);
+			// invoke_test(test_half_edge);
+            test_group("Path and Files") {
+                invoke_test(test_join_paths);
+                invoke_test(test_walk_files);
+                invoke_test(test_path_components);
+            }
 
-            invoke_test(test_json_simple_object_json5);
-            invoke_test(test_json_simple_object_new_syntax);
-            invoke_test(test_json_mvg);
-            invoke_test(test_json_bug);
-            invoke_test(test_json_extract_value_from_list);
-            // invoke_test(test_json_parse_from_quoted_value);
-            // invoke_test(test_json_object_as_hash_map);
-            invoke_test(test_json_wildcard_match_and_parser_context);
+            test_group("Json") {
+                invoke_test(test_obj_to_json_str);
+                invoke_test(test_json_simple_object_json5);
+                invoke_test(test_json_simple_object_new_syntax);
+                invoke_test(test_json_mvg);
+                invoke_test(test_json_bug);
+                invoke_test(test_json_extract_value_from_list);
+                // invoke_test(test_json_parse_from_quoted_value);
+                // invoke_test(test_json_object_as_hash_map);
+                invoke_test(test_json_wildcard_match_and_parser_context);
+                invoke_test(test_json_config);
+                invoke_test(test_json_bug_again);
+            }
 
-            invoke_test(test_json_config);
-            invoke_test(test_json_bug_again);
+            test_group("Array Lists") {
+                invoke_test(test_array_lists_adding_and_removing);
+                invoke_test(test_array_lists_sorting);
+                invoke_test(test_array_lists_sorted_insert_and_remove);
+                invoke_test(test_array_lists_searching);
+                invoke_test(test_array_list_sort_many);
+            }
+
+            test_group("Bucketed Data Structures") {
+                invoke_test(test_bucket_list);
+                invoke_test(test_bucket_list_leak);
+                invoke_test(test_bucket_list_in_linear_allocator);
+                invoke_test(test_bucket_queue);
+            }
+
+            test_group("Allocators") {
+                invoke_test(test_typed_bucket_allocator);
+                invoke_test(test_pool_allocator);
+                invoke_test(test_growable_pool_allocator);
+                invoke_test(test_scratch_arena_can_realloc_last_alloc);
+                invoke_test(test_linear_allocator_growing_and_resetting);
+            }
 
             invoke_test(test_defer_runs_after_return);
-            invoke_test(test_pool_allocator);
-            invoke_test(test_growable_pool_allocator);
-            invoke_test(test_bucket_list);
-            invoke_test(test_bucket_list_leak);
-            invoke_test(test_bucket_queue);
+
             invoke_test(test_math);
             invoke_test(test_math_matrix_compose);
             invoke_test(test_hashmap);
             invoke_test(test_sort);
             invoke_test(test_kd_tree);
-            invoke_test(test_array_lists_adding_and_removing);
-            invoke_test(test_array_lists_sorting);
-            invoke_test(test_array_lists_sorted_insert_and_remove);
-            invoke_test(test_array_lists_searching);
-            invoke_test(test_array_list_sort_many);
             invoke_test(test_string_split);
             // invoke_test(test_stack_array_lists);
-            invoke_test(test_typed_bucket_allocator);
             invoke_test(test_hooks);
             invoke_test(test_scheduler_animations);
 
-            invoke_test(test_scratch_arena_can_realloc_last_alloc);
             invoke_test(test_ringbuffer);
             // invoke_test(test_printer);
         }

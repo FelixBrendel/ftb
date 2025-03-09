@@ -96,6 +96,8 @@
 
 #define array_length(arr)   (sizeof(arr) / sizeof(arr[0]))
 #define zero_out(thing)     memset(&(thing), 0, sizeof((thing)));
+#define ptr_offset(ptr, offset, type) (type)(((u8*)(ptr))+(offset))
+
 
 #define FTB_CONCAT(x, y) x ## y
 #define LABEL(x, y) FTB_CONCAT(x, y)
@@ -463,6 +465,34 @@ inline void* resize(void* old, u64 size_in_bytes, u32 alignment) {
 inline void  deallocate(void* old) {
     grab_current_allocator()->deallocate(old);
 }
+
+inline u64 bytes_missing_to_align(u64 size, u64 align) {
+    u32 align_remainder = size % align;
+    return (align_remainder != 0) * (align - align_remainder);
+}
+
+inline void* allocate_with_preamble(u64 size_of_preamble, u64 size_of_data, u64 align_of_data,
+                                    Allocator_Base* allocator, void** out_preamble_pointer)
+{
+    /* ...|<preamble><padding>|<data> */
+
+    u64 aligned_size_of_preamble = size_of_preamble + bytes_missing_to_align(size_of_preamble, align_of_data);
+    u8* result = (u8*)allocator->allocate(aligned_size_of_preamble+size_of_data, align_of_data);
+    *out_preamble_pointer = result;
+    return result+aligned_size_of_preamble;
+}
+
+inline void* get_preable(u64 size_of_preamble, u64 align_of_data, void* allocated_chunk) {
+    u64 aligned_size_of_preamble = size_of_preamble + bytes_missing_to_align(size_of_preamble, align_of_data);
+    return ((u8*)allocated_chunk) - aligned_size_of_preamble;
+}
+
+inline void deallocate_with_preamble(u64 size_of_preamble, u64 align_of_data,
+                                     void* data, Allocator_Base* allocator)
+{
+    allocator->deallocate(get_preable(size_of_preamble, align_of_data, allocator));
+}
+
 
 
 // ----------------------------------------------------------------------------
@@ -1533,16 +1563,23 @@ struct Panicking_Allocator {
     // NOTE(Felix): no special fields needed
 };
 
-struct Linear_Allocator {
-    Allocator_Base base;
+struct Linear_Segment {
+    Linear_Segment* prev_segment;
+
     void*          data;
     u64            count;
     u64            length;
     void*          last_alloc;
+};
+
+struct Linear_Allocator {
+    Allocator_Base  base;
+    Linear_Segment* last_segment;
+    u64             standard_segment_size;
 
     operator bool () {return false;} // NOTE(Felix): used for in_scratch_buffer
 
-    void init(u32 initial_size, Allocator_Base* next_allocator = nullptr);
+    void init(u32 standard_segment_size, Allocator_Base* next_allocator = nullptr);
 
     void reset();
     void deinit();
@@ -2245,22 +2282,31 @@ LibC_Allocator internal_libc_allocator = LibC_Allocator{
 };
 
 unsigned char tempback_buffer_1[1024*1024*128]; // 128MB
+unsigned char tempback_buffer_2[1024*1024*128]; // 128MB
+
+Linear_Segment temp_linear_segment_1 = {
+    .data   = tempback_buffer_1,
+    .length = sizeof(tempback_buffer_1),
+};
+Linear_Segment temp_linear_segment_2 = {
+    .data   = tempback_buffer_2,
+    .length = sizeof(tempback_buffer_2),
+};
+
+
 Linear_Allocator temp_linear_allocator_1 = {
     .base {
         .type = Allocator_Type::Linear_Allocator,
     },
-    .data   = tempback_buffer_1,
-    .length = sizeof(tempback_buffer_1)
+    .last_segment = &temp_linear_segment_1
 };
-
-unsigned char tempback_buffer_2[1024*1024*128]; // 128MB
 Linear_Allocator temp_linear_allocator_2 = {
     .base {
         .type = Allocator_Type::Linear_Allocator,
     },
-    .data   = tempback_buffer_2,
-    .length = sizeof(tempback_buffer_2)
+    .last_segment = &temp_linear_segment_2
 };
+
 
 Allocator_Base* libc_allocator   = (Allocator_Base*)&internal_libc_allocator;
 Allocator_Base* temp_allocator_1 = (Allocator_Base*)&temp_linear_allocator_1;
@@ -2304,11 +2350,19 @@ Allocator_Base* grab_temp_allocator(Allocator_Base* previous) {
 }
 
 u64 get_temp_allocator_depth(Allocator_Base* temp_allocator) {
-    return ((Linear_Allocator*)temp_allocator)->count;
+# ifdef FTB_DEBUG
+    panic_if(((Linear_Allocator*)temp_allocator)->last_segment->prev_segment != nullptr, "Temp allocator can't have multiple segments");
+# endif
+
+    return ((Linear_Allocator*)temp_allocator)->last_segment->count;
 }
 
 void reset_temp_allocator(Allocator_Base* temp_allocator, u64 depth) {
-    ((Linear_Allocator*)temp_allocator)->count = depth;
+# ifdef FTB_DEBUG
+    panic_if(((Linear_Allocator*)temp_allocator)->last_segment->prev_segment != nullptr, "Temp allocator can't have multiple segments");
+# endif
+
+    ((Linear_Allocator*)temp_allocator)->last_segment->count = depth;
 }
 
 Allocator_Base* push_allocator(Allocator_Base* new_allocator) {
@@ -2668,21 +2722,46 @@ void Bookkeeping_Allocator::print_statistics() {
 //
 void* Linear_Allocator_allocate(Allocator_Base* base, u64 amount, u32 align) {
     Linear_Allocator* self = (Linear_Allocator*)base;
-
-    u32 overshot_align_to_8  = self->count % 8;
-    u32 bytes_missing_to_align_8 = (overshot_align_to_8 != 0) * (8 - overshot_align_to_8);
+    Linear_Segment* last_segment = self->last_segment;
 
     // NOTE(Felix): prev_block | maybe padding | 8 bytes size of next block | next block
-    if (self->count + bytes_missing_to_align_8 + 8 + amount > self->length)
-        return nullptr;
+    u32 bytes_missing_to_align_8 = bytes_missing_to_align(last_segment->count, 8);
+    u64 effective_amount_to_allocate = bytes_missing_to_align_8 + 8 + amount;
 
-    self->count += bytes_missing_to_align_8;
-    *((u64*)(((byte*)self->data)+self->count)) = amount;
-    self->count += 8;
+    if (last_segment->count + effective_amount_to_allocate > last_segment->length) {
+        // NOTE(Felix): Allocate new segment
+        Linear_Segment* new_segment;
+        effective_amount_to_allocate = max(effective_amount_to_allocate, self->standard_segment_size);
+        void* new_data =
+            allocate_with_preamble(sizeof(*new_segment), effective_amount_to_allocate,
+                                   8, base->next_allocator, (void**)&new_segment);
 
-    void* ret = ((byte*)self->data)+self->count;
-    self->count += amount;
-    self->last_alloc = ret;
+        if (!new_data)
+            return nullptr;
+
+        new_segment->prev_segment = last_segment;
+        new_segment->data         = new_data;
+        new_segment->count        = 0;
+        new_segment->length       = effective_amount_to_allocate;
+        new_segment->last_alloc   = nullptr;
+
+        self->last_segment = new_segment;
+
+        // update the locals
+        last_segment                 = new_segment;
+        bytes_missing_to_align_8     = 0;
+        effective_amount_to_allocate = 8 + amount;
+    }
+
+
+    last_segment->count += bytes_missing_to_align_8;
+    u64* amount_ptr = ptr_offset(last_segment->data, last_segment->count, u64*);
+    *amount_ptr = amount;
+    last_segment->count += 8;
+
+    void* ret = ((byte*)last_segment->data)+last_segment->count;
+    last_segment->count += amount;
+    last_segment->last_alloc = ret;
 
     return ret;
 }
@@ -2693,6 +2772,31 @@ void* Linear_Allocator_allocate_0(Allocator_Base* base, u64 size_in_bytes, u32 a
     return ret;
 }
 
+
+void Linear_Allocator_deallocate(Allocator_Base* base, void* data) {
+    Linear_Allocator* self = (Linear_Allocator*)base;
+
+    if (data == self->last_segment->last_alloc) {
+        // NOTE(Felix): self->last_alloc, even though we freed it.. It
+        // shouldn't be freed again, no should it be reallocated. But both of
+        // them would be harmless.. This means though that we can't ever
+        // deallocate two consecutive things (take 2 things off the stack),
+        // because we don't know where the previous allocation was. If we
+        // wanted to remember that, additionally to the allocation size, we
+        // would have to store the addres of the last allocation before that,
+        // basically like stackframes have a pointer to the previous
+        // stackframe
+
+        u64* old_size_ptr = (((u64*)data)-1);
+        u64 new_count = ((byte*)old_size_ptr) - (byte*)(self->last_segment->data);
+        self->last_segment->count = (u32)new_count;
+
+    } else {
+        // NOTE(Felix): nothing we can do if the to-be-freed block is not at the
+        // end of the stack..
+    }
+}
+
 void* Linear_Allocator_resize(Allocator_Base* base, void* old, u64 amount, u32 align) {
     Linear_Allocator* self = (Linear_Allocator*)base;
 
@@ -2701,85 +2805,104 @@ void* Linear_Allocator_resize(Allocator_Base* base, void* old, u64 amount, u32 a
         return Linear_Allocator_allocate(base, amount, align);
     }
 
+    if (amount == 0) {
+        Linear_Allocator_deallocate(base, old);
+    }
+
+    Linear_Segment* last_segment = self->last_segment;
+
     // size was written onto the 8 bytes preceding the actual memory
     u64* old_size_ptr = (((u64*)old)-1);
 
-    // check if we can get away with a resize
-    if (old == self->last_alloc) {
-        u64 new_count = ((byte*)old + amount) - (byte*)(self->data);
-        if (new_count < self->length) {
-            *old_size_ptr = amount;
-            self->count = (u32)new_count;
-            return old;
-        } else {
-            // Can't resize, allocated size is not big enough..
-            return nullptr;
+    // check if we can get away with a resize:
+    // 1) if this was allocated in the last segment
+    if ((u8*)old_size_ptr > (u8*)last_segment->data &&
+        (u8*)old_size_ptr < ((u8*)last_segment->data) + last_segment->length)
+    {
+        // 2) if this was the last allocation
+        if (old == self->last_segment->last_alloc) {
+            u64 new_count = ((byte*)old + amount) - (byte*)(self->last_segment->data);
+
+            // 3) if this allocation would still fit in this segment
+            if (new_count < self->last_segment->length) {
+                *old_size_ptr = amount;
+                self->last_segment->count = (u32)new_count;
+                return old;
+            }
         }
-    } else {
-        // we actually have to alloc again and copy.
-        void* new_block = Linear_Allocator_allocate(base, amount, align);
-        memcpy(new_block, old, *old_size_ptr);
-        return new_block;
     }
+
+    // we actually have to alloc again and copy.
+    void* new_block = Linear_Allocator_allocate(base, amount, align);
+    memcpy(new_block, old, *old_size_ptr);
+    return new_block;
 }
 
-void Linear_Allocator_deallocate(Allocator_Base* base, void* data) {
-    Linear_Allocator* self = (Linear_Allocator*)base;
-    if (data == self->last_alloc) {
-        // NOTE(Felix): self->last_alloc, even though we freed it.. It shouldn't
-        // be freed again, no should it be reallocated. But both of them would
-        // be harmless.. This means though that we can't ever deallocate two
-        // consecutive things (take 2 things off the stack), because we don't
-        // know where the previous allocation was. If we wanted to remember
-        // that, additionally to the allocation size, we would have to store the
-        // addres of the last allocation before that, basically like stackframes
-        // have a pointer to the previous stackframe
-
-        u64* old_size_ptr = (((u64*)data)-1);
-        u64 new_count = ((byte*)old_size_ptr) - (byte*)(self->data);
-        self->count = (u32)new_count;
-    } else {
-        // NOTE(Felix): nothing we can do if the to-be-freed block is not at the
-        // end of the stack..
-    }
-}
-
-void Linear_Allocator::init(u32 initial_size, Allocator_Base* next_allocator) {
+void Linear_Allocator::init(u32 standard_segment_size, Allocator_Base* next_allocator) {
     base.type = Allocator_Type::Linear_Allocator;
     if (next_allocator)
         base.next_allocator = next_allocator;
     else
         base.next_allocator = grab_current_allocator();
 
-    length      = initial_size;
-    count       = 0;
-    last_alloc  = 0;
-    data = base.next_allocator->allocate((u32)length, alignof(void*));
+    Linear_Segment* linear_segment;
+    void* data = allocate_with_preamble(sizeof(*linear_segment), (u32)standard_segment_size, alignof(void*),
+                                        next_allocator, (void**)&linear_segment);
+
+    *linear_segment = {
+        .data        = data,
+        .length      = standard_segment_size,
+    };
+
+    this->last_segment          = linear_segment;
+    this->standard_segment_size = standard_segment_size;
+
+}
+
+void linear_allocator_free_all_additional_segments(Linear_Allocator* linalg) {
+    Linear_Segment* curr_segment = linalg->last_segment;
+    while (curr_segment->prev_segment != nullptr) {
+        Linear_Segment* segment_to_free = curr_segment;
+        curr_segment = curr_segment->prev_segment;
+
+        linalg->base.next_allocator->deallocate(segment_to_free);
+    }
+    linalg->last_segment = curr_segment;
 }
 
 void Linear_Allocator::reset() {
-    count = 0;
+    linear_allocator_free_all_additional_segments(this);
+    last_segment->count = 0;
 }
 
 void Linear_Allocator::deinit() {
-    base.next_allocator->deallocate(data);
+    linear_allocator_free_all_additional_segments(this);
+    base.next_allocator->deallocate(last_segment);
 }
 
 auto scratch_arena_start(Allocator_Base* previous) -> Scratch_Arena {
+# ifdef FTB_INTERNAL_DEBUG
+    panic_if(temp_linear->last_segment->prev_segment != nullptr, "The temp storage is not growable right now");
+# endif
+
     Linear_Allocator* temp_linear = (Linear_Allocator*)grab_temp_allocator(previous);
     return Scratch_Arena {
         .arena            = &temp_linear->base,
-        .size_at_creation = temp_linear->count,
+        .size_at_creation = temp_linear->last_segment->count,
     };
 }
 
 auto scratch_arena_start(Scratch_Arena previous) -> Scratch_Arena {
+# ifdef FTB_INTERNAL_DEBUG
+    panic_if(temp_linear->last_segment->prev_segment != nullptr, "The temp storage is not growable right now");
+# endif
+
     return scratch_arena_start(previous.arena);
 }
 
 auto scratch_arena_end(Scratch_Arena scratch) -> void {
-    Linear_Allocator* linear = (Linear_Allocator*)scratch.arena;
-    linear->count = scratch.size_at_creation;
+    Linear_Allocator* linear    = (Linear_Allocator*)scratch.arena;
+    linear->last_segment->count = scratch.size_at_creation;
 }
 
 struct Allocator_Functions {

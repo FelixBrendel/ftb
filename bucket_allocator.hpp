@@ -28,6 +28,32 @@
 
 #pragma once
 #include "core.hpp"
+#include "hashmap.hpp"
+
+
+template <typename key_type, typename value_type>
+struct Segmented_Hash_Map {
+    struct HM_Cell {
+        key_type original;
+        u64  hash;
+        s32  generational_idx; // increases each resize
+        enum struct Occupancy : u8 {
+            Avaliable = 0,
+            Occupied,
+            Deleted
+        } occupancy;
+        value_type object;
+    };
+
+    Allocator_Base* allocator;
+    value_type**    buckets;
+    u64             num_allocated_buckets;
+    u64             last_active_bucket_idx;
+    u64             bucket_size; // const for whole lifetime
+
+
+
+};
 
 template <typename type>
 struct Bucket_List {
@@ -283,7 +309,7 @@ struct Typed_Bucket_Allocator {
     type* allocate() {
         if (!back_list.buckets)
             init();
-        
+
         type* ret;
 
         if (free_list.count)
